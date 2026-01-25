@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+openai
+pydantic
+pydantic-settings
+mcp
+sse-starlette
+nest_asyncio
