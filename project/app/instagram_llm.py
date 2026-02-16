@@ -4,9 +4,12 @@ import requests
 from io import BytesIO
 from PIL import Image
 import google.generativeai as genai
+from dotenv import load_dotenv
+load_dotenv() # 이 함수가 실행되면서 .env 안의 내용을 os.environ에 싹 넣어줍니다.
 
-# 1. API 키 설정
+# 1. API 키 설정 (이제 알아서 .env에서 가져옵니다)
 api_key = os.environ.get("GOOGLE_API_KEY")
+
 if not api_key:
     raise ValueError("GOOGLE_API_KEY 환경변수가 설정되지 않았습니다.")
 genai.configure(api_key=api_key)
