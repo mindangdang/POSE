@@ -7,9 +7,9 @@ logger = logging.getLogger(__name__)
 
 # --- 정규식 및 선택자 ---
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([^\s#.,!?;:]+)")
-ARTICLE_SELECTOR = "article"
+# 🎯 [수정됨] 다시 article과 main 둘 다 찾도록 복구했습니다!
+ARTICLE_SELECTOR = "article, main" 
 VIDEO_SELECTOR = "video"
-# 다음 버튼 선택자 (다양한 형태 대비)
 NEXT_BUTTON_SELECTOR = "button[aria-label*='Next'], button[aria-label*='다음'], div[role='button'] svg[aria-label='다음']"
 
 CAPTION_CANDIDATES = [
@@ -35,6 +35,7 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
         page.goto(post_url, wait_until="domcontentloaded")
         
         try:
+            # 여기서 article이나 main 태그가 뜰 때까지 대기
             page.wait_for_selector(ARTICLE_SELECTOR, timeout=15000)
         except PlaywrightTimeoutError:
             page_text = page.content().lower()
@@ -46,18 +47,16 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
                 result["error"] = "접근이 차단되었거나 페이지 구조가 변경되었습니다."
             return result
 
-        # 🎯 핵심 1: 화면 전체가 아닌, '첫 번째 게시물 박스'로 탐색 범위를 좁힙니다.
+        # 탐색 범위를 메인 게시물 박스로 좁힘
         post_container = page.locator(ARTICLE_SELECTOR).first
-        if not post_container.is_visible():
-            post_container = page.locator("main").first # 혹시 모를 대체제
 
-        # 1. 본문(Caption) 추출 (게시물 박스 안에서만 검색)
+        # 1. 본문(Caption) 추출
         for selector in CAPTION_CANDIDATES:
             elements = post_container.locator(selector).all()
             for element in elements:
                 if element.is_visible():
                     text = element.inner_text().strip()
-                    # 아이디가 아닌 '진짜 본문(15자 이상)'인지 확인
+                    # 아이디가 아닌 진짜 본문(15자 이상)인지 확인
                     if text and not text.startswith("#") and len(text) > 15:
                         result["caption"] = text
                         result["hashtags"] = HASHTAG_PATTERN.findall(text)
@@ -75,22 +74,21 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             if post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
             
-            # 게시물 박스 안의 모든 이미지를 가져옴
+            # 게시물 박스 안의 이미지 요소들의 src 주소만 싹 가져옴
             images = post_container.locator("img").evaluate_all(
                 "elements => elements.map(e => e.src)"
             )
             
-            # 🎯 핵심 2: 프로필 사진 및 불필요한 이미지 솎아내기
             for src in images:
                 if not src: continue
                 is_cdn = "cdninstagram.com" in src or "fbcdn.net" in src
-                # URL에 150x150 이나 profile_pic이 들어가면 프로필 사진이므로 제외!
+                # 🎯 150x150 (프로필 해상도) 또는 profile_pic 단어가 들어간 URL 제외!
                 is_profile = "150x150" in src or "profile_pic" in src
                 
                 if is_cdn and not is_profile:
                     all_images.append(src)
 
-            # 다음 버튼도 게시물 박스 안에서만 찾아서 클릭
+            # 다음 버튼 클릭
             next_btn = post_container.locator(NEXT_BUTTON_SELECTOR).first
             if next_btn.is_visible():
                 next_btn.click()
