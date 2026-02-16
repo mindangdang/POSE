@@ -14,8 +14,8 @@ def main():
     test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==" 
     
     # 2. 스텔스 옵션 생성 및 적용
+    # 2. 스텔스 옵션 생성 및 적용
     options = Options()
-    # 서버 환경에서 차단을 덜 받기 위해 흔한 User-Agent를 하나 지정해 줍니다.
     chrome_args = build_chrome_stealth_args(
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
@@ -23,7 +23,11 @@ def main():
     for arg in chrome_args:
         options.add_argument(arg)
         
-    # 💡 Tip: 만약 화면이 켜지는 걸 내 눈으로 직접 보고 싶다면 아래 주석을 해제하세요.
+    # 👇👇 리눅스 서버 크래시 방지를 위한 필수 옵션 2개 강제 추가! 👇👇
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    
+    # ❌ 절대 주석을 풀지 마세요! (코드스페이스에서는 화면을 띄울 수 없습니다)
     # options.arguments.remove("--headless=new")
 
     driver = None
