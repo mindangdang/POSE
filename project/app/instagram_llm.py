@@ -2,6 +2,7 @@ import os
 import json
 import requests
 from io import BytesIO
+from PIL import Image
 import google.generativeai as genai
 from dotenv import load_dotenv
 load_dotenv() # 이 함수가 실행되면서 .env 안의 내용을 os.environ에 싹 넣어줍니다.
