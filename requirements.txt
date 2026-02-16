@@ -1,2 +1,2 @@
 selenium
-google-generativeai python-dotenv pillow
+google-generativeai pillow requests
