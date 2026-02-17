@@ -5,8 +5,8 @@ from instagram_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
 
 def main():
-    test_url = "https://www.instagram.com/p/DN7xKptkYQK/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
-    SESSION_ID = "66800932735%3AUOpBmfQO7fuyAn%3A1%3AAYiIHAzu5duEZl2Fx9LgW79sWhywVtxFvJ7kM09QzA" 
+    test_url = "https://www.instagram.com/p/DU1ogsEEwtj/?utm_source=ig_web_copy_link&igsh=NTc4MTIwNjQ2YQ=="
+    SESSION_ID = "66800932735%3ALJDuO8TaJKnovA%3A3%3AAYj6CRkXnQ3wP84-AFi6fGE6zqOUfsh7ik4ocv5kcA" 
 
     with sync_playwright() as p:
         print("🚀 [Step 1] Playwright 크롤러 시작...")
@@ -33,21 +33,21 @@ def main():
             print(f"❌ 크롤링 실패: {crawl_result['error']}")
             return
 
-        print(f"\n✅ [Step 1 완료] 크롤링 성공! (캡션: {crawl_result['caption'][:20]}...)")
+        print(f"\n✅ [Step 1 완료] 크롤링 성공! (캡션: {crawl_result['caption'][:20]}...)") # pyright: ignore[reportIndexIssue]
 
         # 2️⃣ 이미지 다운로드
         print("\n🚀 [Step 2] 이미지 다운로드 시작...")
-        downloaded_files = download_images(crawl_result["image_urls"], save_dir="insta_vibes")
+        downloaded_files = download_images(crawl_result["image_urls"], save_dir="insta_vibes") # type: ignore
 
-        # 3️⃣ AI 분석 실행 (첫 번째 대표 이미지만 분석)
+        # 3️⃣ AI 분석 실행 
         if downloaded_files:
             print("\n🚀 [Step 3] AI 데이터 추출 시작...")
-            target_image = downloaded_files[2] 
+            target_images = downloaded_files
             
             ai_result = extract_fact_and_vibe(
-                image_path=target_image, 
-                caption=crawl_result["caption"], 
-                hashtags=crawl_result["hashtags"]
+                image_path=target_images, 
+                caption=crawl_result["caption"],  # pyright: ignore[reportArgumentType]
+                hashtags=crawl_result["hashtags"] # pyright: ignore[reportArgumentType]
             )
             
             print("\n" + "="*50)

@@ -41,35 +41,43 @@ class InstaAnalysisResult(BaseModel):
 # 3. Gemini 2.5 Flash 분석 엔진 
 # ---------------------------------------------------------
 
-def extract_fact_and_vibe(image_path: str, caption: str, hashtags: list):
-    print(f"\n⚡ [Gemini 2.5 Flash] '{image_path}'와 텍스트를 통합 분석 중입니다...")
+def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
+    print(f"\n⚡ [Gemini 2.5 Flash] '{image_paths}'와 텍스트를 통합 분석 중입니다...")
 
     # 안전하게 다운로드된 로컬 이미지 열기
-    img = Image.open(image_path)
+    images = []
+    for path in image_paths:
+        try:
+            images.append(Image.open(path))
+        except Exception as e:
+            print(f"⚠️ 이미지 로드 실패 ({path}): {e}")
 
     # 해시태그 통합
     tags_str = " ".join(hashtags) if hashtags else ""
     text_input = f"캡션: {caption}\n해시태그: {tags_str}"
 
     prompt = """
-    너는 인스타그램 게시물을 분석하여 '취향 검색 DB용' 데이터를 추출하는 AI야.
-    제공된 '이미지'와 '텍스트(캡션+해시태그)'를 종합적으로 분석해줘.
+    너는 여러 장의 슬라이드로 구성된 인스타그램 게시물을 분석하는 AI야.
+    사용자가 제공한 여러 장의 '이미지 순서'와 '캡션+해시태그'를 종합적으로 분석해.
 
     [핵심 분석 지시사항]
-    1. 대상 식별: 게시물이 소개하는 장소, 상품, 정보 등 핵심 대상을 모두 찾아내. (1개일 수도, 여러 개일 수도 있음)
-    2. 시각 정보 분석 (Vision & OCR): 이미지 속 글자(간판, 메뉴, 로고, 자막 등)를 꼼꼼히 읽고, 사진의 전반적인 분위기(조명, 색감, 인테리어, 스타일)를 파악해 텍스트의 맥락과 결합해.
-    3. 객관적 팩트 (Facts): 확인 가능한 사실(이름, 위치, 가격, 시간, 특징)만 정확히 추출해. 본문에 없거나 유추할 수 없는 정보는 절대 지어내지 말고 비워둬(null).
-    4. 주관적 감성 (Vibe): 객관적 팩트를 제외한 '감성, 분위기, 방문/사용 맥락'을 요약해. 사용자가 검색할 때 매칭될 수 있도록 '느좋', '차분한', '퇴폐적인' 같은 추상적 키워드를 문장에 풍부하게 녹여내.
-    5. 카테고리 분류: 각 대상의 성격을 PLACE, PRODUCT, CONTENT, EVENT, TIP, INSPIRATION 중 하나로 정확히 판별해.
+    1. 대상 식별 및 필터링: 제공된 이미지 수와 실제 소개하는 대상(Item)의 수는 다를 수 있어. 썸네일(표지)이나 마지막 인사말(아웃트로) 슬라이드는 무시하고, '실제로 소개/리뷰하는 핵심 대상'이 총 몇 개인지 파악해.
+    2. 교차 검증 (Cross-matching): 캡션에 적힌 설명이 몇 번째 슬라이드의 어떤 대상을 가리키는지 논리적으로 연결해. 이미지 속 OCR 텍스트와 캡션의 설명을 결합해서 하나의 완벽한 대상 프로필을 완성해.
+    3. 객관적 팩트 (Facts): 확인 가능한 사실만 정확히 추출해. (지어내기 절대 금지, 모르면 null)
+    4. 주관적 감성 (Vibe): 객관적 정보만 전달하는 밋밋한 정보성 게시물이거나 감성을 도출할 수 없다면, 억지로 지어내지 말고 `vibe_text`를 빈 문자열("")이나 null로 비워둬. 감성이 느껴질 때만 검색 최적화 키워드(예: '느좋', '차분한')를 넣어 작성해.
+    5. 카테고리 분류: 추출된 각 대상의 성격을 PLACE, PRODUCT, CONTENT, EVENT, TIP, INSPIRATION 중 하나로 정확히 판별해.
     """
+
+    # 4. 프롬프트 + 이미지 여러 장 + 텍스트를 하나의 리스트로 묶어서 전달
+    contents = [prompt] + images + [text_input]
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=[prompt, img, text_input],
+        contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=InstaAnalysisResult,  
-            temperature=0.3
+            temperature=0.1 # 매칭의 정확도를 극대화하기 위해 온도를 더 낮춤
         )
     )
 
