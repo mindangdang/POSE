@@ -2,7 +2,8 @@
 import os
 import json
 from PIL import Image
-import google.genai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 import requests
 from io import BytesIO
@@ -17,7 +18,7 @@ load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
 # ---------------------------------------------------------
 # 2.schema에 대한 Pydantic
@@ -65,14 +66,14 @@ def extract_fact_and_vibe(image_path: str, caption: str, hashtags: list):
     5. 카테고리 분류: 각 대상의 성격을 PLACE, PRODUCT, CONTENT, EVENT, TIP, INSPIRATION 중 하나로 정확히 판별해.
         """
 
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        generation_config={
-            "response_mime_type": "application/json",
-            "response_schema": InstaAnalysisResult, 
-            "temperature": 0.2 
-        }
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=[prompt, img, text_input],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema = InstaAnalysisResult,  
+            temperature=0.3
+        )
     )
-    
-    response = model.generate_content([prompt, img, text_input])
+
     return json.loads(response.text)

@@ -42,7 +42,7 @@ def main():
         # 3️⃣ AI 분석 실행 (첫 번째 대표 이미지만 분석)
         if downloaded_files:
             print("\n🚀 [Step 3] AI 데이터 추출 시작...")
-            target_image = downloaded_files[0] 
+            target_image = downloaded_files[2] 
             
             ai_result = extract_fact_and_vibe(
                 image_path=target_image, 
