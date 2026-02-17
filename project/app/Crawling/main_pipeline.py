@@ -5,7 +5,7 @@ from instagram_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
 
 def main():
-    test_url = "https://www.instagram.com/p/DUxfe41gXfZ/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
     SESSION_ID = "66800932735%3ALJDuO8TaJKnovA%3A3%3AAYj6CRkXnQ3wP84-AFi6fGE6zqOUfsh7ik4ocv5kcA" 
 
     with sync_playwright() as p:
