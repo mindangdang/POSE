@@ -6,7 +6,6 @@ import json
 import os
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
-from instagram_crawler import crawl_instagram_post
 
 logger = logging.getLogger(__name__)
 
