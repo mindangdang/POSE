@@ -5,6 +5,8 @@ from google.genai import types
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Optional
+import time 
+import json
 
 # ---------------------------------------------------------
 # 1. 환경변수 및 API 설정
@@ -119,6 +121,14 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         1.없는 내용은 절대 지어내지 말 것
         2.여러 리뷰에서 공통적으로 나오는 의견을 최대한 반영할 것
         3.개인의 악의적인 리뷰나 허위 사실 등 데이터에 노이즈가 될 만한 건 배제할 것.
+        4.만약 검색을 해도 리뷰가 안나온다면 억지로 만들어내지 말고 내용을 비워놔.
+        
+        [출력 형식]
+        반드시 아래 JSON 형태로만 대답해. 인사말이나 마크다운 기호(```json 등) 없이 순수 JSON 텍스트만 출력해.
+        {{
+            "star_review": "4.5 (평점 예시)",
+            "core_summary": "리뷰 요약 텍스트"
+        }}
         """
 
         try:
@@ -126,19 +136,23 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
                 model='gemini-2.5-flash',
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=Review,
                     tools=[{"google_search": {}}], 
                     temperature=0.1 
                 )
             )
+            raw_text = response_review.text.strip()
             
-            # Step.3: 조립하기
-            item.reviews = response_review.parsed
+            # (혹시 LLM이 ```json 을 붙여서 대답했을 경우를 대비한 방어 코드)
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:-3].strip()
+                
+            parsed_dict = json.loads(raw_text)
+            item.reviews = Review(**parsed_dict)
             
         except Exception as e:
             print(f"⚠️ '{title}' 리뷰 검색 중 에러 발생: {e}")
-            item.reviews = [] # 에러 나도 파이프라인이 멈추지 않게 빈 리스트 처리
+            item.reviews = None # 에러 나도 파이프라인이 멈추지 않게 빈 리스트 처리
+        time.sleep(15)
 
     print("🎉 모든 데이터 추출 및 조립 완료!")
     return response_ocr.parsed.model_dump()

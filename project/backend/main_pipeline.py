@@ -1,12 +1,12 @@
 import json
 from playwright.sync_api import sync_playwright
-from project.backend.instagram_llm import extract_fact_and_vibe
+from instagram_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
 from insert_db import insert_items_to_db
 
 def main():
-    test_url = "https://www.instagram.com/p/DN7xKptkYQK/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
-    SESSION_ID = "66800932735%3ALJDuO8TaJKnovA%3A3%3AAYj6CRkXnQ3wP84-AFi6fGE6zqOUfsh7ik4ocv5kcA" 
+    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    SESSION_ID = "66800932735%3AO0JTAaKlyNOSjn%3A10%3AAYhuslDRMAGn4gJbwgPKtScrri84JWQRn4comuyXcA" 
 
     with sync_playwright() as p:
         print("🚀 [Step 1] Playwright 크롤러 시작...")
