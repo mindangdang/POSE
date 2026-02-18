@@ -37,7 +37,7 @@ class ExtractedItem(BaseModel):
     summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약 (앱 화면 노출용)")
     vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것 (유사도 검색용)")
     facts: Facts
-    reviews: Review
+    reviews: Optional[Review] = None
 
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
@@ -76,7 +76,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     - 객관적 팩트 (Facts): 확인 가능한 사실(이름, 위치, 가격, 시간, 특징)만 정확히 추출해. 본문에 없거나 유추할 수 없는 정보는 절대 지어내지 말고 `null`로 비워둬.
     - 주관적 감성 (Vibe): 최대한 원본자료에 있는 설명을 그대로 이용하고 단순 정보만 전달하는 정보성 게시물이라면, 억지로 지어내지 말고 `vibe_text`를 빈 문자열("")로 둬.  
     - 요약(summary text): 꼭 필요한 핵심적인 내용만을 포함해.
-    - 리뷰(review) : 무조건 빈 문자열("")로 둬. 어떠한 경우에도 내용을 넣지마.
+    - 리뷰(review) : 지금 단계에서는 리뷰정보가 없으므로 무조건 `null` 처리해 둬.
     - 카테고리 분류: 추출된 각 대상의 유형을 아래 5가지 중 하나로 정확히 판별해.
     * PLACE: 카페, 맛집, 팝업스토어, 전시회 등 직접 방문 가능한 '물리적 장소'
     * PRODUCT: 옷, 화장품, 전자기기 등 구매 가능한 '실물 상품'
@@ -103,7 +103,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         title = item.facts.title
 
         if not title:
-            item.reviews = [] 
+            item.reviews = None 
             continue
 
         print(f"🔍 '{title}'에 대한 실시간 리뷰를 검색합니다...")
@@ -113,7 +113,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         너는 주어진 이름만 갖고 구글 검색을 통해 그 대상의 객관적인 평가와 유용한 리뷰 정보를 모아오는 세계 최고의 데이터 수집가야.
         다음 규칙을 준수해서 점수와 리뷰를 수집해줘.
         
-        [검색 대상]: {item.location_text} {title}
+        [검색 대상]: {title}
         
         [규칙]
         1.없는 내용은 절대 지어내지 말 것
