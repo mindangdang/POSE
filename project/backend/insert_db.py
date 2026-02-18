@@ -10,7 +10,10 @@ neon_url = os.environ.get("NEON_DB_URL")
 google_api_key = os.environ.get("GOOGLE_API_KEY")
 
 # 구글 API 클라이언트 초기화 (임베딩용)
-client = genai.Client(api_key=google_api_key)
+client = genai.Client(
+    api_key=google_api_key,
+    http_options=types.HttpOptions(api_version="v1")
+)
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수
@@ -22,12 +25,15 @@ def get_vibe_vector(text: str):
         return None
     
     print(f"✨ 임베딩 변환 중... (텍스트: {text[:20]}...)")
+    
+    # 💡 수정 2: 일반 딕셔너리가 아닌 SDK 전용 EmbedContentConfig 객체로 넘겨줍니다.
     response = client.models.embed_content(
         model="text-embedding-004",
         contents=text,
-        config={"task_type": "RETRIEVAL_DOCUMENT"} # DB 저장용 명시
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
     )
-    # pgvector가 인식할 수 있도록 문자열 "[0.1, 0.2, ...]" 형태로 변환하여 반환
+    
+    # 파이썬 리스트를 "[0.1, 0.2]" 형태의 문자열로 변환 (pgvector용)
     return str(response.embeddings[0].values)
 
 # ==========================================
