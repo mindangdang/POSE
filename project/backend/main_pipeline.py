@@ -1,6 +1,6 @@
 import json
 from playwright.sync_api import sync_playwright
-from instagram_llm import extract_fact_and_vibe
+from project.backend.instagram_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
 from insert_db import insert_items_to_db
 
