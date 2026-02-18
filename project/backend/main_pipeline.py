@@ -5,7 +5,7 @@ from instagram_crawler import crawl_instagram_post, download_images
 from insert_db import insert_items_to_db
 
 def main():
-    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    test_url = "https://www.instagram.com/p/DThhqQAjxcW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
     SESSION_ID = "66800932735%3AO0JTAaKlyNOSjn%3A10%3AAYhuslDRMAGn4gJbwgPKtScrri84JWQRn4comuyXcA" 
 
     with sync_playwright() as p:
