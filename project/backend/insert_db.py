@@ -11,23 +11,29 @@ google_api_key = os.environ.get("GOOGLE_API_KEY")
 
 # 구글 API 클라이언트 초기화 (임베딩용)
 client = genai.Client(api_key=google_api_key)
+print("API KEY:", google_api_key)
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수
 # ==========================================
 def get_vibe_vector(text: str):
-    """감성 텍스트를 768차원 벡터로 변환합니다."""
+    """감성 텍스트를 벡터로 변환합니다."""
     if not text or text.strip() == "":
         return None
-    
+
     print(f"✨ 임베딩 변환 중... (텍스트: {text[:20]}...)")
-    
-    response = client.models.embed_content(
-        model="embedding-001", 
-        contents=text
-    )
-    
-    return str(response.embeddings[0].values)
+
+    try:
+        response = client.models.embed_content(
+            model="models/text-embedding-004",  
+            contents=[text]
+        )
+
+        return response.embedding.values  # list[float]
+
+    except Exception as e:
+        print(f"❌ 임베딩 생성 실패: {e}")
+        return None
 
 # ==========================================
 # 2. JSON 데이터 DB Insert 함수
