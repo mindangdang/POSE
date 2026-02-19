@@ -6,7 +6,7 @@ from insert_db import insert_items_to_db
 
 def main():
     test_url = "https://www.instagram.com/p/DThhqQAjxcW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
-    SESSION_ID = "66800932735%3AO0JTAaKlyNOSjn%3A10%3AAYhuslDRMAGn4gJbwgPKtScrri84JWQRn4comuyXcA" 
+    SESSION_ID = "66800932735%3ApUljGb11ajMwkw%3A18%3AAYgt6hMfOTodyWoFkZYvTnlFSt5IJAVeqS11IN_8Iw" 
 
     with sync_playwright() as p:
         print("🚀 [Step 1] Playwright 크롤러 시작...")

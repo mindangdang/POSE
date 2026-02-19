@@ -3,6 +3,7 @@ import json
 import psycopg2
 from google import genai
 from dotenv import load_dotenv
+from google.genai import types
 
 # 환경변수 세팅
 load_dotenv()
@@ -10,8 +11,11 @@ neon_url = os.environ.get("NEON_DB_URL")
 google_api_key = os.environ.get("GOOGLE_API_KEY")
 
 # 구글 API 클라이언트 초기화 (임베딩용)
-client = genai.Client(api_key=google_api_key)
-print("API KEY:", google_api_key)
+client = genai.Client(
+    api_key=os.environ["GOOGLE_API_KEY"]
+)
+
+MODEL_NAME = "gemini-embedding-001"
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수
@@ -21,15 +25,18 @@ def get_vibe_vector(text: str):
     if not text or text.strip() == "":
         return None
 
-    print(f"✨ 임베딩 변환 중... (텍스트: {text[:20]}...)")
+    print(f"✨ 임베딩 변환 중...")
 
     try:
         response = client.models.embed_content(
-            model="models/text-embedding-004",  
-            contents=[text]
+            model=MODEL_NAME,
+            contents=[text],
+            config=types.EmbedContentConfig(
+                output_dimensionality=768  # DB의 pgvector(768)와 일치시킴
+            )
         )
 
-        return response.embedding.values  # list[float]
+        return response.embeddings[0].values
 
     except Exception as e:
         print(f"❌ 임베딩 생성 실패: {e}")
