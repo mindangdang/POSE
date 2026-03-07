@@ -59,7 +59,7 @@ class ExtractedItem(BaseModel):
     image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
     category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
     summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약")
-    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
+    vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 시각적 분위기를 중점적으로 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
     facts: Facts
     reviews: Optional[Review] = None
     image_embedding: Optional[List[float]] = Field(description="CLIP 기반 512차원 이미지 임베딩 벡터", default=None)
@@ -138,8 +138,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         except Exception as e:
             print(f"⚠️ '{title}' 이미지 임베딩 실패: {e}")
             # 매핑에 실패한 경우 안전하게 첫 번째 이미지를 기본값으로 사용
-            if images:
-                item.image_embedding = get_image_embedding(images[0])
+            pass
         # -------------------------------------------
 
         if not title:
