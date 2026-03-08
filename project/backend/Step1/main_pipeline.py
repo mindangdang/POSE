@@ -1,12 +1,12 @@
 import json
 import os
 from playwright.sync_api import sync_playwright
-from project.backend.image_ocr_llm import extract_fact_and_vibe
-from instagram_crawler import crawl_instagram_post, download_images
-from insert_db import insert_items_to_db
+from project.backend.Step1.image_ocr_llm import extract_fact_and_vibe
+from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
+from project.backend.Step1.insert_db import insert_items_to_db
 
 def main():
-    test_url = "https://www.instagram.com/p/DThhqQAjxcW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
+    test_url = "https://www.instagram.com/p/DNSF5jryTof/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
     STATE_FILE = "instagram_state.json"
 
     with sync_playwright() as p:
