@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
-# [추가됨] 이미지 임베딩을 위한 HuggingFace CLIP 로드
 import torch
 from transformers import CLIPProcessor, CLIPModel
 
@@ -25,7 +24,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# [추가됨] CLIP 모델 초기화 (서버 가동 시 1회만 로드하여 속도 최적화)
+'''
 print("⚙️ CLIP 모델을 로드하는 중입니다... (최초 1회)")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
@@ -39,6 +38,7 @@ def get_image_embedding(image: Image.Image) -> List[float]:
     # Cosine Similarity 계산을 위해 L2 정규화 수행
     image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
     return image_features.cpu().numpy().tolist()[0]
+'''
 
 # ---------------------------------------------------------
 # 2. Schema에 대한 Pydantic 정의
@@ -62,7 +62,7 @@ class ExtractedItem(BaseModel):
     vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 시각적 분위기를 중점적으로 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
     facts: Facts
     reviews: Optional[Review] = None
-    image_embedding: Optional[List[float]] = Field(description="CLIP 기반 512차원 이미지 임베딩 벡터", default=None)
+    #image_embedding: Optional[List[float]] = Field(description="CLIP 기반 512차원 이미지 임베딩 벡터", default=None)
 
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
@@ -130,6 +130,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         title = item.facts.title
 
         # --- Step.3: 이미지 벡터 임베딩 ---
+        '''
         try:
             # LLM이 매핑해준 슬라이드 인덱스를 바탕으로 원본 이미지 선택
             target_image = images[item.image_index]
@@ -139,6 +140,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
             print(f"⚠️ '{title}' 이미지 임베딩 실패: {e}")
             # 매핑에 실패한 경우 안전하게 첫 번째 이미지를 기본값으로 사용
             pass
+        '''
         # -------------------------------------------
 
         if not title:
