@@ -10,7 +10,7 @@ def main():
     test_url = "https://www.instagram.com/p/DThhqQAjxcW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="
     
     # ⚠️ 이곳에 본인 브라우저에서 복사한 최신 sessionid 값을 넣어주세요.
-    SESSION_ID = "66800932735%3ApUljGb11ajMwkw%3A18%3AAYgt6hMfOTodyWoFkZYvTnlFSt5IJAVeqS11IN_8Iw" 
+    SESSION_ID = "66800932735%3AQa2HXgPmNZw9Py%3A26%3AAYgpgxXoZmg_V3JbcYhc-RIjR7E01b02KkspKpS1jg" 
 
     with sync_playwright() as p:
         print("🚀 [Step 1] Playwright 크롤러 시작...")
