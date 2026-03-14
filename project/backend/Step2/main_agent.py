@@ -61,11 +61,20 @@ class VibeSearchAgent:
         
         # 3. 쿼리 확장 (MCP 2 호출)
         print("   [Step 3] 검색 엔진 노이즈를 걷어낼 Dorks(검색어)를 설계합니다...")
-        expanded_queries = call_mcp_tool(
+        expanded_queries_str = call_mcp_tool(
             "expand_search_queries", 
             user_query=user_query, 
             vibe_context=vibe_context
         )
+        
+        # 💡 2. 텍스트를 파이썬 리스트 구조로 다시 변환합니다.
+        try:
+            expanded_queries = json.loads(expanded_queries_str)
+        except json.JSONDecodeError:
+            # (만약 LLM이 JSON 형식을 어겼을 경우를 대비한 안전 장치)
+            expanded_queries = [expanded_queries_str] 
+
+        # 💡 3. 정상적인 리스트가 되었으므로, 이제 한 줄씩 예쁘게 출력됩니다.
         for q in expanded_queries:
             print(f"      => 🔍 Dork: {q}")
             
