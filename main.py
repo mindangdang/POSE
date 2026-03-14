@@ -283,23 +283,30 @@ def get_taste():
     conn.close()
     return row if row else {"summary": ""}
 
+
 @app.post("/api/login")
 def login(req: AuthRequest):
-    # data.user 형태로 접근할 수 있게 'user' 키를 씌워줍니다.
+    """
+    프론트엔드 Auth.tsx의 onLogin(data.user) 규격에 맞춰
+    데이터를 'user' 키로 감싸서 반환합니다.
+    """
     return {
         "user": {
-            "id": 1, 
+            "id": 1,
             "username": req.username
         },
-        "token": "fake-jwt-token"
+        "token": "vibe-search-fake-jwt-token"
     }
 
 @app.post("/api/signup")
 def signup(req: AuthRequest):
-    # 회원가입 시에도 동일한 규격으로 응답
+    """
+    회원가입 후 프론트엔드에서 바로 로그인을 시도하므로
+    동일하게 'user' 키를 포함하여 반환합니다.
+    """
     return {
         "user": {
-            "id": 1, 
+            "id": 1,
             "username": req.username
         }
     }
