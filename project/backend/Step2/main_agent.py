@@ -2,14 +2,15 @@ import os
 import json
 from google import genai
 from google.genai import types
-
-# 앞서 작성한 MCP 클라이언트 (FastMCP 서버와 통신하는 래퍼 함수)
+from dotenv import load_dotenv
 from mcp_client import call_mcp_tool 
 
 class VibeSearchAgent:
     def __init__(self, user_id: int):
+        load_dotenv()
+        self.api_key = os.environ.get("GOOGLE_API_KEY")
+        self.client = genai.Client(api_key=self.api_key)
         self.user_id = user_id
-        self.client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         
         # ==========================================
         # 1. 도구 설명서(Tool Declaration) 정의
@@ -32,10 +33,12 @@ class VibeSearchAgent:
         self.tools = [types.Tool(function_declarations=[self.taste_tool])]
 
     def _get_embedding(self, text: str) -> list[float]:
-        """텍스트를 768차원 벡터로 변환합니다."""
         response = self.client.models.embed_content(
-            model='text-embedding-004',
+            model='gemini-embedding-001', # 404 에러가 나던 모델명 수정
             contents=text,
+            config=types.EmbedContentConfig(
+                output_dimensionality=768 # DB 스키마(768차원)와 강제 동기화
+            )
         )
         return response.embeddings[0].values
 

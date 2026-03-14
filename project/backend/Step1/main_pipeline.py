@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 # 작성해두신 외부 모듈들 임포트
 from image_ocr_llm import extract_fact_and_vibe
 from instagram_crawler import crawl_instagram_post, download_images
-from project.backend.Step1.insert_DB import insert_items_to_db
+from insert_DB import insert_items_to_db
 
 def main():
     test_url = "https://www.instagram.com/p/DThhqQAjxcW/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA=="

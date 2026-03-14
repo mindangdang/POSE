@@ -1,65 +1,60 @@
 import os
 import json
 import psycopg2
+from pgvector.psycopg2 import register_vector  
 from google import genai
 from dotenv import load_dotenv
 from google.genai import types
 
 # 환경변수 세팅
 load_dotenv()
-neon_url = os.environ.get("NEON_DB_URL")
+neon_url = os.environ.get("NEON_DB_URL") 
 google_api_key = os.environ.get("GOOGLE_API_KEY")
 
-# 구글 API 클라이언트 초기화 (임베딩용)
-client = genai.Client(
-    api_key=os.environ["GOOGLE_API_KEY"]
-)
+# 구글 API 클라이언트 초기화
+client = genai.Client(api_key=google_api_key)
 
-MODEL_NAME = "gemini-embedding-001"
+# 💡 최신 임베딩 모델로 변경 (차원 축소 완벽 지원)
+MODEL_NAME = "text-embedding-001" 
 
 # ==========================================
 # 1. Vibe 텍스트 -> 벡터 변환 함수
 # ==========================================
 def get_vibe_vector(text: str):
-    """감성 텍스트를 벡터로 변환합니다."""
     if not text or text.strip() == "":
         return None
-
-    print(f"✨ 임베딩 변환 중...")
 
     try:
         response = client.models.embed_content(
             model=MODEL_NAME,
-            contents=[text],
+            contents=text, # 리스트가 아닌 단일 텍스트 문자열 그대로 전달
             config=types.EmbedContentConfig(
-                output_dimensionality=768  # DB의 pgvector(768)와 일치시킴
+                output_dimensionality=768  # gemini-embedding-001도 768차원 축소 완벽 지원
             )
         )
-
         return response.embeddings[0].values
-
     except Exception as e:
-        print(f"❌ 임베딩 생성 실패: {e}")
+        print(f"⚠️ 임베딩 생성 실패: {e}")
         return None
 
 # ==========================================
 # 2. JSON 데이터 DB Insert 함수
 # ==========================================
 def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
-    """LLM이 추출한 아이템 리스트(JSON)를 DB에 저장합니다."""
-    
-    print(f"🔌 Neon DB 연결 중... ({len(extracted_items)}개 아이템 저장 대기)")
     conn = None
+    cursor = None # 💡 finally 블록에서의 참조 에러를 막기 위해 초기화
     
     try:
         conn = psycopg2.connect(neon_url)
+        register_vector(conn)  # 💡 핵심: psycopg2가 파이썬 리스트를 vector 컬럼에 넣을 수 있게 허가함
         cursor = conn.cursor()
 
-        # SQL Insert 쿼리 준비 (pgvector와 JSONB 타입에 맞춤)
+        # 💡 ON CONFLICT 추가: 중복된 URL+Category 데이터가 들어오면 무시하고 다음 것 저장
         insert_query = """
             INSERT INTO saved_posts 
             (user_id, source_url, category, summary_text, vibe_text, vibe_vector, facts)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (source_url, category) DO NOTHING; 
         """
 
         for item in extracted_items:
@@ -67,13 +62,13 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
             summary_text = item.get("summary_text")
             vibe_text = item.get("vibe_text", "")
             
-            # 파이썬 딕셔너리를 JSON 문자열로 변환 (PostgreSQL JSONB 컬럼용)
+            # JSON 변환
             facts_json = json.dumps(item.get("facts", {}), ensure_ascii=False)
             
-            # 대망의 벡터 변환!
+            # 벡터 변환
             vibe_vector = get_vibe_vector(vibe_text)
 
-            # DB에 데이터 꽂아넣기
+            # DB 실행
             cursor.execute(insert_query, (
                 user_id, 
                 source_url, 
@@ -83,17 +78,17 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
                 vibe_vector, 
                 facts_json
             ))
-            print(f"✅ DB 저장 완료: [{category}] {summary_text}")
 
-        # 모든 저장이 정상적으로 끝났을 때만 확정(Commit)
         conn.commit()
-        print("🎉 모든 데이터가 성공적으로 적재되었습니다!")
+        print(f"✅ DB 저장 완료: {len(extracted_items)}개의 타겟")
         
     except Exception as e:
         print(f"❌ DB 저장 중 에러 발생: {e}")
         if conn:
-            conn.rollback() # 중간에 에러 나면 저장된 것들 롤백 (안전 장치)
+            conn.rollback() 
     finally:
-        if conn:
+        # 안전한 자원 해제
+        if cursor:
             cursor.close()
+        if conn:
             conn.close()

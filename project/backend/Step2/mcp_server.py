@@ -6,11 +6,17 @@ from pgvector.psycopg2 import register_vector
 from fastmcp import FastMCP
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 
 # 1. 초기화
 mcp = FastMCP("VibeSearch_Agents")
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 NEON_DB_URL = os.environ.get("DATABASE_URL")
+load_dotenv()
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+
+client = genai.Client(api_key=api_key)
 
 # ===================================================================
 # Helper Function (DB Fetch)
