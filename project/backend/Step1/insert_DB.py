@@ -59,41 +59,34 @@ def insert_items_to_db(user_id: str, source_url: str, extracted_items: list):
         register_vector(conn)  
         cursor = conn.cursor()
 
-        # [수정 1] INSERT 컬럼에 'title' 추가
-        # [수정 2] ON CONFLICT 기준을 (source_url, title)로 변경
         insert_query = """
             INSERT INTO saved_posts 
-            (user_id, source_url, title, category, summary_text, vibe_text, vibe_vector, facts)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (user_id, source_url, title, category, summary_text, vibe_text, vibe_vector, facts, reviews)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (source_url, title) DO NOTHING; 
         """
 
         for item in extracted_items:
-            # Pydantic 객체일 경우 .get() 대신 속성 접근이 필요할 수 있으나 
-            # 일반 dict일 경우를 가정하여 안전하게 처리합니다.
             category = item.get("category")
             summary_text = item.get("summary_text")
             vibe_text = item.get("vibe_text", "")
-            
-            # [수정 3] facts 내부의 title 추출 (중복 체크의 핵심)
             facts_data = item.get("facts", {})
             title = facts_data.get("title", "Unknown Item")
-            
+            reviews_data = item.get("reviews", {})
+            reviews_json = json.dumps(reviews_data, ensure_ascii=False)
             facts_json = json.dumps(facts_data, ensure_ascii=False)
-            
-            # 벡터 변환
             vibe_vector = get_vibe_vector(vibe_text)
 
-            # [수정 4] 파라미터 개수 맞춤 (title 포함 8개)
             cursor.execute(insert_query, (
                 user_id, 
                 source_url, 
-                title,          # 추가됨
+                title,         
                 category, 
                 summary_text, 
                 vibe_text, 
                 vibe_vector, 
-                facts_json
+                facts_json,
+                reviews_json
             ))
 
         conn.commit()

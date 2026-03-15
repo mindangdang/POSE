@@ -55,6 +55,7 @@ def init_db():
         vibe_text TEXT,
         vibe_vector vector(768),
         facts JSONB,
+        reviews JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(source_url, title)  
       );
