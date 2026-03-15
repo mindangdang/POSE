@@ -20,7 +20,7 @@ from transformers import CLIPProcessor, CLIPModel
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("⚠️ .env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
 client = genai.Client(api_key=api_key)
 
@@ -72,7 +72,6 @@ class InstaAnalysisResult(BaseModel):
 # ---------------------------------------------------------
 
 def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
-    print(f"\n⚡ [Gemini 2.5 Flash] '{image_paths}'와 텍스트를 통합 분석 중입니다...")
 
     # 안전하게 다운로드된 로컬 이미지 열기
     images = []
@@ -80,7 +79,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         try:
             images.append(Image.open(path))
         except Exception as e:
-            print(f"⚠️ 이미지 로드 실패 ({path}): {e}")
+            print(f"이미지 로드 실패 ({path}): {e}")
 
     # 해시태그 통합
     tags_str = " ".join(hashtags) if hashtags else ""
@@ -97,6 +96,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     3. 교차 검증 (Cross-matching): 캡션에 적힌 설명이 몇 번째 슬라이드의 어떤 대상을 가리키는지 논리적으로 연결해. 이미지 속 글자(OCR)와 캡션의 설명을 결합해서 하나의 완벽한 대상 프로필을 완성해.
     4. 독립적 데이터 분할: 읽어나가다가 새로운 상호명/상품명(다음 Anchor)이 등장하거나, 순번(예: "2.", "두 번째는")이 바뀌면 이전 대상의 정보 수집을 즉시 종료하고 확정해. 대상 간의 정보가 절대 섞이지 않게 마지막 슬라이드까지 순차적으로 반복해.
     5. 각각 독립적인 대상에 대해서 인덱스 번호를 부여해. 이는 이미지 임베딩을 위해 각 이미지에 인덱싱을 해서 순서를 헷갈리게 하지 않기 위한 작업이야.
+    6. 이미지 속에 대상을 가리키는 글자가 없다면 캡션을 참고해.
 
     [데이터 추출 및 작성 규칙]
     - 객관적 팩트 (Facts): 확인 가능한 사실(이름, 위치, 가격, 시간, 특징)만 정확히 추출해. 본문에 없거나 유추할 수 없는 정보는 절대 지어내지 말고 `null`로 비워둬.

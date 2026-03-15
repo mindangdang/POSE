@@ -84,7 +84,6 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
             if post_container.locator(VIDEO_SELECTOR).count() > 0:
                 is_video = True
             
-            # 🎯 [핵심] 궁극의 DOM 구조 & 크기 필터링!
             # 1. e.closest('a') === null : 부모 중 <a> 태그가 있는 '추천 게시물 썸네일' 완벽 차단
             # 2. e.clientWidth > 250 : 화면상 가로 너비가 250px 이하인 '프로필, 아이콘' 완벽 차단
             images = post_container.locator("img").evaluate_all(
@@ -127,16 +126,13 @@ def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str,
 
 def download_images(image_urls: list, save_dir: str = "insta_vibes"):
     if not image_urls:
-        print("⚠️ 다운로드할 이미지가 없습니다.")
         return [] # 빈 리스트 반환으로 수정
 
     # 폴더가 없으면 생성
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-        print(f"📁 [{save_dir}] 폴더를 새로 생성했습니다.")
 
     downloaded_paths = [] # 성공한 파일들의 경로를 담을 바구니
-    print(f"\n⬇️ 총 {len(image_urls)}장의 이미지 다운로드를 시작합니다...")
 
     for index, url in enumerate(image_urls):
         try:
@@ -153,11 +149,8 @@ def download_images(image_urls: list, save_dir: str = "insta_vibes"):
                 f.write(response.content)
             
             downloaded_paths.append(file_path) 
-            print(f"  ✅ {file_name} 저장 완료")
 
         except Exception as e:
-            print(f"  ❌ {index + 1}번째 이미지 다운로드 실패: {e}")
-
-    print("🎉 모든 이미지 다운로드가 완료되었습니다!\n")
+            print(f"{index + 1}번째 이미지 다운로드 실패: {e}")
     
     return downloaded_paths

@@ -119,14 +119,10 @@ def format_data_for_prompt(items: list) -> str:
 # 4. LLM 분석 실행 함수
 # ==========================================
 def analyze_vibe(user_id: int):
-    print(f"🔍 User {user_id}의 데이터를 Neon DB에서 불러오는 중...")
     raw_items = fetch_user_data_from_neon(user_id)
     
     if not raw_items:
-        print("❌ 분석할 데이터가 없습니다.")
         return
-        
-    print(f"✅ {len(raw_items)}개의 게시물을 성공적으로 불러왔습니다. 텍스트로 압축합니다.")
     post_data_string = format_data_for_prompt(raw_items)
     
     user_prompt = f"""
@@ -137,8 +133,6 @@ def analyze_vibe(user_id: int):
 [POST DATA]
 {post_data_string}
 """
-    
-    print("Vibe Search 수석 큐레이터가 분석을 시작합니다...\n")
     
     # Gemini API 호출 설정
     client = genai.Client(api_key=GEMINI_API_KEY)
@@ -157,7 +151,7 @@ def analyze_vibe(user_id: int):
         print("================================")
         
     except Exception as e:
-         print(f"❌ LLM 호출 중 오류 발생: {e}")
+         print(f"LLM 호출 중 오류 발생: {e}")
 
 # ==========================================
 # 실행부

@@ -267,16 +267,11 @@ def debug_dist():
     contents = os.listdir("dist") if exists else []
     return {"exists": exists, "contents": contents, "cwd": os.getcwd()}
 
-# ==========================================
-# 🛑 프론트엔드 (React SPA) 서빙 (수정됨)
-# ==========================================
 if os.path.exists("dist"):
     app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    # 💡 [수정 2] '/api/'로 시작하는 요청이 여기까지 흘러왔다면
-    # 엉뚱하게 HTML을 반환하지 말고 확실하게 404 에러를 던져줍니다.
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
     
