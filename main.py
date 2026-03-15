@@ -146,7 +146,7 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     extracted_items = ai_result.get("extracted_items", [])
     
     try:
-        user_id = "default_user" 
+        user_id = "1" 
         insert_items_to_db(user_id, post_url, extracted_items)
     except Exception as e:
         print(f"DB 저장 중 에러 발생: {e}")
@@ -248,8 +248,7 @@ def save_manual_item(request: ManualItemCreate):
 # 일반 CRUD 엔드포인트
 # ==========================================
 @app.get("/api/items")
-def get_items(user_id: str = None):
-    target_id = user_id if user_id else "1"
+def get_items(user_id: str = "1"):
     conn = get_db()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -266,16 +265,12 @@ def get_items(user_id: str = None):
             WHERE user_id = %s OR user_id = 'default_user'
             ORDER BY created_at DESC
         """
-        cursor.execute(query, (target_id,))
-        
+        cursor.execute(query, (user_id,))
         items = cursor.fetchall()
-        print(f" DB에서 검색된 아이템 수: {len(items)}") 
-        
-        cursor.close()
+        print(f"프론트로 보내는 아이템 수: {len(items)}")
         return jsonable_encoder(items)
-    
     except Exception as e:
-        print(f" DB 조회 중 에러 발생: {str(e)}")
+        print(f" 조회 에러: {e}")
         return []
     finally:
         conn.close()
