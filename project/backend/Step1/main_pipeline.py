@@ -19,10 +19,13 @@ def main():
         browser = p.chromium.launch(
             headless=True,
             args=[
-                "--disable-gpu", 
-                "--no-sandbox", 
-                "--disable-dev-shm-usage", 
-                "--disable-blink-features=AutomationControlled"
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+                "--single-process",
+                "--disable-software-rasterizer",
+                "--disable-extensions"
             ]
         )
         
