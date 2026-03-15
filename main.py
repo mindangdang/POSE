@@ -23,13 +23,13 @@ from project.backend.Step2.main_agent import VibeSearchAgent
 
 app = FastAPI()
 
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=False,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True, 
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
@@ -98,7 +98,7 @@ class ManualItemCreate(BaseModel):
     url: str
 
 
-# [API 1] 크롤링 & 데이터 추출 (기존 로직)
+# [API 1] 크롤링 & 데이터 추출
 @app.post("/api/extract-url")
 def extract_and_save_url(request: UrlAnalyzeRequest):
     post_url = request.url
@@ -107,7 +107,6 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     
     crawl_result = None
     
-    # 크롤러 실행
     if rapid_api_key:
         crawl_result = Rapid_crawler(post_url)
     else:
@@ -127,7 +126,6 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     if not crawl_result or crawl_result.get("error"):
         raise HTTPException(status_code=400, detail=f"크롤링 실패: {crawl_result.get('error')}")
 
-    # 이미지 다운로드 & AI 파이프라인
     downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
     try:
         ai_result = extract_fact_and_vibe(
@@ -140,28 +138,23 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
 
     extracted_items = ai_result.get("extracted_items", [])
     
-    # DB 적재
     try:
         user_id = "default_user" 
         insert_items_to_db(user_id, post_url, extracted_items)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DB 저장 에러: {str(e)}")
 
-    # 임시 파일 삭제
     for file_path in downloaded_files:
         try: os.remove(file_path)
         except: pass
 
     return {"success": True, "message": f"총 {len(extracted_items)}개 추출 완료", "data": extracted_items}
 
-# [API 2] 취향 프로필 자동 생성 (preference_llm 연동)
+# [API 2] 취향 프로필 자동 생성
 @app.post("/api/generate-taste")
 def generate_taste_profile():
-    """preference_llm.py의 로직을 호출하여 사용자의 취향을 분석하고 업데이트합니다."""
     try:
         summary = analyze_vibe(user_id="default_user") 
-        
-        # 분석 결과를 DB에 저장
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
@@ -171,35 +164,25 @@ def generate_taste_profile():
         conn.commit()
         cursor.close()
         conn.close()
-        
         return {"success": True, "summary": summary}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"취향 분석 실패: {str(e)}")
 
-# [API 3] 에이전틱 큐레이션 검색 (main_agent 연동)
+# [API 3] 에이전틱 큐레이션 검색
 @app.post("/api/agent-search")
 def run_agentic_search(request: SearchRequest):
-    """main_agent.py의 에이전트를 호출하여 Vibe Search 쿼리를 처리합니다."""
     try:
-        # main_agent.py 내부에 구현해두신 클래스/함수 호출
         agent = VibeSearchAgent(user_id="default_user")
-        
-        # 에이전트가 MCP를 거쳐 검색/큐레이션한 최종 마크다운 텍스트 반환
         final_answer = agent.run(request.query)
-        
         return {"success": True, "result": final_answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"에이전트 검색 실패: {str(e)}")
 
-# [API 4] 에이전트 검색 결과 피드백 저장 (Like/Dislike)
-
+# [API 4] 피드백 저장
 @app.post("/api/agentic-search/feedback")
 def save_agent_feedback(request: FeedbackRequest):
-    """사용자가 에이전트의 검색 결과에 남긴 피드백(학습 데이터)을 DB에 저장합니다."""
     conn = get_db()
     cursor = conn.cursor()
-    
-    # 피드백을 저장할 테이블이 없다면 동적으로 생성 (init_db에 미리 넣어두면 더 좋습니다)
     cursor.execute("""
       CREATE TABLE IF NOT EXISTS search_feedback (
         id SERIAL PRIMARY KEY,
@@ -211,7 +194,6 @@ def save_agent_feedback(request: FeedbackRequest):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     """)
-    
     try:
         cursor.execute(
             "INSERT INTO search_feedback (user_id, query, result, feedback_type, reason) VALUES (%s, %s, %s, %s, %s)",
@@ -226,24 +208,15 @@ def save_agent_feedback(request: FeedbackRequest):
         cursor.close()
         conn.close()
 
-#  [API 5] 에이전트 큐레이션 결과를 내 피드에 수동 저장
-
+# [API 5] 수동 저장
 @app.post("/api/items/manual")
 def save_manual_item(request: ManualItemCreate):
-    """사용자가 마음에 든 에이전틱 검색 결과를 자신의 영감 피드(saved_posts)에 강제 저장합니다."""
     conn = get_db()
     cursor = conn.cursor()
-    
     try:
         cursor.execute(
             "INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts) VALUES (%s, %s, %s, %s, %s)",
-            (
-                str(request.user_id), 
-                request.url, 
-                request.category, 
-                request.vibe, 
-                json.dumps(request.facts, ensure_ascii=False)
-            )
+            (str(request.user_id), request.url, request.category, request.vibe, json.dumps(request.facts, ensure_ascii=False))
         )
         conn.commit()
         return {"success": True, "message": "에이전트 검색 결과가 내 피드에 박제되었습니다."}
@@ -287,7 +260,6 @@ def get_taste():
     conn.close()
     return row if row else {"summary": ""}
 
-
 @app.get("/api/debug/dist")
 def debug_dist():
     import os
@@ -296,27 +268,26 @@ def debug_dist():
     return {"exists": exists, "contents": contents, "cwd": os.getcwd()}
 
 # ==========================================
-# 프론트엔드 (React SPA) 서빙
+# 🛑 프론트엔드 (React SPA) 서빙 (수정됨)
 # ==========================================
 if os.path.exists("dist"):
     app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    # API routes are handled by their respective decorators.
-    # If we reach here, it's either a static file or a SPA route.
+    # 💡 [수정 2] '/api/'로 시작하는 요청이 여기까지 흘러왔다면
+    # 엉뚱하게 HTML을 반환하지 말고 확실하게 404 에러를 던져줍니다.
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
     
-    # Handle root path
     if not full_path or full_path == "/":
         if os.path.exists("dist/index.html"):
             return FileResponse("dist/index.html")
     
-    # Check if it's a file in dist
     file_path = os.path.join("dist", full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     
-    # Fallback to SPA routing
     if os.path.exists("dist/index.html"):
         return FileResponse("dist/index.html")
     
@@ -324,5 +295,5 @@ async def serve_spa(full_path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 3000)))
+    port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 8000)))
     uvicorn.run(app, host="0.0.0.0", port=port)

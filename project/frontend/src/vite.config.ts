@@ -9,8 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        // 💡 핵심: 0.0.0.0 또는 127.0.0.1로 시도해봅니다.
-        target: 'http://127.0.0.1:8000', 
+        target: 'http://0.0.0.0:8000', 
         changeOrigin: true,
         secure: false,
         // 이 옵션을 추가하여 프록시가 작동하는지 터미널에 찍히게 합니다.
