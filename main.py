@@ -140,7 +140,8 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
             hashtags=crawl_result.get("hashtags", []) 
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 분석 에러: {str(e)}")
+        print(f"AI 분석 중 에러 발생: {e}")
+        return {"success": False, "message": "일부 아이템 분석 실패", "data": []}
 
     extracted_items = ai_result.get("extracted_items", [])
     
@@ -148,7 +149,8 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
         user_id = "default_user" 
         insert_items_to_db(user_id, post_url, extracted_items)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB 저장 에러: {str(e)}")
+        print(f"DB 저장 중 에러 발생: {e}")
+        return {"success": True, "message": "DB 저장 중 오류가 있었으나 데이터는 추출됨", "data": extracted_items}
 
     for file_path in downloaded_files:
         try: os.remove(file_path)
@@ -221,8 +223,17 @@ def save_manual_item(request: ManualItemCreate):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts) VALUES (%s, %s, %s, %s, %s)",
-            (str(request.user_id), request.url, request.category, request.vibe, json.dumps(request.facts, ensure_ascii=False))
+            """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title) 
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (
+                str(request.user_id), 
+                request.url, 
+                request.category, 
+                request.vibe, 
+                json.dumps(request.facts, ensure_ascii=False),
+                json.dumps(request.facts.get("reviews", {}), ensure_ascii=False), 
+                request.facts.get("title", "Manual Item")
+            )
         )
         conn.commit()
         return {"success": True, "message": "에이전트 검색 결과가 내 피드에 박제되었습니다."}
