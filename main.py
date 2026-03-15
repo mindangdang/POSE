@@ -236,19 +236,21 @@ def save_manual_item(request: ManualItemCreate):
 # 일반 CRUD 엔드포인트
 # ==========================================
 @app.get("/api/items")
-def get_items():
+def get_items(user_id: str = "1"):
     conn = get_db()
     try:
-        # RealDictCursor를 유지하되, 반환 시 명시적으로 변환합니다.
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM saved_posts ORDER BY created_at DESC")
+
+        query = "SELECT * FROM saved_posts WHERE user_id = %s ORDER BY created_at DESC"
+        cursor.execute(query, (user_id,))
+        
         items = cursor.fetchall()
         cursor.close()
-
+        
         return jsonable_encoder([dict(item) for item in items])
     
     except Exception as e:
-        print(f"DB 조회 중 에러: {e}")
+        print(f"DB 조회 중 에러 발생: {str(e)}")
         return []
     finally:
         conn.close()
