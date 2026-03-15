@@ -7,6 +7,7 @@ from typing import List, Optional
 import os
 import json
 from dotenv import load_dotenv
+from fastapi.encoders import jsonable_encoder
 
 load_dotenv()
 
@@ -233,12 +234,20 @@ def save_manual_item(request: ManualItemCreate):
 @app.get("/api/items")
 def get_items():
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM saved_posts ORDER BY created_at DESC")
-    items = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return items
+    try:
+        # RealDictCursor를 유지하되, 반환 시 명시적으로 변환합니다.
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM saved_posts ORDER BY created_at DESC")
+        items = cursor.fetchall()
+        cursor.close()
+
+        return jsonable_encoder([dict(item) for item in items])
+    
+    except Exception as e:
+        print(f"DB 조회 중 에러: {e}")
+        return []
+    finally:
+        conn.close()
 
 @app.delete("/api/items/{item_id}")
 def delete_item(item_id: int):
