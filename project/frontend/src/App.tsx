@@ -55,6 +55,10 @@ export default function App() {
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
 
+  // 필터링할 fact 키 목록 (소문자 기준)
+  // DB에 저장되는 필드명 기준으로만 렌더링합니다.
+  const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
+
   useEffect(() => {
     if (user) {
       fetchItems();
@@ -351,7 +355,29 @@ export default function App() {
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
-                      <p className="text-xs font-medium leading-tight line-clamp-2">{item.vibe}</p>
+                      <p className="text-xs font-bold leading-tight line-clamp-1">{item.vibe}</p>
+
+                      {/* 💡 [추가] 상세 리뷰(facts) 정보 렌더링 */}
+                      {item.facts && typeof item.facts === 'object' && (
+                        <>
+                          {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
+                            <div className="space-y-1 mt-2 border-t border-gray-50 pt-2">
+                              {Object.entries(item.facts)
+                                .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
+                                .map(([key, value]) => (
+                                  // 너무 긴 정보는 제외하고 핵심 리뷰 정보만 노출 (예: brand, price, review 등)
+                                  <div key={key} className="flex flex-col gap-0.5">
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">{key.replace(/_/g, ' ')}</span>
+                                    <p className="text-[10px] text-gray-600 line-clamp-2 italic">
+                                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                                    </p>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
                       <div className="pt-2 flex items-center gap-2">
                         {item.url && item.url.startsWith('http') ? (
                           <a 
@@ -672,24 +698,36 @@ export default function App() {
 
                   <section className="mt-6 border-t pt-6">
                     <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3">Review Insights</h3>
-                    {selectedItem.reviews && (selectedItem.reviews.star_review || selectedItem.reviews.core_summary) ? (
-                      <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100">
-                        <div className="flex items-center gap-1 mb-2">
-                          <span className="text-sm font-bold text-yellow-600">
-                            {selectedItem.reviews.star_review || "No rating"}
-                          </span>
-                          <div className="flex text-yellow-400">
-                            {/* 별점 시각화 (간이) */}
-                            {"★".repeat(Math.floor(parseFloat(selectedItem.reviews.star_review) || 0))}
+                    {/* facts 내부나 reviews 객체 양쪽을 모두 체크하도록 변경 */}
+                    {(() => {
+                      const facts = typeof selectedItem.facts === 'string' ? (() => {
+                        try {
+                          return JSON.parse(selectedItem.facts);
+                        } catch {
+                          return null;
+                        }
+                      })() : selectedItem.facts;
+                      const reviewData = selectedItem.reviews || facts;
+
+                      return (reviewData?.star_review || reviewData?.core_summary || reviewData?.review) ? (
+                        <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100">
+                          <div className="flex items-center gap-1 mb-2">
+                            <span className="text-sm font-bold text-yellow-600">
+                              {reviewData.star_review || "Recommended"}
+                            </span>
+                            <div className="flex text-yellow-400">
+                              {/* 별점 데이터가 숫자일 경우 별표 렌더링 */}
+                              {"★".repeat(Math.min(5, Math.floor(parseFloat(reviewData.star_review) || 5)))}
+                            </div>
                           </div>
+                          <p className="text-xs leading-relaxed text-gray-600 italic">
+                            "{reviewData.core_summary || reviewData.review || "No summary available"}"
+                          </p>
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-600 italic">
-                          "{selectedItem.reviews.core_summary}"
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No review data extracted for this item.</p>
-                    )}
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No review data extracted for this item.</p>
+                      );
+                    })()}
                   </section>
 
                   {selectedItem.url && (
