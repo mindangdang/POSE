@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 # ==========================================
 
 load_dotenv()
-GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 
 # ==========================================
