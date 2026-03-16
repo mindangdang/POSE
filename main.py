@@ -348,7 +348,7 @@ def get_items(user_id: str = "1"):
                 vibe_text as vibe, 
                 image_url, 
                 summary_text, 
-                reveiws,
+                reviews,
                 created_at 
             FROM saved_posts 
             WHERE user_id = %s OR user_id = 'default_user'
