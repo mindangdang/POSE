@@ -179,13 +179,48 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     #     try: os.remove(file_path)
     #     except: pass
 
+    # 취향 프로필 업데이트 (아이템 추가 시)
+    try:
+        from project.backend.Step1.preferance_llm import analyze_vibe
+        summary = analyze_vibe(user_id=1)  # user_id를 정수로 전달
+        if summary:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
+                (summary,)
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("취향 프로필 업데이트 완료")
+        else:
+            print("취향 프로필 생성 실패: 데이터 부족")
+    except Exception as e:
+        print(f"취향 프로필 업데이트 실패: {e}")
+
     return {"success": True, "message": f"총 {len(extracted_items)}개 추출 완료", "data": extracted_items}
 
 # [API 2] 취향 프로필 자동 생성
 @app.post("/api/generate-taste")
 def generate_taste_profile():
     try:
-        summary = analyze_vibe(user_id="default_user") 
+        # 피드에 아이템이 있는지 확인
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1' OR user_id = 'default_user'")
+        count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+
+        if count == 0:
+            return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
+
+        from project.backend.Step1.preferance_llm import analyze_vibe
+        summary = analyze_vibe(user_id=1)  # user_id를 정수로 전달
+        if not summary:
+            return {"success": False, "message": "취향 분석에 실패했습니다."}
+
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
@@ -231,6 +266,20 @@ def save_agent_feedback(request: FeedbackRequest):
             (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
         )
         conn.commit()
+
+        # 피드백 저장 후 취향 프로필 업데이트
+        try:
+            from project.backend.Step1.preferance_llm import analyze_vibe
+            summary = analyze_vibe(user_id=int(request.user_id))
+            if summary:
+                cursor.execute(
+                    "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
+                    (summary,)
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"취향 프로필 업데이트 실패: {e}")
+
         return {"success": True, "message": "Feedback saved successfully"}
     except Exception as e:
         conn.rollback()
@@ -260,6 +309,20 @@ def save_manual_item(request: ManualItemCreate):
             )
         )
         conn.commit()
+
+        # 수동 저장 후 취향 프로필 업데이트
+        try:
+            from project.backend.Step1.preferance_llm import analyze_vibe
+            summary = analyze_vibe(user_id=int(request.user_id))
+            if summary:
+                cursor.execute(
+                    "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
+                    (summary,)
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"취향 프로필 업데이트 실패: {e}")
+
         return {"success": True, "message": "에이전트 검색 결과가 내 피드에 박제되었습니다."}
     except Exception as e:
         conn.rollback()
@@ -285,6 +348,7 @@ def get_items(user_id: str = "1"):
                 vibe_text as vibe, 
                 image_url, 
                 summary_text, 
+                reveiws,
                 created_at 
             FROM saved_posts 
             WHERE user_id = %s OR user_id = 'default_user'

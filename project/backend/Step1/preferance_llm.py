@@ -73,8 +73,8 @@ def fetch_user_data_from_neon(user_id: int):
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         query = """
-            SELECT extracted_data 
-            FROM saved_posts 
+            SELECT facts, reviews, vibe_text, category, title
+            FROM saved_posts
             WHERE user_id = %s
             ORDER BY created_at DESC
             LIMIT 20; -- 너무 많으면 토큰 낭비이므로 최근/핵심 데이터 20개로 제한
@@ -85,8 +85,8 @@ def fetch_user_data_from_neon(user_id: int):
         cur.close()
         conn.close()
         
-        # JSONB 컬럼에서 데이터 추출
-        return [row['extracted_data'] for row in rows]
+        # 데이터 추출
+        return rows
         
     except Exception as e:
         print(f"Neon DB 연결 또는 쿼리 실패: {e}")
@@ -101,14 +101,18 @@ def format_data_for_prompt(items: list) -> str:
         location = facts.get("location_text", "위치 정보 없음")
         key_details = facts.get("key_details", [])
         details_str = ", ".join(key_details) if key_details else "특징 없음"
-        
+        reviews = item.get("reviews", {})
+        star_review = reviews.get("star_review", "")
+        core_summary = reviews.get("core_summary", "")
+
         post_text = f"""[Item {idx}]
 - Category: {item.get('category', 'UNKNOWN')}
 - Target: {title}
 - Location: {location}
 - Summary: {item.get('summary_text', '')}
 - Vibe: {item.get('vibe_text', '')}
-- Key Details: {details_str}"""
+- Key Details: {details_str}
+- Review: {star_review} - {core_summary}"""
         
         formatted_posts.append(post_text)
         
@@ -119,9 +123,9 @@ def format_data_for_prompt(items: list) -> str:
 # ==========================================
 def analyze_vibe(user_id: int):
     raw_items = fetch_user_data_from_neon(user_id)
-    
+
     if not raw_items:
-        return
+        return "취향 데이터를 생성할 수 없습니다. 피드에 아이템을 추가해 주세요."
     post_data_string = format_data_for_prompt(raw_items)
     
     user_prompt = f"""
@@ -156,12 +160,11 @@ def analyze_vibe(user_id: int):
                 temperature=0.7, 
             ),
         )
-        print("================================")
-        print(response.text)
-        print("================================")
         
+        return response.text
     except Exception as e:
          print(f"LLM 호출 중 오류 발생: {e}")
+         return None
 
 # ==========================================
 # 실행부
