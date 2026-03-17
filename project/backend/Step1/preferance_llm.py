@@ -12,6 +12,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        base_url=my_proxy_url
+    )
+)
 
 # ==========================================
 # 2. 시스템 프롬프트
@@ -103,13 +113,13 @@ def format_data_for_prompt(items: list) -> str:
         core_summary = reviews.get("core_summary", "")
 
         post_text = f"""[Item {idx}]
-- Category: {item.get('category', 'UNKNOWN')}
-- Target: {title}
-- Location: {location}
-- Summary: {item.get('summary_text', '')}
-- Vibe: {item.get('vibe_text', '')}
-- Key Details: {details_str}
-- Review: {star_review} - {core_summary}"""
+                    - Category: {item.get('category', 'UNKNOWN')}
+                    - Target: {title}
+                    - Location: {location}
+                    - Summary: {item.get('summary_text', '')}
+                    - Vibe: {item.get('vibe_text', '')}
+                    - Key Details: {details_str}
+                    - Review: {star_review} - {core_summary}"""
         
         formatted_posts.append(post_text)
         
@@ -132,21 +142,7 @@ def analyze_vibe(user_id: int):
 
 [POST DATA]
 {post_data_string}
-"""
-    
-    load_dotenv()
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
-
-    my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
-    client = genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(
-            base_url=my_proxy_url
-        )
-    )
-    
+"""    
     try:
         response = client.models.generate_content(
             model='gemini-2.5-flash-lite', 
@@ -158,6 +154,5 @@ def analyze_vibe(user_id: int):
         )
         return response.text
     except Exception as e:
-         # 여기서 에러가 나면 터미널에 확실히 빨간불이 켜지게 로그 강화
          print(f"LLM 프로필 생성 중 오류 발생: {e}") 
          return None

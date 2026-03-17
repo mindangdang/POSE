@@ -180,15 +180,9 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
         print(f"DB 저장 중 에러 발생: {e}")
         return {"success": True, "message": "DB 저장 중 오류가 있었으나 데이터는 추출됨", "data": extracted_items}
 
-    # NOTE: 이미지를 로컬에 저장한 상태로 서빙하기 때문에 삭제하지 않습니다.
-    # for file_path in downloaded_files:
-    #     try: os.remove(file_path)
-    #     except: pass
-
     # 취향 프로필 업데이트 (아이템 추가 시)
     try:
-        from project.backend.Step1.preferance_llm import analyze_vibe
-        summary = analyze_vibe(user_id=1)  # user_id를 정수로 전달
+        summary = analyze_vibe(user_id=1)  
         if summary:
             conn = get_db()
             cursor = conn.cursor()
@@ -221,10 +215,9 @@ def generate_taste_profile():
 
         if count == 0:
             return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
-        summary = analyze_vibe(user_id=1)  # user_id를 정수로 전달
+        summary = analyze_vibe(user_id=1)  
         if not summary:
             return {"success": False, "message": "취향 분석에 실패했습니다."}
-
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute(
@@ -273,7 +266,6 @@ def save_agent_feedback(request: FeedbackRequest):
 
         # 피드백 저장 후 취향 프로필 업데이트
         try:
-            from project.backend.Step1.preferance_llm import analyze_vibe
             summary = analyze_vibe(user_id=int(request.user_id))
             if summary:
                 cursor.execute(
@@ -316,7 +308,6 @@ def save_manual_item(request: ManualItemCreate):
 
         # 수동 저장 후 취향 프로필 업데이트
         try:
-            from project.backend.Step1.preferance_llm import analyze_vibe
             summary = analyze_vibe(user_id=int(request.user_id))
             if summary:
                 cursor.execute(
