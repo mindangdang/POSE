@@ -360,7 +360,7 @@ export default function App() {
                       </div>
                       <p className="text-xs font-bold leading-tight line-clamp-1">{item.vibe}</p>
 
-                      {/* 💡 [추가] 상세 리뷰(facts) 정보 렌더링 */}
+                      {/* 상세 리뷰(facts) 정보 렌더링 */}
                       {item.facts && typeof item.facts === 'object' && (
                         <>
                           {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
