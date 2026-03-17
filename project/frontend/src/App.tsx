@@ -54,6 +54,7 @@ export default function App() {
   const [feedbackReason, setFeedbackReason] = useState("");
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
+  const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
 
   // 필터링할 fact 키 목록 (소문자 기준)
   // DB에 저장되는 필드명 기준으로만 렌더링합니다.
@@ -102,6 +103,25 @@ export default function App() {
     }
   };
 
+  const handleGenerateTaste = async () => {
+    setIsGeneratingTaste(true);
+    try {
+      const res = await fetch('/api/generate-taste', { method: 'POST' });
+      const data = await res.json();
+      
+      if (data.success) {
+        setTaste(data.summary);
+      } else {
+        alert(data.message || "취향 분석에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("Taste generation failed:", error);
+      alert("취향 분석 중 에러가 발생했습니다.");
+    } finally {
+      setIsGeneratingTaste(false);
+    }
+  };
+
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl || !user) return;
@@ -123,13 +143,7 @@ export default function App() {
       alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
     } finally {
       await fetchItems();
-   
-      try {
-        const tasteRes = await fetch('/api/generate-taste', { method: 'POST' });
-        const tasteData = await tasteRes.json();
-        if (tasteData.success) setTaste(tasteData.summary);
-      } catch (e) { console.error("Taste update failed"); }
-      
+      await fetchTaste(); // 백엔드가 방금 업데이트한 프로필을 다시 불러오기만 함
       setLoading(false);
     }
   };
@@ -205,6 +219,7 @@ export default function App() {
       });
       setShowFeedbackReason(false);
       setFeedbackReason("");
+      await fetchTaste(); // 👈 피드백 제출 후 취향 프로필 새로고침
     } catch (error) {
       console.error("Failed to submit feedback:", error);
     }
@@ -230,6 +245,7 @@ export default function App() {
       
       if (!silent) alert("Saved to your feed!");
       await fetchItems();
+      await fetchTaste(); // 수동 저장 후 취향 프로필도 새로고침
     } catch (error: any) {
       console.error(error);
       if (!silent) alert(error.message);
@@ -578,16 +594,52 @@ export default function App() {
                   {taste ? (
                     <div className="markdown-body markdown-serif text-gray-800">
                       <Markdown>{taste}</Markdown>
+                      
+                      {/* [프로필이 있을 때] 하단에 '취향 다시 분석하기' 버튼 추가 */}
+                      <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
+                        <button 
+                          onClick={handleGenerateTaste}
+                          disabled={isGeneratingTaste}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all border border-gray-200"
+                        >
+                          {isGeneratingTaste ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                          {isGeneratingTaste ? '미학적 패턴 분석 중...' : '취향 다시 분석하기'}
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="py-12 border border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-4">
-                      <p className="text-gray-400 font-serif italic">Save more items to reveal your hidden patterns.</p>
-                      <button 
-                        onClick={() => setActiveTab('feed')}
-                        className="text-xs font-bold uppercase tracking-widest hover:tracking-[0.2em] transition-all"
-                      >
-                        Explore Feed
-                      </button>
+                    <div className="py-16 border border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-6">
+                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+                        <Sparkles className="w-6 h-6 text-gray-300" />
+                      </div>
+                      
+                      {items.length > 0 ? (
+                        <>
+                          {/* [아이템은 있는데 프로필이 없을 때] 분석 시작 버튼 */}
+                          <p className="text-gray-500 font-serif italic max-w-sm">
+                            충분한 영감이 모였습니다.<br/>당신의 무의식적인 취향 패턴을 분석해 볼까요?
+                          </p>
+                          <button 
+                            onClick={handleGenerateTaste}
+                            disabled={isGeneratingTaste}
+                            className="px-8 py-3 bg-black text-white rounded-full text-sm font-bold tracking-widest hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 disabled:hover:scale-100"
+                          >
+                            {isGeneratingTaste ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {isGeneratingTaste ? '미학적 패턴 분석 중...' : '내 취향 분석하기'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {/* [아이템도 없을 때] 기본 상태 */}
+                          <p className="text-gray-400 font-serif italic">Save more items to reveal your hidden patterns.</p>
+                          <button 
+                            onClick={() => setActiveTab('feed')}
+                            className="text-xs font-bold uppercase tracking-widest hover:tracking-[0.2em] transition-all text-gray-600"
+                          >
+                            Explore Feed
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
