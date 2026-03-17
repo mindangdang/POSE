@@ -55,6 +55,7 @@ export default function App() {
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
+  const [selectedCategory, setSelectedCategory] = useState<string>('All'); // 필터용 상태 추가 
 
   // 필터링할 fact 키 목록 (소문자 기준)
   // DB에 저장되는 필드명 기준으로만 렌더링합니다.
@@ -75,6 +76,14 @@ export default function App() {
       setQuotaCountdown(null);
     }
   }, [quotaCountdown]);
+
+  // 저장된 아이템들에서 존재하는 카테고리만 중복 없이 추출
+  const categories = ['All', ...Array.from(new Set(items.map(item => item.category))).filter(Boolean)];
+  
+  // 선택된 카테고리에 맞는 아이템만 걸러내기
+  const filteredItems = selectedCategory === 'All' 
+    ? items 
+    : items.filter(item => item.category === selectedCategory);
 
   const fetchItems = async () => {
     if (!user) return;
@@ -341,9 +350,30 @@ export default function App() {
                 </form>
               </header>
 
+              {/*카테고리 필터 버튼 영역  */}
+              {items.length > 0 && (
+                <div className="flex flex-wrap gap-2 py-2">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border",
+                        selectedCategory === cat 
+                          ? "bg-black text-white border-black" 
+                          : "bg-white text-gray-500 border-[#DBDBDB] hover:border-gray-400"
+                      )}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Pinterest-like Grid */}
-              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                {Array.isArray(items) && items.map((item) => (
+              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
+                {/* items 대신 filteredItems로 렌더링  */}
+                {Array.isArray(filteredItems) && filteredItems.map((item) => (
                   <motion.div
                     layout
                     key={item.id}
