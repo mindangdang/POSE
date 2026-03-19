@@ -17,7 +17,8 @@ import {
   X,
   ThumbsUp,
   ThumbsDown,
-  Send
+  Send,
+  Zap
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
@@ -56,10 +57,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
   const [isSharingProfile, setIsSharingProfile] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All'); // 필터용 상태 추가 
+  const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
 
-  // 필터링할 fact 키 목록 (소문자 기준)
-  // DB에 저장되는 필드명 기준으로만 렌더링합니다.
   const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
 
   useEffect(() => {
@@ -78,10 +77,8 @@ export default function App() {
     }
   }, [quotaCountdown]);
 
-  // 저장된 아이템들에서 존재하는 카테고리만 중복 없이 추출
   const categories = ['All', ...Array.from(new Set(items.map(item => item.category))).filter(Boolean)];
   
-  // 선택된 카테고리에 맞는 아이템만 걸러내기
   const filteredItems = selectedCategory === 'All' 
     ? items 
     : items.filter(item => item.category === selectedCategory);
@@ -91,10 +88,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/items?user_id=${user.id}`, { cache: 'no-store' });
       const data = await res.json();
-      
-      // API 응답이 배열인지 확인 후 상태 업데이트
       setItems(Array.isArray(data) ? data : []);
-      console.log("Items updated:", data);
     } catch (error) {
       console.error("Failed to fetch items:", error);
       setItems([]);
@@ -132,16 +126,110 @@ export default function App() {
     }
   }; 
 
+  const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = ctx.measureText(testLine).width;
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+
+  const createStoryCardBlob = async (nickname: string, profile: string): Promise<Blob | null> => {
+    const width = 1080;
+    const height = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#2d2a67');
+    gradient.addColorStop(1, '#1f1b4f');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px Pretendard, system-ui, sans-serif';
+    ctx.fillText('My POSE! 취향 프로필', 70, 130);
+
+    ctx.font = 'bold 44px Pretendard, system-ui, sans-serif';
+    ctx.fillText(`닉네임: ${nickname || 'Anonymous'}`, 70, 220);
+
+    ctx.font = '36px Pretendard, system-ui, sans-serif';
+    const wrappedLines = profile.split('\n').flatMap((line) => wrapText(ctx, line, 940));
+    let y = 300;
+    const lineHeight = 54;
+    for (const line of wrappedLines) {
+      if (y > height - 120) break;
+      ctx.fillText(line, 70, y);
+      y += lineHeight;
+    }
+
+    ctx.font = 'bold 40px Pretendard, system-ui, sans-serif';
+    ctx.fillStyle = '#f8d442';
+    ctx.fillText('#POSE #취향프로필 #Aesthetic', 70, height - 90);
+
+    return await new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    });
+  };
+
+  const handleDownloadStoryCard = async () => {
+    if (!taste) {
+      alert('먼저 취향 프로필을 생성해 주세요.');
+      return;
+    }
+
+    const blob = await createStoryCardBlob(user?.username || 'Anonymous', taste);
+    if (!blob) {
+      alert('스토리 카드 이미지 생성에 실패했습니다.');
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pose_story_profile.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    alert('스토리 카드 이미지가 다운로드되었습니다. 인스타그램 스토리에 업로드하세요.');
+  };
+
   const handleShareProfile = async () => {
     if (!taste) {
       alert('먼저 취향 프로필을 생성해 주세요.');
       return;
     }
 
-    const shareText = `My VibeSearch 취향 프로필\n\n닉네임: ${user?.username || 'Anonymous'}\n\n${taste}\n\n#VibeSearch #취향프로필 #Aesthetic`;
-
     setIsSharingProfile(true);
     try {
+      const blob = await createStoryCardBlob(user?.username || 'Anonymous', taste);
+      if (blob && navigator.canShare && navigator.canShare({ files: [new File([blob], 'pose_story_profile.png', { type: 'image/png' })] })) {
+        await navigator.share({
+          title: '내 취향 프로필',
+          text: '인스타그램 스토리용 POSE 취향 프로필',
+          files: [new File([blob], 'pose_story_profile.png', { type: 'image/png' })],
+        });
+        return;
+      }
+
+      const shareText = `My POSE! 취향 프로필\n\n닉네임: ${user?.username || 'Anonymous'}\n\n${taste}\n\n#POSE #취향프로필 #Aesthetic`;
+
       if (navigator.share) {
         await navigator.share({
           title: '내 취향 프로필',
@@ -161,7 +249,6 @@ export default function App() {
       setIsSharingProfile(false);
     }
   };
-
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,7 +271,7 @@ export default function App() {
       alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
     } finally {
       await fetchItems();
-      await fetchTaste(); // 백엔드가 방금 업데이트한 프로필을 다시 불러오기만 함
+      await fetchTaste(); 
       setLoading(false);
     }
   };
@@ -195,15 +282,6 @@ export default function App() {
     fetchItems();
   };
 
-  const handleLogin = (userData: { id: number; username: string }) => {
-    // Removed login logic
-  };
-
-  const handleLogout = () => {
-    // Removed logout logic
-  };
-
-
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery || !user) return;
@@ -213,7 +291,6 @@ export default function App() {
     setFeedbackReason("");
     setShowFeedbackReason(false);
     try {
-
       const res = await fetch('/api/agent-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -260,7 +337,7 @@ export default function App() {
       });
       setShowFeedbackReason(false);
       setFeedbackReason("");
-      await fetchTaste(); // 피드백 제출 후 취향 프로필 새로고침
+      await fetchTaste();
     } catch (error) {
       console.error("Failed to submit feedback:", error);
     }
@@ -286,7 +363,7 @@ export default function App() {
       
       if (!silent) alert("Saved to your feed!");
       await fetchItems();
-      await fetchTaste(); // 수동 저장 후 취향 프로필도 새로고침
+      await fetchTaste();
     } catch (error: any) {
       console.error(error);
       if (!silent) alert(error.message);
@@ -296,47 +373,52 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#262626] font-sans flex">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-yellow-400 to-blue-900 animate-gradient text-black font-sans flex selection:bg-yellow-300 selection:text-black selection:backdrop-blur-sm selection:bg-black/10">
       {/* Sidebar Navigation */}
-      <nav className="w-20 md:w-64 border-r border-[#DBDBDB] h-screen sticky top-0 bg-white flex flex-col p-4">
-        <div className="mb-10 px-2">
-          <h1 className="text-xl font-bold hidden md:block italic">VibeSearch</h1>
-          <div className="md:hidden flex justify-center">
-            <Sparkles className="w-8 h-8" />
+      <nav className="w-20 md:w-72 border-r border-gradient-r-from-yellow-400 border-r-to-blue-500 backdrop-blur-md bg-white/5 h-screen sticky top-0 flex flex-col p-6 z-10 space-y-12">
+        <div className="flex items-center gap-4 border border-black/10 bg-white/5 p-4 rounded-3xl shadow-sm">
+          <img src="/logo-pose.png" alt="POSE! Logo" className="w-12 h-12 rounded-xl shrink-0" />
+          <div className="hidden md:flex flex-col gap-0.5">
+            <h1 className="text-2xl font-serif font-black tracking-tighter uppercase">POSE!</h1>
+            <p className="text-[10px] font-sans font-medium text-gray-500 tracking-widest uppercase">My Aesthetic Archive</p>
           </div>
         </div>
 
-        <div className="space-y-2 flex-1">
+        <div className="space-y-4 flex-1">
           <NavItem 
-            icon={<Grid />} 
-            label="Feed" 
+            icon={<Grid className="w-6 h-6" />} 
+            label="Archive" 
             active={activeTab === 'feed'} 
             onClick={() => setActiveTab('feed')} 
           />
           <NavItem 
-            icon={<Search />} 
-            label="Agentic Search" 
+            icon={<Search className="w-6 h-6" />} 
+            label="Aesthetic Search" 
             active={activeTab === 'search'} 
             onClick={() => setActiveTab('search')} 
           />
           <NavItem 
-            icon={<User />} 
-            label="Taste Profile" 
+            icon={<User className="w-6 h-6" />} 
+            label="Vibe Profile" 
             active={activeTab === 'profile'} 
             onClick={() => setActiveTab('profile')} 
           />
         </div>
 
         <div className="mt-auto space-y-2">
-          <div className="flex items-center gap-4 p-3 w-full rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 to-purple-600" />
-            <span className="hidden md:block font-medium">@{user.username}</span>
+          <div className="flex items-center gap-3 p-3 w-full rounded-2xl bg-white/5 border border-black/5 backdrop-blur-md">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-blue-500 p-[1.5px] shadow-md shadow-yellow-500/10">
+              <div className="w-full h-full bg-white rounded-full flex items-center justify-center">
+                <User className="w-4 h-4 text-black"/>
+              </div>
+            </div>
+            <span className="hidden md:block font-serif font-medium text-lg tracking-tight">@{user.username}</span>
           </div>
         </div>
       </nav>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl mx-auto p-4 md:p-8">
+      <main className="flex-1 max-w-6xl mx-auto p-4 md:p-10 overflow-x-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'feed' && (
             <motion.div
@@ -344,56 +426,56 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
+              className="space-y-12"
             >
-              <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-bold">Curated Inspirations</h2>
-                  <p className="text-gray-500 text-sm">Collect the vibes that define you.</p>
+              <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-10">
+                <div className="space-y-1">
+                  <h2 className="text-4xl xl:text-5xl font-serif font-black tracking-tighter uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500 animate-text-gradient">Catch your POSE!</h2>
+                  <p className="text-gray-500 font-sans font-medium mt-1">나만의 무드를 박제하세요.</p>
                 </div>
-                <form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-2 items-end">
-                  <div className="flex-1 w-full space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Instagram URL</label>
+                <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row gap-3 items-end w-full xl:w-auto p-4 bg-white/5 backdrop-blur-sm rounded-3xl border border-black/5">
+                  <div className="flex-1 w-full xl:w-80 space-y-2">
+                    <label className="text-[10px] font-sans font-black text-gray-400 uppercase tracking-widest">Instagram URL</label>
                     <input
                       type="url"
-                      placeholder="Paste Instagram link..."
+                      placeholder="Paste link..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full px-4 py-2 bg-white border border-[#DBDBDB] rounded-lg focus:outline-none focus:ring-1 focus:ring-black text-sm"
+                      className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-black text-sm font-medium transition-all"
                     />
                   </div>
-                  <div className="w-full md:w-48 space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Session ID</label>
+                  <div className="w-full sm:w-60 space-y-2">
+                    <label className="text-[10px] font-sans font-black text-gray-400 uppercase tracking-widest">Session ID</label>
                     <input
                       type="password"
                       placeholder="sessionid cookie"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full px-4 py-2 bg-white border border-[#DBDBDB] rounded-lg focus:outline-none focus:ring-1 focus:ring-black text-sm"
+                      className="w-full px-5 py-3.5 bg-gray-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-black text-sm font-medium transition-all"
                     />
                   </div>
                   <button
                     disabled={loading}
-                    className="w-full md:w-auto px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-all flex items-center justify-center gap-2 text-sm font-medium h-[38px]"
+                    className="w-full sm:w-auto px-10 py-3.5 bg-black text-white rounded-full hover:bg-gray-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:transform-none transition-all flex items-center justify-center gap-2.5 text-xs font-sans font-black tracking-widest uppercase h-[50px] sm:h-auto shadow-md shadow-black/10"
                   >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                     Add
                   </button>
                 </form>
               </header>
 
-              {/*카테고리 필터 버튼 영역  */}
+              {/* 카테고리 필터 버튼 영역 */}
               {items.length > 0 && (
-                <div className="flex flex-wrap gap-2 py-2">
+                <div className="flex flex-wrap gap-2.5 py-4 border-t border-b border-black/5">
                   {categories.map(cat => (
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
                       className={cn(
-                        "px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border",
+                        "px-6 py-2.5 rounded-full text-[11px] font-sans font-black uppercase tracking-widest transition-all",
                         selectedCategory === cat 
-                          ? "bg-black text-white border-black" 
-                          : "bg-white text-gray-500 border-[#DBDBDB] hover:border-gray-400"
+                          ? "bg-black text-white shadow-lg scale-105" 
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                       )}
                     >
                       {cat}
@@ -403,27 +485,31 @@ export default function App() {
               )}
 
               {/* Pinterest-like Grid */}
-              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
-                {/* items 대신 filteredItems로 렌더링  */}
+              <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-5 space-y-5 mt-4">
                 {Array.isArray(filteredItems) && filteredItems.map((item) => (
                   <motion.div
                     layout
                     key={item.id}
                     onClick={() => setSelectedItem(item)}
-                    className="break-inside-avoid group relative bg-white rounded-xl overflow-hidden border border-[#DBDBDB] hover:shadow-xl transition-all duration-300 cursor-pointer"
+                    className="break-inside-avoid group relative bg-white rounded-[2rem] overflow-hidden border border-black/5 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
                   >
-                    <img
-                      src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=Image+Not+Found'}
-                      alt={item.category}
-                      className="w-full h-auto object-cover"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=Image+Not+Found';
-                      }}
-                    />
-                    <div className="p-3 space-y-1">
+                    <div className="relative overflow-hidden">
+                      <img
+                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=POSE+Not+Found'}
+                        alt={item.category}
+                        className="w-full h-auto object-cover transform group-hover:scale-110 transition-transform duration-700"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=POSE+Not+Found';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm bg-black/10">
+                        <span className="text-white text-[11px] font-sans font-black uppercase tracking-widest bg-black/20 px-3 py-1 rounded-full border border-white/20">View Detail</span>
+                      </div>
+                    </div>
+                    <div className="p-5 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        <span className="text-[10px] font-sans font-black uppercase tracking-widest text-black bg-yellow-300 px-3 py-1 rounded-full">
                           {item.category}
                         </span>
                         <button 
@@ -431,48 +517,27 @@ export default function App() {
                             e.stopPropagation();
                             handleDelete(item.id);
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 p-2.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-all shadow-md shadow-red-500/10"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <p className="text-xs font-bold leading-tight line-clamp-1">{item.vibe}</p>
+                      <p className="text-sm xl:text-base font-serif font-black leading-tight line-clamp-2 text-black">{item.vibe}</p>
 
-                      {/* 상세 리뷰(facts) 정보 렌더링 */}
-                      {item.facts && typeof item.facts === 'object' && (
-                        <>
-                          {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
-                            <div className="space-y-1 mt-2 border-t border-gray-50 pt-2">
-                              {Object.entries(item.facts)
-                                .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
-                                .map(([key, value]) => (
-                                  // 너무 긴 정보는 제외하고 핵심 리뷰 정보만 노출 (예: brand, price, review 등)
-                                  <div key={key} className="flex flex-col gap-0.5">
-                                    <span className="text-[9px] font-bold text-gray-400 uppercase">{key.replace(/_/g, ' ')}</span>
-                                    <p className="text-[10px] text-gray-600 line-clamp-2 italic">
-                                      {Array.isArray(value) ? value.join(', ') : String(value)}
-                                    </p>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      <div className="pt-2 flex items-center gap-2">
+                      <div className="pt-3 flex items-center gap-3">
                         {item.url && item.url.startsWith('http') ? (
                           <a 
                             href={item.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] text-blue-500 hover:underline flex items-center gap-1"
+                            className="text-[11px] font-sans font-bold text-gray-500 hover:text-black flex items-center gap-1.5 transition-colors bg-gray-50 px-3 py-1 rounded-full border border-gray-100"
                           >
-                            <Instagram className="w-3 h-3" /> View Source
+                            <Instagram className="w-3.5 h-3.5" /> View Source
                           </a>
                         ) : (
-                          <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> AI Curated
+                          <span className="text-[11px] font-sans font-bold text-gray-400 flex items-center gap-1.5 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                            <Sparkles className="w-3.5 h-3.5 text-yellow-400" fill="currentColor"/> AI Curated
                           </span>
                         )}
                       </div>
@@ -482,9 +547,12 @@ export default function App() {
               </div>
               
               {items.length === 0 && !loading && (
-                <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-2xl">
-                  <Compass className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                  <p className="text-gray-500">Your aesthetic journey starts here.</p>
+                <div className="text-center py-40 bg-white/5 border-2 border-dashed border-gradient-r-from-yellow-400 border-r-to-blue-500 rounded-[3rem] backdrop-blur-sm animate-pulse-border">
+                  <div className="w-24 h-24 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-10 shadow-lg border border-white/20">
+                    <Zap className="w-12 h-12 text-yellow-300" fill="currentColor" />
+                  </div>
+                  <h3 className="text-3xl font-serif font-black tracking-tighter mb-3 uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500">Strike your first POSE!</h3>
+                  <p className="text-gray-500 font-sans font-medium">인스타그램 링크를 넣고 나만의 바이브를 수집하세요.</p>
                 </div>
               )}
             </motion.div>
@@ -496,27 +564,32 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-3xl mx-auto space-y-8"
+              className="max-w-4xl mx-auto space-y-16 py-12"
             >
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold italic">Agentic Curation</h2>
-                <p className="text-gray-500">Search through the lens of your own taste.</p>
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-yellow-400 via-white to-blue-500 p-[3px] mb-6 shadow-xl animate-spin-gradient">
+                  <div className="w-full h-full bg-black rounded-[20px] flex items-center justify-center">
+                    <Search className="w-10 h-10 text-white" />
+                  </div>
+                </div>
+                <h2 className="text-5xl font-serif font-black tracking-tighter uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500 animate-text-gradient">POSE! Aesthetic Search</h2>
+                <p className="text-gray-500 font-sans font-medium mt-1">당신의 취향을 기반으로 새로운 영감을 찾아냅니다.</p>
               </div>
 
-              <form onSubmit={handleSearch} className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <form onSubmit={handleSearch} className="relative group p-4 bg-white/5 backdrop-blur-sm rounded-[3rem] border border-black/5">
+                <Search className="absolute left-10 top-1/2 -translate-y-1/2 text-gray-400 w-7 h-7 transition-colors group-focus-within:text-black" />
                 <input
                   type="text"
-                  placeholder="What are you looking for? (e.g., 'A chair for my reading nook')"
+                  placeholder="What are you looking for? (e.g., 빈티지한 조명)"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-white border border-[#DBDBDB] rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-black transition-all"
+                  className="w-full pl-24 pr-40 py-6 bg-white border-2 border-gray-100 rounded-[2.5rem] shadow-xl shadow-gray-100 focus:outline-none focus:border-black transition-all text-xl font-medium"
                 />
                 <button
                   disabled={loading || quotaCountdown !== null}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2 bg-black text-white rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-all font-medium"
+                  className="absolute right-7 top-1/2 -translate-y-1/2 px-10 py-4 bg-black text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-all font-sans font-black tracking-widest uppercase text-xs h-[56px]"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : quotaCountdown !== null ? `${quotaCountdown}s` : "Dig"}
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : quotaCountdown !== null ? `${quotaCountdown}s` : "Dig for POSE"}
                 </button>
               </form>
 
@@ -524,7 +597,7 @@ export default function App() {
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-center p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 text-sm font-medium"
+                  className="text-center p-5 bg-red-50 text-red-600 rounded-2xl border border-red-100 text-sm font-sans font-bold tracking-tight shadow-lg shadow-red-500/10"
                 >
                   토큰이 부족합니다. {quotaCountdown}초 뒤에 다시 시도하세요.
                 </motion.div>
@@ -534,37 +607,39 @@ export default function App() {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white p-8 rounded-3xl border border-[#DBDBDB] shadow-sm prose prose-sm max-w-none relative"
+                  className="bg-white p-10 md:p-12 rounded-[4rem] border border-black/5 shadow-2xl shadow-gray-100 prose prose-lg max-w-none relative backdrop-blur-sm bg-white/5 overflow-hidden"
                 >
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
-                      <Sparkles className="w-4 h-4 text-yellow-500" />
-                      Curated Results
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-8 mb-10 pb-10 border-b border-gray-100">
+                    <div className="flex items-center gap-4 text-xs xl:text-sm font-sans font-black uppercase tracking-widest text-black">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 via-white to-blue-500 p-[2px] shadow-lg animate-spin-gradient">
+                        <div className="w-full h-full bg-black rounded-full flex items-center justify-center">
+                          <Sparkles className="w-5 h-5 text-yellow-400" fill="currentColor"/>
+                        </div>
+                      </div>
+                      Curated Results for your POSE
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 bg-gray-100 p-2 rounded-2xl">
                       <button
                         onClick={() => handleFeedback('like')}
                         className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+                          "flex items-center gap-2 px-8 py-3 rounded-xl text-xs xl:text-sm font-sans font-black tracking-widest uppercase transition-all",
                           feedbackType === 'like' 
-                            ? "bg-green-50 text-green-600 border-green-200" 
-                            : "bg-gray-50 hover:bg-gray-100 text-gray-600 border-[#DBDBDB]"
+                            ? "bg-black text-white shadow-xl scale-105" 
+                            : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm"
                         )}
                       >
-                        <ThumbsUp className="w-3 h-3" />
-                        Like
+                        <ThumbsUp className="w-4 h-4" /> Like
                       </button>
                       <button
                         onClick={() => handleFeedback('dislike')}
                         className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+                          "flex items-center gap-2 px-8 py-3 rounded-xl text-xs xl:text-sm font-sans font-black tracking-widest uppercase transition-all",
                           feedbackType === 'dislike' 
-                            ? "bg-red-50 text-red-600 border-red-200" 
-                            : "bg-gray-50 hover:bg-gray-100 text-gray-600 border-[#DBDBDB]"
+                            ? "bg-red-500 text-white shadow-xl scale-105" 
+                            : "bg-transparent text-gray-500 hover:bg-white hover:shadow-sm"
                         )}
                       >
-                        <ThumbsDown className="w-3 h-3" />
-                        Dislike
+                        <ThumbsDown className="w-4 h-4" /> Dislike
                       </button>
                     </div>
                   </div>
@@ -575,26 +650,25 @@ export default function App() {
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="mb-6 overflow-hidden"
+                        className="mb-10 overflow-hidden"
                       >
-                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3">
-                          <p className="text-xs font-medium text-gray-500">
-                            {feedbackType === 'like' ? "What did you like about this result?" : "How can we improve this result?"}
+                        <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 space-y-5">
+                          <p className="text-sm xl:text-base font-sans font-black text-black uppercase tracking-tight">
+                            {feedbackType === 'like' ? "What defined this POSE?" : "How can we refine your POSE?"}
                           </p>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-4">
                             <input
                               type="text"
-                              placeholder="Optional reason..."
+                              placeholder="Leave a quick note..."
                               value={feedbackReason}
                               onChange={(e) => setFeedbackReason(e.target.value)}
-                              className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-black"
+                              className="flex-1 px-6 py-4 bg-white border-none rounded-2xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-black shadow-lg shadow-gray-100"
                             />
                             <button
                               onClick={submitFeedbackReason}
-                              className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all flex items-center gap-2"
+                              className="px-10 py-4 bg-black text-white rounded-2xl text-xs font-sans font-black tracking-widest uppercase hover:bg-gray-800 transition-all flex items-center justify-center gap-2.5 h-[56px] sm:h-auto"
                             >
-                              <Send className="w-3 h-3" />
-                              Submit
+                              <Send className="w-4 h-4" /> Submit
                             </button>
                           </div>
                         </div>
@@ -602,7 +676,7 @@ export default function App() {
                     )}
                   </AnimatePresence>
 
-                  <div className="markdown-body">
+                  <div className="markdown-body prose-headings:font-serif prose-headings:font-black prose-headings:tracking-tighter prose-headings:uppercase prose-a:text-blue-600 prose-a:font-bold prose-lg prose-gray max-w-none text-gray-800 font-sans font-medium prose-strong:font-black">
                     <Markdown>{searchResults}</Markdown>
                   </div>
                 </motion.div>
@@ -616,130 +690,136 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto space-y-16"
+              className="max-w-5xl mx-auto space-y-20 py-12"
             >
-              <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 border-b border-black/5 pb-12">
-                <div className="space-y-4">
-                  <div className="w-20 h-20 rounded-full bg-gray-50 border border-black/5 flex items-center justify-center overflow-hidden">
-                    <User className="w-10 h-10 text-gray-300" />
+              <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-10 border-b border-black/10 pb-16">
+                <div className="space-y-6">
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-yellow-400 via-white to-blue-500 p-[4px] shadow-2xl shadow-black/10 animate-spin-gradient">
+                    <div className="w-full h-full bg-white rounded-full flex items-center justify-center overflow-hidden">
+                      <User className="w-16 h-16 text-black" />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-serif italic tracking-tight text-black">
+                  <div className="space-y-2">
+                    <h2 className="text-6xl font-serif font-black tracking-tighter text-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500 animate-text-gradient">
                       {user?.username || 'Anonymous'}
                     </h2>
-                    <p className="text-sm font-medium text-gray-400 uppercase tracking-widest">
-                      Aesthetic Soul No. {user?.id || '000'}
+                    <p className="text-xs font-sans font-black text-gray-400 uppercase tracking-widest bg-gray-100 inline-block px-4 py-1.5 rounded-full border border-gray-200">
+                      POSE Creator No. {user?.id || '000'}
                     </p>
                   </div>
                 </div>
-                <div className="text-left md:text-right max-w-xs">
-                  <p className="text-lg font-serif italic text-gray-500 leading-relaxed">
-                    "형용하지 못하는 나를 이루어주길"
+                <div className="text-left md:text-right max-w-sm">
+                  <p className="text-3xl xl:text-4xl font-serif font-black text-black leading-tight tracking-tighter uppercase bg-clip-text text-transparent bg-gradient-to-r from-black to-gray-500">
+                    "My Vibe is<br/>My POSE."
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                <div className="lg:col-span-4 space-y-6">
-                  <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">
-                    <Sparkles className="w-3 h-3" />
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 p-6 bg-white/5 backdrop-blur-sm rounded-[3rem] border border-black/5">
+                <div className="lg:col-span-4 space-y-8">
+                  <div className="flex items-center gap-4 text-[11px] xl:text-xs font-sans font-black uppercase tracking-[0.3em] text-blue-600 bg-blue-50 px-4 py-2 rounded-full border border-blue-100 w-auto inline-flex">
+                    <Zap className="w-4 h-4 text-yellow-400" fill="currentColor" />
                     Taste Analysis
                   </div>
-                  <h3 className="text-2xl font-serif leading-tight">
-                    The patterns of your <br />
-                    <span className="italic">unconscious choices.</span>
+                  <h3 className="text-4xl xl:text-5xl font-serif font-black tracking-tighter leading-none uppercase bg-clip-text text-transparent bg-gradient-to-r from-black via-gray-700 to-black animate-text-gradient">
+                    The Patterns<br/>of your<br/>Choices.
                   </h3>
-                  <div className="h-px w-12 bg-black/10" />
+                  <div className="h-3 w-16 bg-gradient-to-r from-yellow-400 to-blue-500 rounded-full" />
                 </div>
 
                 <div className="lg:col-span-8">
                   {taste ? (
-                    <div className="markdown-body markdown-serif text-gray-800">
-                      <Markdown>{taste}</Markdown>
+                    <div className="bg-gray-50 p-10 md:p-16 rounded-[4rem] border border-gray-100 space-y-12">
+                      <div className="markdown-body font-medium text-gray-800 text-lg leading-relaxed prose-p:mb-8 prose-strong:font-black prose-strong:text-black font-sans prose-headings:font-serif prose-headings:uppercase">
+                        <Markdown>{taste}</Markdown>
+                      </div>
                       
-                      {/* [프로필이 있을 때] 하단에 '취향 다시 분석하기' 버튼 추가 */}
-                      <div className="mt-12 pt-8 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2">
+                      <div className="pt-10 border-t border-gray-200 flex flex-wrap items-center justify-end gap-4">
                         <button 
                           onClick={handleGenerateTaste}
-                          disabled={isGeneratingTaste}
-                          className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl text-xs font-bold transition-all border border-gray-200"
+                          disabled={isGenDownloadStoryCard}
+                          className="flex items-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white rounded-full text-xs font-sans font-black tracking-widest uppercase transition-all shadow-xl shadow-pink-500/20 h-[50px]"
                         >
-                          {isGeneratingTaste ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                          {isGeneratingTaste ? '미학적 패턴 분석 중...' : '취향 다시 분석하기'}
+                          <Instagram className="w-5 h-5" />
+                          {'스토리 카드 다운로드'}
+                        </button>
+                        <button 
+                          onClick={handleeratingTaste}
+                          className="flex items-center gap-2.5 px-8 py-3.5 bg-white hover:bg-gray-100 text-black rounded-full text-xs font-sans font-black tracking-widest uppercase transition-all shadow-md shadow-gray-200 border border-gray-100 h-[50px]"
+                        >
+                          {isGeneratingTaste ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 text-yellow-400" fill="currentColor"/>}
+                          {isGeneratingTaste ? 'Re-Analyzing...' : 'Analyze Again'}
                         </button>
                         <button 
                           onClick={handleShareProfile}
                           disabled={isSharingProfile}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all border border-blue-700"
+                          className="flex items-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full text-xs font-sans font-black tracking-widest uppercase transition-all shadow-xl shadow-purple-500/20 h-[50px]"
                         >
-                          {isSharingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Instagram className="w-3 h-3" />}
-                          {isSharingProfile ? '공유 준비 중...' : '인스타그램 공유하기'}
+                          {isSharingProfile ? <Loader2 className="w-5 h-5 animate-spin" /> : <Instagram className="w-5 h-5" />}
+                          {isSharingProfile ? 'Preparing...' : 'Share My POSE'}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="py-16 border border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-6">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2">
-                        <Sparkles className="w-6 h-6 text-gray-300" />
+                    <div className="py-28 bg-gray-50 rounded-[3rem] flex flex-col items-center justify-center text-center space-y-10 px-6 border-2 border-dashed border-gradient-r-from-yellow-400 border-r-to-blue-500 backdrop-blur-sm animate-pulse-border">
+                      <div className="w-24 h-24 bg-white/50 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg border border-white/20">
+                        <Sparkles className="w-10 h-10 text-yellow-300" fill="currentColor" />
                       </div>
                       
                       {items.length > 0 ? (
-                        <>
-                          {/* [아이템은 있는데 프로필이 없을 때] 분석 시작 버튼 */}
-                          <p className="text-gray-500 font-serif italic max-w-sm">
-                            충분한 영감이 모였습니다.<br/>당신의 무의식적인 취향 패턴을 분석해 볼까요?
+                        <div className="space-y-8 flex flex-col items-center">
+                          <p className="text-gray-500 font-bold text-xl xl:text-2xl max-w-sm">
+                            충분한 영감이 모였습니다.<br/>당신의 무의식적인 패턴을 꺼내볼까요?
                           </p>
                           <button 
                             onClick={handleGenerateTaste}
                             disabled={isGeneratingTaste}
-                            className="px-8 py-3 bg-black text-white rounded-full text-sm font-bold tracking-widest hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 disabled:hover:scale-100"
+                            className="px-12 py-5 bg-black text-white rounded-full text-sm xl:text-base font-sans font-black tracking-widest uppercase hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all flex items-center gap-3.5 disabled:opacity-50 shadow-2xl shadow-black/20"
                           >
-                            {isGeneratingTaste ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                            {isGeneratingTaste ? '미학적 패턴 분석 중...' : '내 취향 분석하기'}
+                            {isGeneratingTaste ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6 text-yellow-300" fill="currentColor" />}
+                            {isGeneratingTaste ? 'Analyzing My POSE...' : 'Show My POSE'}
                           </button>
-                        </>
+                        </div>
                       ) : (
-                        <>
-                          {/* [아이템도 없을 때] 기본 상태 */}
-                          <p className="text-gray-400 font-serif italic">Save more items to reveal your hidden patterns.</p>
+                        <div className="space-y-6 flex flex-col items-center">
+                          <p className="text-gray-400 font-bold text-lg xl:text-xl">아직 수집된 영감이 없습니다.</p>
                           <button 
                             onClick={() => setActiveTab('feed')}
-                            className="text-xs font-bold uppercase tracking-widest hover:tracking-[0.2em] transition-all text-gray-600"
+                            className="px-10 py-3.5 bg-white border-2 border-gray-100 text-black rounded-full text-xs xl:text-sm font-sans font-black uppercase tracking-widest hover:border-black transition-all shadow-lg shadow-gray-100"
                           >
                             Explore Feed
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-10 pt-16 border-t border-black/10">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-300">
+                  <h4 className="text-2xl xl:text-3xl font-serif font-black uppercase tracking-tighter text-black">
                     Recent Inspirations
                   </h4>
-                  <div className="text-[10px] text-gray-400">
-                    {items.length} Items Collected
+                  <div className="text-xs font-sans font-black text-gray-400 uppercase tracking-widest bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
+                    {items.length} Items Captured
                   </div>
                 </div>
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                  {Array.isArray(items) && items.slice(0, 12).map((item) => (
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                  {Array.isArray(items) && items.slice(0, 16).map((item) => (
                     <div 
                       key={item.id} 
-                      className="aspect-square bg-gray-50 overflow-hidden cursor-pointer group relative"
+                      className="aspect-square bg-white/5 backdrop-blur-sm border border-black/5 overflow-hidden cursor-pointer group relative rounded-3xl hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 shadow-lg shadow-black/5"
                       onClick={() => setSelectedItem(item)}
                     >
                       <img 
-                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=Image+Not+Found'}
-                        className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 ease-in-out group-hover:scale-105" 
+                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
+                        className="w-full h-full object-cover grayscale opacity-70 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110 ease-in-out" 
                         referrerPolicy="no-referrer"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=Image+Not+Found';
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=No+Image';
                         }}
                       />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
                     </div>
                   ))}
                 </div>
@@ -752,84 +832,84 @@ export default function App() {
       {/* Item Detail Modal */}
       <AnimatePresence>
         {selectedItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/80 backdrop-blur-lg" onClick={() => setSelectedItem(null)}>
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]"
+              className="bg-white/5 backdrop-blur-md w-full max-w-5xl rounded-[4rem] overflow-hidden shadow-2xl shadow-black/30 flex flex-col md:flex-row max-h-[95vh] border-2 border-white/10"
             >
-              <div className="md:w-1/2 bg-gray-100 flex items-center justify-center overflow-hidden">
+              <div className="md:w-1/2 bg-gray-50 flex items-center justify-center overflow-hidden p-8 lg:p-12 relative border-r-2 border-white/10">
                 <img 
                   src={selectedItem.image_url ? `/api/images/${selectedItem.image_url}` : 'https://via.placeholder.com/600x600?text=No+Image'} 
                   alt={selectedItem.category}
-                  className="w-full h-full object-contain"
+                  className="w-full h-auto object-contain rounded-3xl shadow-xl shadow-black/10"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x600?text=No+Image';
                   }}
                 />
               </div>
-              <div className="md:w-1/2 p-6 flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
+              <div className="md:w-1/2 p-10 md:p-14 flex flex-col bg-white">
+                <div className="flex items-center justify-between mb-10 pb-6 border-b border-gray-100">
+                  <span className="text-[11px] font-sans font-black uppercase tracking-widest text-black bg-yellow-300 px-4 py-2 rounded-full border border-yellow-400">
                     {selectedItem.category}
                   </span>
                   <button 
                     onClick={() => setSelectedItem(null)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    className="p-3 hover:bg-gray-100 rounded-full transition-all shadow-md shadow-black/5"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-7 h-7" />
                   </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto space-y-12 pr-5 custom-scrollbar font-sans text-gray-800">
                   <section>
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-2">Vibe Analysis</h3>
-                    <p className="text-sm leading-relaxed text-gray-700">{selectedItem.vibe}</p>
+                    <h3 className="text-xs xl:text-sm font-sans font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-yellow-300" fill="currentColor"/> Vibe Analysis
+                    </h3>
+                    <p className="text-xl xl:text-2xl font-serif font-black leading-tight text-black tracking-tight">{selectedItem.vibe}</p>
                   </section>
 
                   <section>
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3">Extracted Information</h3>
-                    <div className="grid grid-cols-1 gap-3">
+                    <h3 className="text-xs xl:text-sm font-sans font-black text-gray-400 uppercase tracking-widest mb-5">Extracted Information</h3>
+                    <div className="grid grid-cols-1 gap-5">
                       {(() => {
-                        // facts가 문자열일 경우를 대비해 파싱 시도
                         const facts = typeof selectedItem.facts === 'string' 
                           ? JSON.parse(selectedItem.facts) 
                           : selectedItem.facts;
 
                         return facts && typeof facts === 'object' ? (
                           Object.entries(facts).map(([key, value]) => (
-                            <div key={key} className="group/fact">
-                              <dt className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                            <div key={key} className="group/fact bg-gray-50 p-6 rounded-3xl border border-gray-100 shadow-sm">
+                              <dt className="text-[10px] font-sans font-black text-gray-400 uppercase tracking-widest mb-2.5">
                                 {key.replace(/_/g, ' ')}
                               </dt>
-                              <dd className="text-sm text-gray-800 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                              <dd className="text-base xl:text-lg font-sans font-semibold text-black leading-snug">
                                 {Array.isArray(value) ? (
-                                  <div className="flex flex-wrap gap-1.5">
+                                  <div className="flex flex-wrap gap-2.5 pt-1">
                                     {value.map((val, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-white border border-gray-200 rounded-md text-[11px]">
+                                      <span key={i} className="px-3.5 py-1.5 bg-white border border-gray-200 rounded-xl text-[11px] xl:text-xs font-black shadow-md shadow-gray-100">
                                         {String(val)}
                                       </span>
                                     ))}
                                   </div>
                                 ) : (
-                                  <span className="font-medium">{String(value)}</span>
+                                  <span>{String(value)}</span>
                                 )}
                               </dd>
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-gray-400 italic">No detailed facts available.</p>
+                          <p className="text-base text-gray-400 font-medium italic">No detailed facts available.</p>
                         );
                       })()}
                     </div>
                   </section>
 
-                  <section className="mt-6 border-t pt-6">
-                    <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3">Review Insights</h3>
-                    {/* facts 내부나 reviews 객체 양쪽을 모두 체크하도록 변경 */}
+                  <section className="border-t border-gray-100 pt-10">
+                    <h3 className="text-xs xl:text-sm font-sans font-black text-gray-400 uppercase tracking-widest mb-5">Review Insights</h3>
                     {(() => {
                       const facts = typeof selectedItem.facts === 'string' ? (() => {
                         try {
@@ -841,36 +921,34 @@ export default function App() {
                       const reviewData = selectedItem.reviews || facts;
 
                       return (reviewData?.star_review || reviewData?.core_summary || reviewData?.review) ? (
-                        <div className="bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100">
-                          <div className="flex items-center gap-1 mb-2">
-                            <span className="text-sm font-bold text-yellow-600">
+                        <div className="bg-yellow-50/50 p-8 rounded-4xl border border-yellow-100/50 shadow-lg shadow-yellow-500/5">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="text-sm xl:text-base font-sans font-black text-black uppercase tracking-tight">
                               {reviewData.star_review || "Recommended"}
                             </span>
                             <div className="flex text-yellow-400">
-                              {/* 별점 데이터가 숫자일 경우 별표 렌더링 */}
                               {"★".repeat(Math.min(5, Math.floor(parseFloat(reviewData.star_review) || 5)))}
                             </div>
                           </div>
-                          <p className="text-xs leading-relaxed text-gray-600 italic">
+                          <p className="text-lg font-serif font-black leading-tight text-gray-900 tracking-tight italic">
                             "{reviewData.core_summary || reviewData.review || "No summary available"}"
                           </p>
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-400 italic">No review data extracted for this item.</p>
+                        <p className="text-base text-gray-400 font-medium italic">No review data extracted for this item.</p>
                       );
                     })()}
                   </section>
 
                   {selectedItem.url && (
-                    <section>
-                      <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-2">Source</h3>
+                    <section className="pt-6">
                       <a 
                         href={selectedItem.url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
+                        className="flex items-center justify-center gap-2.5 w-full py-5 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 text-black rounded-2xl text-[11px] font-sans font-black uppercase tracking-widest transition-colors shadow-lg shadow-gray-200/50"
                       >
-                        <Instagram className="w-4 h-4" />
+                        <Instagram className="w-5 h-5" />
                         Open Original Post
                       </a>
                     </section>
@@ -890,14 +968,16 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-4 p-3 w-full rounded-lg transition-all duration-200",
-        active ? "bg-gray-100 font-bold" : "hover:bg-gray-50 text-gray-500"
+        "flex items-center gap-4.5 p-5 w-full rounded-3xl transition-all duration-300 backdrop-blur-sm",
+        active 
+          ? "bg-gradient-to-tr from-yellow-400 via-white to-blue-500 shadow-xl shadow-yellow-500/10 text-black font-serif font-black tracking-tighter" 
+          : "hover:bg-white/5 text-gray-500 hover:text-black font-sans font-medium"
       )}
     >
-      <div className={cn("w-6 h-6", active && "text-black")}>
+      <div className={cn("shrink-0 w-7 h-7 flex items-center justify-center", active && "text-black")}>
         {icon}
       </div>
-      <span className="hidden md:block text-sm">{label}</span>
+      <span className="hidden md:block text-sm xl:text-base tracking-widest uppercase">{label}</span>
     </button>
   );
 }
