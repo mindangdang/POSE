@@ -11,3 +11,4 @@ fastmcp
 pgvector==0.2.5
 fastapi
 openai
+duckduckgo-search
