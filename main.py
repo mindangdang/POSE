@@ -244,7 +244,7 @@ def generate_taste_profile():
 @app.post("/api/agent-search")
 def run_agentic_search(request: SearchRequest):
     try:
-        agent = VibeSearchAgent(user_id="default_user")
+        agent = VibeSearchAgent(user_id=1)
         final_answer = agent.run(request.query)
         return {"success": True, "result": final_answer}
     except Exception as e:
