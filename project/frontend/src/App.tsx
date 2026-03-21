@@ -33,6 +33,7 @@ export interface SavedItem {
   vibe: string;
   image_url: string;
   created_at: string;
+  summary_text?: string;
 }
 
 function cn(...inputs: ClassValue[]) {
@@ -171,21 +172,49 @@ export default function App() {
         const error = await res.json();
         throw new Error(error.detail || "Failed to analyze URL");
       }
+      
+      // 🌟 Optimistic UI: 응답 데이터 즉시 state에 추가 (새로고침 없음)
+      const responseData = await res.json();
+      if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
+        const newItems = responseData.data.map((item: any, index: number) => ({
+          id: Date.now() + index,
+          url: newUrl,
+          category: item.category || 'General',
+          facts: item.facts || {},
+          reviews: item.reviews || null,
+          vibe: item.vibe_text || 'Extracted',
+          image_url: item.image_url || '',
+          created_at: new Date().toISOString(),
+          summary_text: item.summary_text || ''
+        }));
+        setItems([...newItems, ...items]);
+      }
+      
       setNewUrl("");
+      await fetchTaste();
     } catch (error: any) {
       console.error(error);
       alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
-    } finally {
       await fetchItems();
-      await fetchTaste(); 
+    } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!user) return;
-    await fetch(`/api/items/${id}?user_id=${user.id}`, { method: 'DELETE' });
-    fetchItems();
+    
+    // 🌟 Optimistic UI: 먼저 UI에서 제거 (즉각 업데이트)
+    const previousItems = items;
+    setItems(items.filter(item => item.id !== id));
+    
+    try {
+      await fetch(`/api/items/${id}?user_id=${user.id}`, { method: 'DELETE' });
+    } catch (error) {
+      console.error('Delete failed:', error);
+      setItems(previousItems);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -267,8 +296,21 @@ export default function App() {
       
       if (!res.ok) throw new Error("Failed to save result");
       
+      // Optimistic UI: 새로고침 없이 state 즉시 업데이트
+      const newItem: SavedItem = {
+        id: Date.now(),
+        url: "agentic-search",
+        category: "INSPIRATION",
+        facts: { content: searchResults },
+        reviews: null,
+        vibe: `Agentic Search Result: ${searchQuery}`,
+        image_url: '',
+        created_at: new Date().toISOString(),
+        summary_text: searchResults.substring(0, 100)
+      };
+      setItems([newItem, ...items]);
+      
       if (!silent) alert("Saved to your feed!");
-      await fetchItems();
       await fetchTaste();
     } catch (error: any) {
       console.error(error);
@@ -759,7 +801,14 @@ export default function App() {
             >
               <div className="md:w-1/2 bg-gray-50 flex items-center justify-center overflow-hidden p-8">
                 <img 
-                  src={selectedItem.image_url ? `/api/images/${selectedItem.image_url}` : 'https://via.placeholder.com/600x600?text=No+Image'} 
+                  // http로 시작하면 그대로 쓰고, 아니면 /api/images/를 붙이도록 분기 처리
+                  src={
+                    selectedItem.image_url?.startsWith('http') 
+                      ? selectedItem.image_url 
+                      : selectedItem.image_url 
+                        ? `/api/images/${selectedItem.image_url}` 
+                        : 'https://via.placeholder.com/600x600?text=No+Image'
+                  } 
                   alt={selectedItem.category}
                   className="w-full h-full object-contain rounded-2xl shadow-sm"
                   referrerPolicy="no-referrer"
