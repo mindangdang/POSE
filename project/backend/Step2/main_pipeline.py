@@ -3,7 +3,7 @@ from playwright.sync_api import sync_playwright
 
 # 작성해두신 외부 모듈들 임포트
 from image_ocr_llm import extract_fact_and_vibe
-from instagram_crawler import crawl_instagram_post, download_images
+from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
 from insert_DB import insert_items_to_db
 
 def main():
