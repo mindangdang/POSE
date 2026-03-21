@@ -14,6 +14,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
+from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
 from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step2.insert_DB import insert_items_to_db 
@@ -130,58 +131,80 @@ def extract_and_save_url(request: UrlAnalyzeRequest):
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
     
     crawl_result = None
-    
-    if rapid_api_key:
-        crawl_result = Rapid_crawler(post_url)
-    else:
-        if not session_id:
-            raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
+    is_instagram = "instagram.com" in post_url.lower()
+    # case1:인스타 게시물인 경우
+    if is_instagram:
+        if rapid_api_key:
+            crawl_result = Rapid_crawler(post_url)
+        else:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+                    context = browser.new_context(user_agent="Mozilla/5.0...")
+                    context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
+                    page = context.new_page()
+                    crawl_result = crawl_instagram_post(page, post_url)
+                    browser.close()
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Playwright 에러: {str(e)}")
+
+        if not crawl_result or crawl_result.get("error"):
+            raise HTTPException(status_code=400, detail=f"크롤링 실패: {crawl_result.get('error')}")
+
+        raw_downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
+        downloaded_files = []
+        
+        # 다운로드된 파일들에 절대 겹치지 않는 랜덤 이름(UUID) 부여
+        for old_path in raw_downloaded_files:
+            if os.path.exists(old_path):
+                ext = os.path.splitext(old_path)[1] or '.jpg'
+                new_filename = f"{uuid.uuid4().hex}{ext}"
+                new_path = os.path.join("insta_vibes", new_filename)
+                os.rename(old_path, new_path)
+                downloaded_files.append(new_path)
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-                context = browser.new_context(user_agent="Mozilla/5.0...")
-                context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
-                page = context.new_page()
-                crawl_result = crawl_instagram_post(page, post_url)
-                browser.close()
+            ai_result = extract_fact_and_vibe(
+                image_paths=downloaded_files, 
+                caption=crawl_result.get("caption", ""),  
+                hashtags=crawl_result.get("hashtags", []) 
+            )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Playwright 에러: {str(e)}")
+            print(f"AI 분석 중 에러 발생: {e}")
+            return {"success": False, "message": "일부 아이템 분석 실패", "data": []}
 
-    if not crawl_result or crawl_result.get("error"):
-        raise HTTPException(status_code=400, detail=f"크롤링 실패: {crawl_result.get('error')}")
+        extracted_items = ai_result.get("extracted_items", [])
 
-    raw_downloaded_files = download_images(crawl_result.get("image_urls", []), save_dir="insta_vibes")
-    downloaded_files = []
+        # 이미지 파일명(또는 경로)을 각 추출 항목에 주입하여 프론트에서 /api/images/ 경로로 접근할 수 있도록 합니다.
+        for item in extracted_items:
+            try:
+                image_index = int(item.get("image_index", 0) or 0)
+                image_path = downloaded_files[image_index] if image_index < len(downloaded_files) else None
+                item["image_url"] = os.path.basename(image_path) if image_path else ""
+            except Exception:
+                item["image_url"] = ""
     
-    # 다운로드된 파일들에 절대 겹치지 않는 랜덤 이름(UUID) 부여
-    for old_path in raw_downloaded_files:
-        if os.path.exists(old_path):
-            ext = os.path.splitext(old_path)[1] or '.jpg'
-            new_filename = f"{uuid.uuid4().hex}{ext}"
-            new_path = os.path.join("insta_vibes", new_filename)
-            os.rename(old_path, new_path)
-            downloaded_files.append(new_path)
-    try:
-        ai_result = extract_fact_and_vibe(
-            image_paths=downloaded_files, 
-            caption=crawl_result.get("caption", ""),  
-            hashtags=crawl_result.get("hashtags", []) 
-        )
-    except Exception as e:
-        print(f"AI 분석 중 에러 발생: {e}")
-        return {"success": False, "message": "일부 아이템 분석 실패", "data": []}
-
-    extracted_items = ai_result.get("extracted_items", [])
-
-    # 이미지 파일명(또는 경로)을 각 추출 항목에 주입하여 프론트에서 /api/images/ 경로로 접근할 수 있도록 합니다.
-    for item in extracted_items:
-        try:
-            image_index = int(item.get("image_index", 0) or 0)
-            image_path = downloaded_files[image_index] if image_index < len(downloaded_files) else None
-            item["image_url"] = os.path.basename(image_path) if image_path else ""
-        except Exception:
-            item["image_url"] = ""
-
+    # case2:인스타 게시물이 아닌 경우
+    else:
+        data = scrape_product_metadata(request.url)
+        if not data:
+            raise HTTPException(status_code=400, detail="웹페이지 정보를 가져올 수 없습니다.")
+        
+        extracted_items = [{
+            "category": "PRODUCT", 
+            "title": data.get("title", "Unknown"),
+            "vibe_text": data.get("description", "No description available"), # 묘사 텍스트
+            "image_url": data.get("image_url", ""), # BeautifulSoup으로 뜯어온 진짜 주소
+            "facts": {
+                "title": data.get("title", ""),
+                "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
+                "location_text": data.get("source", ""),
+                "key_details": data.get("brand", "")
+            }
+        }]
+    
+    # DB 저장 (각 아이템에 user_id를 "1"로 주입하여 저장)
     try:
         user_id = "1" 
         insert_items_to_db(user_id, post_url, extracted_items)
