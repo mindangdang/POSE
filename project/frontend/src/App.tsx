@@ -402,7 +402,7 @@ export default function App() {
                   >
                     <div className="relative overflow-hidden">
                       <img
-                        src={item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=POSE+Not+Found'}
+                        src={item.image_url?.startsWith('http') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=POSE+Not+Found'}
                         alt={item.category}
                         className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
                         referrerPolicy="no-referrer"
