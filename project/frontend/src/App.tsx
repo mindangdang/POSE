@@ -40,6 +40,101 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
+type TasteProfileSection = {
+  title: string;
+  body: string[];
+  accent: string;
+};
+
+const tasteSectionAccents = [
+  'from-purple-500/15 via-pink-500/10 to-transparent border-purple-200/70',
+  'from-blue-500/15 via-cyan-500/10 to-transparent border-blue-200/70',
+  'from-yellow-400/20 via-orange-400/10 to-transparent border-yellow-200/70',
+  'from-emerald-500/15 via-teal-500/10 to-transparent border-emerald-200/70',
+];
+
+function normalizeTasteValue(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => normalizeTasteValue(entry));
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).map(([key, nested]) => {
+      const nestedText = normalizeTasteValue(nested).join(' · ');
+      return nestedText ? `${key.replace(/_/g, ' ')}: ${nestedText}` : key.replace(/_/g, ' ');
+    });
+  }
+  return String(value)
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function buildTasteProfileSections(taste: string): TasteProfileSection[] {
+  const trimmed = taste.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      const entries = Object.entries(parsed as Record<string, unknown>)
+        .map(([key, value], index) => ({
+          title: key.replace(/_/g, ' '),
+          body: normalizeTasteValue(value),
+          accent: tasteSectionAccents[index % tasteSectionAccents.length],
+        }))
+        .filter((section) => section.body.length > 0);
+      if (entries.length > 0) return entries;
+    }
+  } catch {
+    // Fallback to markdown/text parsing below.
+  }
+
+  const markdownSections = trimmed
+    .split(/\n(?=#{1,3}\s|[-*]\s|\d+\.\s)/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block, index) => {
+      const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+      const [first, ...rest] = lines;
+      const headingMatch = first?.match(/^#{1,3}\s+(.*)$/);
+      const title = headingMatch ? headingMatch[1] : `Taste Point ${index + 1}`;
+      const contentSource = headingMatch ? rest : lines;
+      const body = contentSource
+        .flatMap((line) => line.split(/(?<=\.)\s+|•\s+|^-\s+/))
+        .map((line) => line.replace(/^[-*]\s*/, '').trim())
+        .filter(Boolean);
+      return {
+        title,
+        body,
+        accent: tasteSectionAccents[index % tasteSectionAccents.length],
+      };
+    })
+    .filter((section) => section.body.length > 0);
+
+  return markdownSections.length > 0
+    ? markdownSections
+    : [{ title: 'Taste Profile', body: [trimmed], accent: tasteSectionAccents[0] }];
+}
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
 export default function App() {
   const [user] = useState<{ id: number; username: string }>({ id: 1, username: 'guest' });
   const [items, setItems] = useState<SavedItem[]>([]);
@@ -61,6 +156,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
 
   const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
+  const tasteSections = buildTasteProfileSections(taste);
 
   useEffect(() => {
     if (user) {
@@ -134,24 +230,35 @@ export default function App() {
     }
 
     const shareText = `My POSE! 취향 프로필\n\n닉네임: ${user?.username || 'Anonymous'}\n\n${taste}\n\n#POSE #취향프로필 #Aesthetic`;
+    const instagramUrl = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      ? 'instagram://camera'
+      : 'https://www.instagram.com/';
 
     setIsSharingProfile(true);
     try {
+      await copyTextToClipboard(shareText);
+
       if (navigator.share) {
-        await navigator.share({
-          title: '내 취향 프로필',
-          text: shareText,
-        });
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
-        alert('취향 프로필 텍스트가 클립보드에 복사되었습니다. 인스타그램에서 붙여넣기 후 공유하세요.');
-        window.open('https://www.instagram.com/', '_blank');
-      } else {
-        alert('공유를 지원하지 않는 환경입니다. 취향 텍스트를 수동으로 복사하여 인스타그램에 공유해주세요.');
+        try {
+          await navigator.share({
+            title: '내 취향 프로필',
+            text: shareText,
+          });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            alert('공유가 취소되었어요. 복사된 텍스트를 인스타그램에 붙여넣어 공유할 수 있어요.');
+            return;
+          }
+          console.error('Native share failed, falling back to Instagram helper:', error);
+        }
       }
+
+      window.open(instagramUrl, '_blank', 'noopener,noreferrer');
+      alert('취향 프로필이 클립보드에 복사되었어요. 인스타그램에서 붙여넣어 공유해 보세요.');
     } catch (error) {
       console.error('Profile share failed:', error);
-      alert('프로필 공유 중 오류가 발생했습니다.');
+      alert('프로필 텍스트 복사에 실패했습니다. 브라우저 권한을 확인해 주세요.');
     } finally {
       setIsSharingProfile(false);
     }
@@ -203,7 +310,9 @@ export default function App() {
 
   const handleDelete = async (id: number) => {
     if (!user) return;
-    
+    const shouldDelete = window.confirm('정말로 삭제하십니까?');
+    if (!shouldDelete) return;
+
     // Optimistic UI: 먼저 UI에서 제거 (즉각 업데이트)
     const previousItems = items;
     setItems(items.filter(item => item.id !== id));
@@ -324,7 +433,14 @@ export default function App() {
     <div className="min-h-screen bg-white text-black font-sans flex selection:bg-yellow-300 selection:text-black">
       {/* Sidebar Navigation */}
       <nav className="w-20 md:w-64 border-r border-black/10 h-screen sticky top-0 bg-white flex flex-col p-4 z-10">
-        <div className="mb-12 px-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('feed');
+            setSelectedItem(null);
+          }}
+          className="mb-12 px-2 flex items-center gap-3 text-left transition-transform hover:scale-[1.02]"
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 via-yellow-300 to-purple-500 p-[2px] shadow-sm shrink-0">
             <div className="w-full h-full bg-black rounded-[10px] flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" fill="white" />
@@ -333,7 +449,7 @@ export default function App() {
           <h1 className="text-3xl font-black tracking-tighter uppercase hidden md:block">
             POSE!
           </h1>
-        </div>
+        </button>
 
         <div className="space-y-3 flex-1">
           <NavItem 
@@ -695,28 +811,79 @@ export default function App() {
 
                 <div className="lg:col-span-8">
                   {taste ? (
-                    <div className="bg-gray-50 p-8 md:p-12 rounded-[3rem] border border-black/5">
-                      <div className="markdown-body font-medium text-gray-800 text-lg leading-relaxed prose-p:mb-6 prose-strong:font-black prose-strong:text-black">
-                        <Markdown>{taste}</Markdown>
-                      </div>
-                      
-                      <div className="mt-12 pt-8 border-t border-gray-200 flex flex-wrap items-center justify-end gap-3">
-                        <button 
-                          onClick={handleGenerateTaste}
-                          disabled={isGeneratingTaste}
-                          className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-100 text-black rounded-2xl text-xs font-black tracking-widest uppercase transition-all shadow-sm"
-                        >
-                          {isGeneratingTaste ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                          {isGeneratingTaste ? 'Analyzing...' : 'Re-Analyze'}
-                        </button>
-                        <button 
-                          onClick={handleShareProfile}
-                          disabled={isSharingProfile}
-                          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-2xl text-xs font-black tracking-widest uppercase transition-all shadow-lg shadow-purple-500/30"
-                        >
-                          {isSharingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
-                          {isSharingProfile ? 'Preparing...' : 'Share to IG'}
-                        </button>
+                    <div className="relative overflow-hidden rounded-[3rem] border border-black/5 bg-white shadow-[0_30px_80px_-40px_rgba(0,0,0,0.35)]">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(135deg,_rgba(250,250,250,0.96),_rgba(244,244,245,0.98))]" />
+                      <div className="relative p-8 md:p-10 space-y-8">
+                        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                          <div className="space-y-3">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 backdrop-blur">
+                              <Heart className="h-3.5 w-3.5 text-pink-500" fill="currentColor" />
+                              Signature Taste
+                            </span>
+                            <div>
+                              <h4 className="text-3xl md:text-4xl font-black tracking-tighter text-black">
+                                {user?.username || 'Anonymous'}님의 취향 한 장 요약
+                              </h4>
+                              <p className="mt-2 text-sm md:text-base font-medium text-gray-500">
+                                AI가 모아본 취향의 결, 좋아하는 무드, 다시 찾게 될 영감 포인트예요.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="rounded-[2rem] bg-black px-5 py-4 text-white shadow-xl shadow-black/10">
+                            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/60">Pose Index</p>
+                            <p className="mt-2 text-3xl font-black tracking-tight">{Math.max(items.length, tasteSections.length).toString().padStart(2, '0')}</p>
+                            <p className="mt-1 text-xs font-medium text-white/70">Collected inspirations analyzed</p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {tasteSections.map((section, index) => (
+                            <div
+                              key={`${section.title}-${index}`}
+                              className={`rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 backdrop-blur-sm`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Taste Cue {String(index + 1).padStart(2, '0')}</p>
+                                  <h5 className="mt-2 text-xl font-black tracking-tight text-black capitalize">{section.title}</h5>
+                                </div>
+                                <Compass className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <div className="mt-5 space-y-3">
+                                {section.body.map((line, lineIndex) => (
+                                  <div key={`${section.title}-${lineIndex}`} className="flex gap-3 rounded-2xl bg-white/80 px-4 py-3 shadow-sm shadow-black/5">
+                                    <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-black" />
+                                    <p className="text-sm font-medium leading-6 text-gray-700">{line}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="rounded-[2rem] border border-dashed border-black/10 bg-white/70 p-5 text-sm font-medium leading-7 text-gray-600">
+                          <span className="mr-2 inline-flex rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-white">Share Tip</span>
+                          공유 버튼을 누르면 프로필 문구를 먼저 클립보드에 복사한 뒤, 인스타그램으로 이동할 수 있게 도와드려요.
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200/80 pt-6">
+                          <button 
+                            onClick={handleGenerateTaste}
+                            disabled={isGeneratingTaste}
+                            className="flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-black shadow-sm transition-all hover:bg-gray-100"
+                          >
+                            {isGeneratingTaste ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            {isGeneratingTaste ? 'Analyzing...' : 'Re-Analyze'}
+                          </button>
+                          <button 
+                            onClick={handleShareProfile}
+                            disabled={isSharingProfile}
+                            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-purple-500/30 transition-all hover:from-purple-700 hover:to-blue-700"
+                          >
+                            {isSharingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Instagram className="w-4 h-4" />}
+                            {isSharingProfile ? 'Preparing...' : 'Share to IG'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
