@@ -551,7 +551,14 @@ export default function App() {
 
               {/* Pinterest-like Grid */}
               <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
-                {Array.isArray(filteredItems) && filteredItems.map((item) => (
+                {Array.isArray(filteredItems) && filteredItems.map((item) => {
+                  // 1. facts 파싱 및 타이틀 추출
+                  const facts = typeof item.facts === 'string' ? (() => {
+                    try { return JSON.parse(item.facts); } catch { return null; }
+                  })() : item.facts;
+                  const title = facts?.title || facts?.Title;
+
+                  return (
                   <motion.div
                     layout
                     key={item.id}
@@ -585,14 +592,25 @@ export default function App() {
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
-                      <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{item.vibe}</p>
+                      
 
-                      {item.facts && typeof item.facts === 'object' && (
+                      <div>
+                        <h3 className="text-base font-black leading-tight line-clamp-2 text-black">
+                          {title || item.vibe}
+                        </h3>
+                        {title && item.vibe && (
+                          <p className="text-xs font-bold text-gray-500 mt-1 line-clamp-1">
+                            {item.vibe}
+                          </p>
+                        )}
+                      </div>
+
+                      {facts && typeof facts === 'object' && (
                         <>
-                          {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
+                          {Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title' && factKeysToShow.includes(key.toLowerCase())).length > 0 && (
                             <div className="space-y-1.5 mt-3 border-t border-gray-100 pt-3">
-                              {Object.entries(item.facts)
-                                .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
+                              {Object.entries(facts)
+                                .filter(([key]) => key.toLowerCase() !== 'title' && factKeysToShow.includes(key.toLowerCase()))
                                 .map(([key, value]) => (
                                   <div key={key} className="flex flex-col gap-0.5">
                                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</span>
@@ -625,7 +643,7 @@ export default function App() {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                )})}
               </div>
               
               {items.length === 0 && !loading && (
