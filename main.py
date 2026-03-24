@@ -161,8 +161,7 @@ async def background_crawl_and_save(post_url: str, session_id: Optional[str], ra
         # case1: 인스타 게시물인 경우
         if is_instagram:
             if rapid_api_key:
-                # 동기 함수인 Rapid_crawler를 스레드풀로 넘겨 비동기 서버 멈춤 방지
-                crawl_result = await asyncio.to_thread(Rapid_crawler, post_url) 
+                crawl_result = crawl_result = await Rapid_crawler(post_url) 
             else:
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
@@ -277,7 +276,7 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
             if count == 0:
                 return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
             
-            summary = await asyncio.to_thread(analyze_vibe, user_id=1)  
+            summary = await analyze_vibe(user_id=1)  
             if not summary:
                 return {"success": False, "message": "취향 분석에 실패했습니다."}
             
