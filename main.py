@@ -234,7 +234,7 @@ async def background_crawl_and_save(post_url: str, session_id: Optional[str], ra
         
         # DB 저장 
         user_id = "1" 
-        await asyncio.to_thread(insert_items_to_db, user_id, post_url, extracted_items)
+        await insert_items_to_db(user_id, post_url, extracted_items)
         print(f"[백그라운드] 작업 및 DB 저장 완료: 총 {len(extracted_items)}개")
 
     except Exception as e:
