@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as Tabs from '@radix-ui/react-tabs';
 import { 
   Search, 
   Plus, 
@@ -159,7 +160,7 @@ export default function App() {
   const [feedbackType, setFeedbackType] = useState<'like' | 'dislike' | null>(null);
   const [feedbackReason, setFeedbackReason] = useState("");
   const [showFeedbackReason, setShowFeedbackReason] = useState(false);
-  const [activeTab, setActiveTab] = useState<'feed' | 'search' | 'profile'>('feed');
+  const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('feed');
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
   const [isSharingProfile, setIsSharingProfile] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
@@ -479,13 +480,18 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans flex selection:bg-yellow-300 selection:text-black">
+    <Tabs.Root
+      value={currentTab}
+      onValueChange={(value) => setCurrentTab(value as 'feed' | 'search' | 'profile')}
+      orientation="vertical"
+      className="min-h-screen bg-white text-black font-sans flex selection:bg-yellow-300 selection:text-black"
+    >
       {/* Sidebar Navigation */}
       <nav className="w-20 md:w-64 border-r border-black/10 h-screen sticky top-0 bg-white flex flex-col p-4 z-10">
         <button
           type="button"
           onClick={() => {
-            setActiveTab('feed');
+            setCurrentTab('feed');
             setSelectedItem(null);
           }}
           className="mb-12 px-2 flex items-center gap-3 text-left transition-transform hover:scale-[1.02]"
@@ -500,26 +506,26 @@ export default function App() {
           </h1>
         </button>
 
-        <div className="space-y-3 flex-1">
+        <Tabs.List
+          aria-label="POSE sections"
+          className="space-y-3 flex-1"
+        >
           <NavItem 
+            value="feed"
             icon={<Grid className="w-5 h-5" />} 
             label="Feed" 
-            active={activeTab === 'feed'} 
-            onClick={() => setActiveTab('feed')} 
           />
           <NavItem 
+            value="search"
             icon={<Search className="w-5 h-5" />} 
             label="Agentic Search" 
-            active={activeTab === 'search'} 
-            onClick={() => setActiveTab('search')} 
           />
           <NavItem 
+            value="profile"
             icon={<User className="w-5 h-5" />} 
             label="Taste Profile" 
-            active={activeTab === 'profile'} 
-            onClick={() => setActiveTab('profile')} 
           />
-        </div>
+        </Tabs.List>
 
         <div className="mt-auto space-y-2">
           <div className="flex items-center gap-3 p-3 w-full rounded-2xl bg-gray-50 border border-black/5">
@@ -534,7 +540,8 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl mx-auto p-4 md:p-8 overflow-x-hidden">
         <AnimatePresence mode="wait">
-          {activeTab === 'feed' && (
+          {currentTab === 'feed' && (
+        <Tabs.Content value="feed" forceMount>
             <motion.div
               key="feed"
               initial={{ opacity: 0, y: 20 }}
@@ -700,9 +707,11 @@ export default function App() {
                 </div>
               )}
             </motion.div>
+        </Tabs.Content>
           )}
 
-          {activeTab === 'search' && (
+          {currentTab === 'search' && (
+        <Tabs.Content value="search" forceMount>
             <motion.div
               key="search"
               initial={{ opacity: 0, y: 20 }}
@@ -826,9 +835,11 @@ export default function App() {
                 </motion.div>
               )}
             </motion.div>
+        </Tabs.Content>
           )}
 
-          {activeTab === 'profile' && (
+          {currentTab === 'profile' && (
+        <Tabs.Content value="profile" forceMount>
             <motion.div
               key="profile"
               initial={{ opacity: 0, y: 20 }}
@@ -969,8 +980,9 @@ export default function App() {
                       ) : (
                         <div className="space-y-6 flex flex-col items-center">
                           <p className="text-gray-400 font-bold text-lg">아직 수집된 영감이 없습니다.</p>
-                          <button 
-                            onClick={() => setActiveTab('feed')}
+                          <button
+                            type="button"
+                            onClick={() => setCurrentTab('feed')}
                             className="px-8 py-3 bg-white border-2 border-gray-200 text-black rounded-full text-xs font-black uppercase tracking-widest hover:border-black transition-all"
                           >
                             Explore Feed
@@ -1011,6 +1023,7 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+        </Tabs.Content>
           )}
         </AnimatePresence>
       </main>
@@ -1143,23 +1156,24 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </Tabs.Root>
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
   return (
-    <button
-      onClick={onClick}
+    <Tabs.Trigger
+      value={value}
       className={cn(
-        "flex items-center gap-4 p-4 w-full rounded-2xl transition-all duration-200",
-        active ? "bg-black text-white shadow-lg" : "hover:bg-gray-50 text-gray-400 hover:text-black"
+        "flex items-center gap-4 p-4 w-full rounded-2xl transition-all duration-200 text-left",
+        "data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:shadow-lg",
+        "text-gray-400 hover:bg-gray-50 hover:text-black"
       )}
     >
-      <div className={cn("shrink-0", active && "text-white")}>
+      <div className="shrink-0">
         {icon}
       </div>
       <span className="hidden md:block text-sm font-black tracking-widest uppercase">{label}</span>
-    </button>
+    </Tabs.Trigger>
   );
 }
