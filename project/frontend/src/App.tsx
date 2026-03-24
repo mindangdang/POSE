@@ -165,6 +165,7 @@ export default function App() {
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false); 
   const [isSharingProfile, setIsSharingProfile] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
+  const [hasRequestedTasteProfile, setHasRequestedTasteProfile] = useState(false);
 
   // 성능 최적화: 의존성 값이 바뀔 때만 재계산하도록 useMemo 적용
   const tasteSections = useMemo(() => buildTasteProfileSections(taste), [taste]);
@@ -234,6 +235,13 @@ export default function App() {
       setIsGeneratingTaste(false);
     }
   }; 
+
+  const handleTasteProfileAction = async () => {
+    setHasRequestedTasteProfile(true);
+    if (!taste) {
+      await handleGenerateTaste();
+    }
+  };
 
   const handleShareProfile = async () => {
     if (!taste) {
@@ -831,7 +839,7 @@ export default function App() {
                 </div>
 
                 <div className="lg:col-span-8">
-                  {taste ? (
+                  {hasRequestedTasteProfile && taste ? (
                     <div className="relative overflow-hidden rounded-[3rem] border border-black/5 bg-white shadow-[0_30px_80px_-40px_rgba(0,0,0,0.35)]">
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(135deg,_rgba(250,250,250,0.96),_rgba(244,244,245,0.98))]" />
                       <div className="relative p-8 md:p-10 space-y-8">
@@ -895,14 +903,6 @@ export default function App() {
 
                         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200/80 pt-6">
                           <button 
-                            onClick={handleGenerateTaste}
-                            disabled={isGeneratingTaste}
-                            className="flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-black shadow-sm transition-all hover:bg-gray-100"
-                          >
-                            {isGeneratingTaste ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                            {isGeneratingTaste ? 'Analyzing...' : 'Re-Analyze'}
-                          </button>
-                          <button 
                             onClick={handleShareProfile}
                             disabled={isSharingProfile}
                             className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-purple-500/30 transition-all hover:from-purple-700 hover:to-blue-700"
@@ -925,12 +925,12 @@ export default function App() {
                             충분한 영감이 모였습니다.<br/>당신의 무의식적인 패턴을 꺼내볼까요?
                           </p>
                           <button 
-                            onClick={handleGenerateTaste}
+                            onClick={handleTasteProfileAction}
                             disabled={isGeneratingTaste}
                             className="px-10 py-4 bg-black text-white rounded-full text-sm font-black tracking-widest uppercase hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50 shadow-xl"
                           >
                             {isGeneratingTaste ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 text-yellow-400" fill="currentColor" />}
-                            {isGeneratingTaste ? 'Analyzing POSE...' : 'Analyze My POSE'}
+                            {isGeneratingTaste ? '분석 중...' : '취향분석하기!'}
                           </button>
                         </div>
                       ) : (
