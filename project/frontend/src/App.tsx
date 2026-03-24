@@ -50,7 +50,6 @@ const tasteSectionAccents = [
   'from-emerald-500/15 via-teal-500/10 to-transparent border-emerald-200/70',
 ];
 
-// 변하지 않는 상수 배열은 컴포넌트 밖으로 분리하여 불필요한 재생성 방지
 const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
 
 function normalizeTasteValue(value: unknown): string[] {
@@ -134,7 +133,6 @@ async function copyTextToClipboard(text: string) {
   document.body.removeChild(textarea);
 }
 
-// facts 데이터를 안전하게 파싱하는 유틸리티 함수 (중복 제거용)
 function parseItemFacts(facts: unknown): Record<string, any> | null {
   if (!facts) return null;
   if (typeof facts === 'string') {
@@ -167,12 +165,10 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('All'); 
   const [hasRequestedTasteProfile, setHasRequestedTasteProfile] = useState(false);
 
-  // 성능 최적화: 의존성 값이 바뀔 때만 재계산하도록 useMemo 적용
   const tasteSections = useMemo(() => buildTasteProfileSections(taste), [taste]);
   const categories = useMemo(() => ['All', ...Array.from(new Set(items.map(item => item.category))).filter(Boolean)], [items]);
   const filteredItems = useMemo(() => selectedCategory === 'All' ? items : items.filter(item => item.category === selectedCategory), [items, selectedCategory]);
 
-  // 모달 내부 최적화: selectedItem이 바뀔 때 한 번만 파싱
   const parsedModalFacts = useMemo(() => parseItemFacts(selectedItem?.facts), [selectedItem]);
   const modalTitle = parsedModalFacts?.title || parsedModalFacts?.Title;
   const modalReviewData = selectedItem?.reviews || parsedModalFacts;
@@ -284,6 +280,7 @@ export default function App() {
     }
   };
 
+  
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl || !user) return;
@@ -301,7 +298,12 @@ export default function App() {
       }
       
       const responseData = await res.json();
-      if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
+      
+      // 백엔드가 Background task로 처리 중일 때의 응답
+      if (responseData.status === "processing") {
+        alert("✨ " + responseData.message);
+      } else if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
+        // 기존 방식(동기식)으로 바로 데이터가 왔을 때를 대비한 Fallback
         const newItems = responseData.data.map((item: any, index: number) => ({
           id: Date.now() + index,
           url: newUrl,
@@ -317,12 +319,17 @@ export default function App() {
       }
       
       setNewUrl("");
-      await fetchTaste();
-      await fetchItems(); // 버그 픽스: 서버 ID 동기화를 위해 다시 Fetch
+      setSessionId("");
+      
+      // 백그라운드 처리가 끝날 즈음(3초 뒤) 피드를 한 번 갱신합니다.
+      setTimeout(() => {
+        fetchItems();
+        fetchTaste();
+      }, 3000);
+      
     } catch (error: any) {
       console.error(error);
-      alert("분석 중 일부 오류가 발생했습니다. 저장된 데이터만 확인합니다.");
-      await fetchItems();
+      alert("분석 요청 중 오류가 발생했습니다: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -345,31 +352,57 @@ export default function App() {
     }
   };
 
+  // 에이전트 검색 결과를 실시간으로 받아오는 Streaming 로직
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery || !user) return;
+    
     setLoading(true);
-    setSearchResults(null);
+    setSearchResults(""); // null 대신 빈 문자열로 렌더링 시작
     setFeedbackType(null);
     setFeedbackReason("");
     setShowFeedbackReason(false);
+    
     try {
       const res = await fetch('/api/agent-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery }) 
       });
-      const data = await res.json();
+      
       if (res.status === 429) {
         setQuotaCountdown(60); 
+        setLoading(false);
         return;
       }
-      if (!res.ok) throw new Error(data.detail || "Search failed");
-      setSearchResults(data.result || null);
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Search failed");
+      }
+
+      // 스트리밍 데이터 읽기 준비
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      if (!reader) throw new Error("스트리밍을 지원하지 않는 브라우저입니다.");
+      
+      setLoading(false); // 연결이 성공하면 로딩 스피너를 끄고 타자를 치기 시작합니다.
+      let accumulatedText = "";
+
+      // 청크(데이터 조각)가 올 때마다 누적해서 렌더링
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+        setSearchResults(accumulatedText);
+      }
+      
     } catch (error: any) {
       console.error(error);
       alert(error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -438,7 +471,7 @@ export default function App() {
       
       if (!silent) alert("Saved to your feed!");
       await fetchTaste();
-      await fetchItems(); // 버그 픽스: 동기화 누락 방지
+      await fetchItems();
     } catch (error: any) {
       console.error(error);
       if (!silent) alert(error.message);
@@ -528,7 +561,7 @@ export default function App() {
                   <div className="w-full sm:w-48 space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Session ID</label>
                     <input
-                      type="text" // 버그 수정: password 타입 제거하여 자동완성 방지
+                      type="text"
                       placeholder="sessionid"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
