@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import List, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -295,9 +295,10 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 async def run_agentic_search(request: SearchRequest):
     try:
         agent = VibeSearchAgent(user_id=1)
-        # LLM 호출도 스레드로 분리하여 서버 응답 지연 방지
-        final_answer = await asyncio.to_thread(agent.run, request.query)
-        return {"success": True, "result": final_answer}
+        return StreamingResponse(
+            agent.run_stream(request.query), 
+            media_type="text/plain"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"에이전트 검색 실패: {str(e)}")
 

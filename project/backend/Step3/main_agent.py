@@ -48,115 +48,102 @@ class VibeSearchAgent:
         )
         return response.embeddings[0].values
 
-    def _execute_vibe_pipeline(self, user_query: str) -> str:
-        """제미나이가 Vibe Search를 승인했을 때 실행되는 핵심 파이프라인"""
+    # ... (init과 _get_embedding 부분은 기존과 동일) ...
+
+    def _execute_vibe_pipeline_stream(self, user_query: str):
+        """제미나이가 Vibe Search를 승인했을 때 실행되는 핵심 파이프라인 (스트리밍 버전)"""
+        
+        # [UX 트릭] 프론트엔드에 지금 무슨 작업을 하고 있는지 먼저 한 줄씩 타자를 쳐줍니다.
+        yield "질문의 숨은 의도를 파악하여 취향 DB를 탐색하고 있습니다...\n\n"
         
         # 1. 쿼리 벡터화
-        print("   [Step 1] 사용자 질문을 수학적 주파수(Vector)로 변환합니다...")
         query_vector = self._get_embedding(user_query)
         
         # 2. 취향 맥락 수집 (MCP 1 호출)
-        print("   [Step 2] 취향 MCP에 접근하여 맥락(Vibe Context)을 분석합니다...")
         vibe_context = call_mcp_tool(
             "get_taste_context", 
             user_query=user_query, 
             query_vector=query_vector, 
             user_id=self.user_id
         )
-        print(f"      => 도출된 취향: {vibe_context}")
+        
+        yield "유저님의 미학적 취향 패턴을 분석 완료했습니다. 맞춤형 큐레이션을 시작합니다...\n\n"
         
         # 3. 쿼리 확장 (MCP 2 호출)
-        print("   [Step 3] 검색 엔진 노이즈를 걷어낼 Dorks(검색어)를 설계합니다...")
         expanded_queries_str = call_mcp_tool(
             "expand_search_queries", 
             user_query=user_query, 
             vibe_context=vibe_context
         )
         
-        # 2. 텍스트를 파이썬 리스트 구조로 다시 변환합니다.
         try:
             expanded_queries = json.loads(expanded_queries_str)
         except json.JSONDecodeError:
-            # (만약 LLM이 JSON 형식을 어겼을 경우를 대비한 안전 장치)
             expanded_queries = [expanded_queries_str] 
 
-        #  3. 정상적인 리스트가 되었으므로, 이제 한 줄씩 예쁘게 출력됩니다.
-        for q in expanded_queries:
-            print(f"      =>  Dork: {q}")
-            
-        # 4. 구글 검색을 통한 최종 큐레이션 (Gemini Search Grounding)
-        print("   [Step 4] 제미나이가 구글 웹 검색을 수행하고 최종 답변을 큐레이팅합니다...")
+        yield "일반적인 노이즈를 걷어내고, 감도 높은 웹 검색을 수행 중입니다...\n\n---\n\n"
+        
+        # 4. 구글 검색을 통한 최종 큐레이션 (Streaming)
         prompt = f"""
-        당신은 하이엔드 라이프스타일 큐레이터입니다.
+        당신은 하이엔드 라이프스타일 큐레이터이다.
         
         [사용자 원본 질문]: "{user_query}"
         [사용자 취향 맥락]: "{vibe_context}"
         [최적화된 검색 쿼리들]: {expanded_queries}
         
         [Instruction]
-        1. 부여된 '구글 검색 기능'을 활용하여 위 [최적화된 검색 쿼리들]로 실제 웹 검색을 수행하세요.
-        2. 양산형 블로그나 광고는 배제하고, 사용자의 '취향 맥락'과 시각적/감각적으로 완벽히 일치하는 결과 1~2개만 엄선하세요.
-        3. 고급 매거진의 에디터처럼 통찰력 있고 매혹적인 톤앤매너로 답변을 작성하세요.
+        1. 부여된 '구글 검색 기능'을 활용하여 위 [최적화된 검색 쿼리들]을 활용해 실제 웹 검색을 수행하라.
+        2. 양산형 블로그나 광고, 쿠팡 등의 싸구려 검색결과는 배제하고, 사용자의 '취향 맥락'과 페르소나를 만조시킬 수 있는 감도높은 결과만 엄선하라.
         """
         
-        response = self.client.models.generate_content(
+        # generate_content_stream으로 변경하여 청크 단위로 받아옵니다.
+        response_stream = self.client.models.generate_content_stream(
             model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}], # 구글 검색 도구 활성화
-                temperature=0.7
+                tools=[{"google_search": {}}], 
+                temperature=0.5
             )
         )
-        return response.text
-
-    def run(self, user_query: str) -> str:
-        """메인 에이전트 라우팅 및 실행"""
-        print(f"\n [User Query] '{user_query}'")
-        print("에이전트가 질문의 성격을 판단 중입니다...")
         
-        # 제미나이에게 도구 설명서를 쥐여주고 판단을 맡깁니다.
+        # 스트리밍 청크를 실시간으로 프론트엔드로 밀어냅니다(yield)
+        for chunk in response_stream:
+            if chunk.text:
+                yield chunk.text
+
+    def run_stream(self, user_query: str):
+        """메인 에이전트 라우팅 및 실행 (스트리밍 반환)"""
+        
+        # 제미나이에게 판단을 맡깁니다. (이 작업은 1~2초 내에 끝나므로 스트리밍 생략)
         response = self.client.models.generate_content(
-            model='gemini-2.5-flash', # 라우팅 판단은 빠르고 저렴한 flash 모델 사용 권장
+            model='gemini-2.5-flash-lite', 
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=self.tools,
-                temperature=0.0 # 냉철한 판단을 위해 창의성 제거
+                temperature=0.0 
             )
         )
         
-        # 제미나이가 도구(trigger_vibe_search)를 사용하기로 결정했는지 확인합니다.
+        # 도구(trigger_vibe_search)를 사용하기로 결정한 경우
         if response.function_calls:
             for function_call in response.function_calls:
                 if function_call.name == "trigger_vibe_search":
-                    print("[판단 결과] 이 질문은 개인의 '취향 분석'이 필요합니다. Vibe Search를 가동합니다.\n")
-                    return self._execute_vibe_pipeline(user_query)
+                    # 파이프라인 제너레이터를 그대로 연결합니다.
+                    yield from self._execute_vibe_pipeline_stream(user_query)
+                    return
         
-        # 도구를 호출하지 않은 경우 (일반적인 대화나 단순 정보 검색)
-        print(" [판단 결과] 단순 지식/대화형 질문입니다. 즉시 답변을 생성합니다.\n")
+        # 도구를 호출하지 않은 경우 (일반 지식 검색)
+        yield "일반 웹 검색을 통해 빠르고 정확한 답변을 생성 중입니다...\n\n"
         
-        # 구글 검색만 켜서 일반적인 답변 제공
-        standard_response = self.client.models.generate_content(
+        standard_response_stream = self.client.models.generate_content_stream(
             model='gemini-2.5-flash',
             contents=user_query,
             config=types.GenerateContentConfig(
                 tools=[{"google_search": {}}] 
             )
         )
-        return standard_response.text
+        
+        for chunk in standard_response_stream:
+            if chunk.text:
+                yield chunk.text
 
-# ==========================================
-# 실행부 테스트
-# ==========================================
-if __name__ == "__main__":
-    TEST_USER_ID = 1
-    agent = VibeSearchAgent(user_id=TEST_USER_ID)
-    
-    # 케이스 1: 취향 분석이 필요한 질문 (Vibe Search 파이프라인 가동됨)
-    print("\n--- [Test Case 1] ---")
-    answer1 = agent.run("이번 주말에 서촌에서 책 읽을 만한 조용한 카페 추천해 줘")
-    print("\n [최종 결과]\n", answer1)
-    
-    # 케이스 2: 취향 분석이 필요 없는 일반 질문 (바로 답변함)
-    print("\n--- [Test Case 2] ---")
-    answer2 = agent.run("서촌은 어느 구에 위치해 있어?")
-    print("\n [최종 결과]\n", answer2)
