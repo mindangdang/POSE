@@ -16,7 +16,6 @@ class VibeSearchAgent:
                 base_url=self.my_proxy_url
             )
         )
-        self.client = genai.Client(api_key=self.api_key)
         self.user_id = user_id
         
         # ==========================================
