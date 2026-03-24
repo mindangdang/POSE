@@ -214,13 +214,15 @@ export default function App() {
   };
 
   const handleGenerateTaste = async () => {
-    setIsGeneratingTaste(true);
+    setIsGeneratingTaste(true); // "분석 중..." 스피너 켜기
+    setTaste("");               // 화면에 남아있던 옛날 취향 텍스트 지우기
+    
     try {
       const res = await fetch('/api/generate-taste', { method: 'POST' });
       const data = await res.json();
       
       if (data.success) {
-        setTaste(data.summary);
+        setTaste(data.summary); // 제미나이가 방금 막 분석한 따끈따끈한 결과 렌더링!
       } else {
         alert(data.message || "취향 분석에 실패했습니다.");
       }
@@ -228,15 +230,13 @@ export default function App() {
       console.error("Taste generation failed:", error);
       alert("취향 분석 중 에러가 발생했습니다.");
     } finally {
-      setIsGeneratingTaste(false);
+      setIsGeneratingTaste(false); // 분석이 끝났으니 스피너 끄기
     }
-  }; 
+  };
 
   const handleTasteProfileAction = async () => {
+    await handleGenerateTaste();
     setHasRequestedTasteProfile(true);
-    if (!taste) {
-      await handleGenerateTaste();
-    }
   };
 
   const handleShareProfile = async () => {
