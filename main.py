@@ -153,7 +153,7 @@ class ManualItemCreate(BaseModel):
     image_url: Optional[str] = ""
 
 # ==========================================
-# 4. [백그라운드 워커] 무거운 크롤링 전담
+# 4. [백그라운드 워커] 무거운 크롤링 전담  
 # ==========================================
 async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
     print(f"[백그라운드] 작업 시작: {post_url}")
@@ -215,8 +215,9 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
                 return
             
+            title = data.get("title", "No title available")
             description = data.get("description", "No description available")
-            ai_parsed_data = await analyze_description_with_gemini(description)
+            ai_parsed_data = await analyze_description_with_gemini(title,description)
             brand_info = data.get("brand", "")
             final_key_details = ai_parsed_data.get("key_details", "")
             if brand_info:
@@ -232,8 +233,10 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                     "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                     "location_text": data.get("source", ""),
                     "key_details": final_key_details
-                }
+                },
+                "reviews" : ai_parsed_data.get("review", "No review available")
             }]
+
         if not extracted_items:
             raise Exception("추출된 데이터가 없습니다.")
 
@@ -279,10 +282,10 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
         await conn.rollback()
         raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {str(e)}")
 
-    # 2. 백그라운드 큐에 할당 (new_item_id 전달)
-    background_tasks.add_task(background_crawl_and_save, new_item_id, post_url, session_id, rapid_api_key, user_id)
+    # 2. 백그라운드 큐에 할당 
+    background_tasks.add_task(background_crawl_and_save, new_item_id, user_id, post_url, session_id, rapid_api_key)
     
-    # 3. 즉시 리턴 (프론트에서 이 item_id를 받아 폴링 시작)
+    # 3. 즉시 리턴 
     return {
         "success": True, 
         "message": "데이터 추출 및 AI 분석이 시작되었습니다.", 
