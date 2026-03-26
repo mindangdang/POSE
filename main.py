@@ -172,7 +172,7 @@ async def background_crawl_and_save(item_id: int, user_id: str,post_url: str, se
                     context = await browser.new_context(user_agent="Mozilla/5.0...")
                     await context.add_cookies([{"name": "sessionid", "value": session_id, "domain": ".instagram.com", "path": "/", "httpOnly": True, "secure": True}])
                     page = await context.new_page()
-                    crawl_result = crawl_instagram_post(page, post_url) 
+                    crawl_result = await crawl_instagram_post(page, post_url) 
                     await browser.close()
 
             if not crawl_result or crawl_result.get("error"):
@@ -358,7 +358,7 @@ async def save_agent_feedback(request: FeedbackRequest, conn = Depends(get_db_co
             await conn.commit()
 
             try:
-                summary = await asyncio.to_thread(analyze_vibe, user_id=int(request.user_id))
+                summary = await analyze_vibe(user_id=int(request.user_id))
                 if summary:
                     await cursor.execute(
                         "INSERT INTO taste_profile (id, summary, updated_at) VALUES (1, %s, CURRENT_TIMESTAMP) ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP",
