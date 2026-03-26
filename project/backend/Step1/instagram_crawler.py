@@ -21,7 +21,6 @@ CAPTION_CANDIDATES = [
     "span._ap3a",
 ]
 
-# async def로 변경하고 Playwright 메서드에 await 적용
 async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dict[str, object]:
     result = {
         "post_url": post_url,

@@ -20,6 +20,7 @@ class ProductFallbackSchema(BaseModel):
     image_url: str
     brand: Optional[str] = ""
     description: Optional[str] = ""
+    reviews: Optional[str] = ""
 
 async def fallback_with_gemini(url: str):
     try:
@@ -81,6 +82,7 @@ async def fallback_with_gemini(url: str):
             "currency": data.currency,
             "image_url": real_image_url,
             "description": data.description,
+            "review": data.reviews,
             "source": "gemini-url-context-backend" 
         }
     except Exception as e:
@@ -240,7 +242,7 @@ async def scrape_product_metadata(url: str) -> dict:
         # --- 1차 방어막: 파싱이 실패하면(제목이나 이미지가 없으면) Gemini 폴백 (비동기 호출) ---
         if not title or not normalized_image_url:
             print(f"[{url}] 핵심 정보 누락. Gemini 폴백 실행...")
-            gemini_result = await fallback_with_gemini(url) # await 추가!
+            gemini_result = await fallback_with_gemini(url) 
             if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
                 return gemini_result
 

@@ -155,7 +155,7 @@ class ManualItemCreate(BaseModel):
 # ==========================================
 # 4. [백그라운드 워커] 무거운 크롤링 전담
 # ==========================================
-async def background_crawl_and_save(item_id: int, user_id: str,post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
+async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, session_id: Optional[str], rapid_api_key: Optional[str]):
     print(f"[백그라운드] 작업 시작: {post_url}")
     try:
         crawl_result = None
