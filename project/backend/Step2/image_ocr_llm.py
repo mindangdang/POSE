@@ -1,6 +1,5 @@
 import os
 import json
-import time 
 from typing import List, Optional
 from PIL import Image
 from dotenv import load_dotenv
@@ -163,6 +162,7 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
 
             for item in items_to_review:
                 matched_review = review_dict.get(item.facts.title)
+                
                 if matched_review and (matched_review.star_review or matched_review.core_summary):
                     item.reviews = Review(
                         star_review=matched_review.star_review,
