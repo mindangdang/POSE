@@ -234,7 +234,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                     "location_text": data.get("source", ""),
                     "key_details": final_key_details
                 },
-                "reviews" : ai_parsed_data.get("reviews") or {"star_review": "", "core_summary": "리뷰 없음"}
+                "reviews" : ai_parsed_data.get("reviews") or {}
             }]
 
         if not extracted_items:
