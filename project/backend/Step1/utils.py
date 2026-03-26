@@ -51,7 +51,7 @@ async def analyze_description_with_gemini(title: str, description: str) -> dict:
 
     [출력 형식]
     {{
-        "vibe_text": "무드 텍스트",
+        "vibe_text": "단순한 객관적 묘사가 아닌 아이템이 사용자의 욕구를 자극한 바로 그 '미세한 매력 포인트를 추론해 낼 것.
         "key_details": "핵심 특징"
         "reviews": {{
             "star_review": "4.5/5",
