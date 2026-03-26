@@ -154,10 +154,7 @@ async def analyze_vibe(user_id: int):
         # Pydantic 객체로 파싱된 데이터
         data = response.parsed
         
-        # DB의 summary(TEXT) 컬럼 구조에 맞게 예쁘게 마크다운 텍스트로 조립
-        final_summary = f"**페르소나**\n{data.persona}\n\n**나도 몰랐던 나의 취향**\n{data.unconscious_taste}\n\n**추천**\n{data.recommendation}"
-        
-        return final_summary
+        return data.model_dump()
         
     except Exception as e:
         print(f"LLM 프로필 생성 중 오류 발생: {e}") 
