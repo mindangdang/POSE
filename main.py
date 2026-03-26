@@ -51,7 +51,6 @@ async def init_db(db_pool: AsyncConnectionPool):
                     vibe_text TEXT,
                     vibe_vector vector(768),
                     facts JSONB,
-                    reviews JSONB,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(source_url, title)
                   );
@@ -61,12 +60,7 @@ async def init_db(db_pool: AsyncConnectionPool):
                   ALTER TABLE saved_posts
                   ADD COLUMN IF NOT EXISTS image_url TEXT;
                 """)
-                
-                await cursor.execute("""
-                  ALTER TABLE saved_posts
-                  ADD COLUMN IF NOT EXISTS reviews JSONB;
-                """)
-                
+
                 await cursor.execute("""
                   CREATE TABLE IF NOT EXISTS taste_profile (
                     id INTEGER PRIMARY KEY DEFAULT 1,
@@ -217,9 +211,8 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
                 return
             
-            title = data.get("title", "No title available")
             description = data.get("description", "No description available")
-            ai_parsed_data = await analyze_description_with_gemini(title,description)
+            ai_parsed_data = await analyze_description_with_gemini(description)
             brand_info = data.get("brand", "")
             final_key_details = ai_parsed_data.get("key_details", "")
             if brand_info:
@@ -235,8 +228,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                     "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                     "location_text": data.get("source", ""),
                     "key_details": final_key_details
-                },
-                "reviews" : ai_parsed_data.get("reviews") or {}
+                }
             }]
 
         if not extracted_items:
@@ -282,8 +274,8 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
     try:
         async with conn.cursor() as cursor:
             await cursor.execute("""
-                INSERT INTO saved_posts (user_id, source_url, category, title, vibe_text, image_url, facts, reviews) 
-                VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}', '{}') 
+                INSERT INTO saved_posts (user_id, source_url, category, title, vibe_text, image_url, facts) 
+                VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}') 
                 RETURNING id
             """, (user_id, post_url))
             new_item_id = (await cursor.fetchone())[0]
@@ -413,15 +405,14 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
     try:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, reviews, title, image_url) 
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, title, image_url) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (
                     str(request.user_id), 
                     request.url, 
                     request.category, 
                     request.vibe, 
                     request.facts,               
-                    request.facts.get("reviews"), 
                     request.facts.get("title", "Manual Item"),
                     request.image_url or ""
                 )
@@ -449,7 +440,6 @@ async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
                     vibe_text as vibe, 
                     image_url, 
                     summary_text, 
-                    reviews,
                     created_at 
                 FROM saved_posts 
                 WHERE user_id = %s OR user_id = 'default_user'

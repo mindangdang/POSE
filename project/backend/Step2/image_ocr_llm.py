@@ -38,28 +38,16 @@ class Facts(BaseModel):
     time_info: Optional[str] = Field(description="시간/기간 텍스트", default=None)
     key_details: Optional[List[str]] = Field(description="핵심 특징 1, 2, 3", default=None)
 
-class Review(BaseModel):
-    star_review: str = Field(description="별점 등 해당 대상에 대한 평균적인 점수 정보", default=None)
-    core_summary: str = Field(description="여러사람들의 리뷰를 중요하고 핵심적인 내용만 요약한 텍스트", default=None)
-
 class ExtractedItem(BaseModel):
     image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
     category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
     summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약")
     vibe_text: str = Field(description="감성, 분위기, 사용 맥락 요약. 시각적 분위기를 중점적으로 상황에 맞는 추상적 키워드를 문장에 자연스럽게 포함할 것")
     facts: Facts
-    reviews: Optional[Review] = None
 
 class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
 
-class ReviewResult(BaseModel):
-    title: str = Field(description="리뷰를 검색한 원본 대상의 이름")
-    star_review: str = Field(description="별점 등 평가 점수 (없으면 빈 문자열)", default="")
-    core_summary: str = Field(description="핵심 리뷰 요약 (없으면 빈 문자열)", default="")
-
-class ReviewBatchResponse(BaseModel):
-    results: List[ReviewResult]
 # ---------------------------------------------------------
 # 3. Gemini 2.5 Flash 분석 엔진 & 멀티모달 파이프라인
 # ---------------------------------------------------------
@@ -117,64 +105,6 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
     )
 
     extracted_data = response_ocr.parsed
-
-    # Step.2: Review Search 
-    items_to_review = [item for item in extracted_data.extracted_items if item.facts.title]
-    titles_to_search = [item.facts.title for item in items_to_review]
-
-    if titles_to_search:
-        print(f"[Step 2] {len(titles_to_search)}개 대상의 리뷰를 한 번에 일괄 검색합니다: {titles_to_search}")
-
-        prompt_review = f"""
-        너는 주어진 이름 목록을 바탕으로 구글 검색을 통해 객관적인 평가와 유용한 리뷰 정보를 모아오는 수집가야.
-        
-        [검색 대상 목록]: {titles_to_search}
-        
-        [규칙]
-        1. 목록에 있는 '각 대상'에 대해 모두 구글 검색을 수행해.
-        2. 없는 내용은 절대 지어내지 말고, 내용을 비워둬.
-        3. 개인의 악의적인 리뷰나 허위 사실 등 노이즈는 배제해.
-        4.무조건 실시간으로 구글검색을 해서 리뷰를 수집해와. (내장된 지식이나 과거 데이터에 의존하지 말고)
-
-        [CRITICAL INSTRUCTION]
-        결과는 반드시 아래 형태의 순수 JSON 문자열로만 반환해. 
-        마크다운 백틱(```json)과 다른 인사말을 절대 포함하지 마.
-
-        {
-            "title": "상품명",
-            "star_review": "Recommended",
-            "core_summary": "리뷰 핵심 요약..."
-}
-        """
-
-        try:
-            response_review = client.models.generate_content(
-                model='gemini-2.5-flash', 
-                contents=prompt_review,
-                config=types.GenerateContentConfig(
-                    tools=[{"google_search": {}}], 
-                    temperature=0.1 
-                )
-            )
-            
-            review_batch = response_review.parsed
-            review_dict = {res.title: res for res in review_batch.results}
-
-            for item in items_to_review:
-                matched_review = review_dict.get(item.facts.title)
-                
-                if matched_review and (matched_review.star_review or matched_review.core_summary):
-                    item.reviews = Review(
-                        star_review=matched_review.star_review,
-                        core_summary=matched_review.core_summary
-                    )
-                else:
-                    item.reviews = None
-                    
-        except Exception as e:
-            print(f"리뷰 일괄 검색 중 에러 발생 (파이프라인 통과 방어): {e}")
-            for item in items_to_review:
-                item.reviews = None 
  
     print("모든 데이터 추출, 임베딩 및 조립 완료!")
     return extracted_data.model_dump()
