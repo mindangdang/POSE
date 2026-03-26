@@ -3,6 +3,20 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
+from typing import Optional, List
+import json
+import re
+
+# 1. 인스타 코드와 동일한 구조의 스키마 정의
+class Review(BaseModel):
+    star_review: str = Field(description="별점 등 해당 대상에 대한 평균적인 점수 정보", default="")
+    core_summary: str = Field(description="여러사람들의 리뷰를 중요하고 핵심적인 내용만 요약한 텍스트", default="")
+
+class ProductAnalysisResult(BaseModel):
+    vibe_text: str = Field(description="상품이 주는 감성, 무드, 분위기")
+    key_details: List[str] = Field(description="상품의 핵심 특징 리스트")
+    reviews: Optional[Review] = None
 
 load_dotenv()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -19,7 +33,7 @@ client = genai.Client(
 
 async def analyze_description_with_gemini(title: str, description: str) -> dict:
     if not description or description == "No description available":
-        return {"vibe_text": "No description available", "key_details": ""}
+        return {"vibe_text": "No description available", "key_details": "", "reviews": {"star_review": "", "core_summary": ""}}
 
     prompt = f"""
     다음 상품설명을 분석하여 'vibe_text'와'key_details'로 분리하고, title을 이용해서 상품의 주요리뷰를 요약해와. 
@@ -39,7 +53,10 @@ async def analyze_description_with_gemini(title: str, description: str) -> dict:
     {{
         "vibe_text": "무드 텍스트",
         "key_details": "핵심 특징"
-        "review":"리뷰정보"
+        "reviews": {{
+            "star_review": "4.5/5",
+            "core_summary": "실제 유저들의 주요 리뷰 요약"
+        }}
     }}
     """
     try:
@@ -56,10 +73,10 @@ async def analyze_description_with_gemini(title: str, description: str) -> dict:
         return json.loads(clean_text)
         
     except Exception as e:
-        print(f"Gemini API 파싱 에러: {e}")
-        # API 실패 시 원본 데이터를 적당히 쪼개서 반환하는 Fallback
+        print(f"Gemini API 에러: {e}")
+        # 실패 시에도 통일된 스키마 구조의 기본값 반환
         return {
             "vibe_text": description[:50] + "...", 
-            "key_details": "세부 정보 없음",
-            "review": "리뷰 정보 없음"
+            "key_details": ["세부 정보 없음"],
+            "reviews": {"star_review": "", "core_summary": "리뷰 정보 없음"}
         }
