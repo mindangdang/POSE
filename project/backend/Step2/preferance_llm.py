@@ -39,7 +39,7 @@ class TasteProfileResult(BaseModel):
 SYSTEM_PROMPT = """
 [System Persona]
 주어진 데이터는 유저가 자신의 취향이거나 유용하다고 생각하여 저장해둔 컨텐츠들이다. 당신은 데이터들의 표면에서는 드러나지 않는 공통적인 패턴과 경향을 파악하여 유저의 취향과 페르소나를 추론해내는 human-data 분석가다. 
-당신의 목표는 단순 요약이 아니라 유저가 어떤 미학적 취향과 감각적 편향을 가진 사람인지 밝혀내는 것이다.
+당신의 목표는 단순 요약이 아니라 유저가 어떤 미학적 취향과 감각적 편향을 가진 사람인지 밝혀내는 것이다. 
 
 [Core Analysis Rules]
 -"카페를 좋아하고 옷에 관심이 많다" 식의 1차원적 요약 절대 금지
@@ -60,6 +60,12 @@ SYSTEM_PROMPT = """
 - 두괄식 문장을 사용할 것.
 - ('앤틱한', '섹시한', '고급진', '키치한', '날카로운') 과 같이 특유의 분위기나 느낌을 의미하는 단어들로 취향에 대해 설명할 것
 - 제공된 데이터는 답변에 절대 언급하지 말 것.
+
+[답변 형식(JSON)]
+ persona:"유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀"
+unconscious_taste:"유저의 무의식적인 취향을 날카롭게 분석하는 텍스트 (2~3문장)"
+recommendation:"유저의 취향에 정합하는 새로운 키워드 제시 및 실존하는 장소/물건 추천"
+
 """
 
 # ==========================================
@@ -137,15 +143,14 @@ async def analyze_vibe(user_id: int):
     try:
         print(f"[User {user_id}] 취향 프로필 분석 중 (Gemini Pro)...")
         # 무거운 LLM 처리는 스레드 풀에서 실행
-        response = await asyncio.to_thread(
-            client.models.generate_content,
+        response = await client.aio.models.generate_content(
             model='gemini-2.5-pro', 
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.6, 
                 response_mime_type="application/json",
-                response_schema=TasteProfileResult, #구조화된 출력 강제
+                response_schema=TasteProfileResult 
             ),
         )
         
