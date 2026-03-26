@@ -118,8 +118,11 @@ app.add_middleware(
 async def get_db_connection():
     if pool is None:
         raise HTTPException(status_code=500, detail="Database pool is not initialized")
-    async with pool.connection() as conn:
+    conn = await pool.getconn()
+    try:
         yield conn
+    finally:
+        await pool.putconn(conn)
 
 # ==========================================
 # 3. Pydantic Models 
@@ -162,7 +165,7 @@ async def background_crawl_and_save(item_id: int, user_id: str,post_url: str, se
         # case1: 인스타 게시물인 경우
         if is_instagram:
             if rapid_api_key:
-                crawl_result = crawl_result = await Rapid_crawler(post_url) 
+                crawl_result = await Rapid_crawler(post_url) 
             else:
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
@@ -238,8 +241,6 @@ async def background_crawl_and_save(item_id: int, user_id: str,post_url: str, se
             async with conn.cursor() as cursor:
                 await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
                 await conn.commit()
-                
-        await insert_items_to_db(user_id, post_url, extracted_items)
         # DB 저장 
         user_id = "1" 
         await insert_items_to_db(user_id, post_url, extracted_items)
