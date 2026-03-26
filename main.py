@@ -240,10 +240,22 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
         if not extracted_items:
             raise Exception("추출된 데이터가 없습니다.")
 
-        async with pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
-                await conn.commit()
+        try:
+            async with pool.connection() as conn:
+                async with conn.cursor() as cursor:
+                    # 처리 중인 임시 데이터 삭제
+                    await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
+                    
+                    # 빌려온 conn을 그대로 전달하여 내부에서 재사용
+                    await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
+                    
+                    # 최종 커밋
+                    await conn.commit()
+                    print(f"[백그라운드] 작업 및 DB 저장 완료")
+
+        except Exception as e:
+            print(f"[백그라운드] 에러: {str(e)}")
+            
         # DB 저장 
         user_id = "1" 
         await insert_items_to_db(user_id, post_url, extracted_items)
