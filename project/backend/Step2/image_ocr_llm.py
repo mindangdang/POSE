@@ -136,6 +136,16 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
         2. 없는 내용은 절대 지어내지 말고, 내용을 비워둬.
         3. 개인의 악의적인 리뷰나 허위 사실 등 노이즈는 배제해.
         4.무조건 실시간으로 구글검색을 해서 리뷰를 수집해와. (내장된 지식이나 과거 데이터에 의존하지 말고)
+
+        [CRITICAL INSTRUCTION]
+        결과는 반드시 아래 형태의 순수 JSON 문자열로만 반환해. 
+        마크다운 백틱(```json)과 다른 인사말을 절대 포함하지 마.
+
+        {
+            "title": "상품명",
+            "star_review": "Recommended",
+            "core_summary": "리뷰 핵심 요약..."
+}
         """
 
         try:
@@ -144,8 +154,6 @@ def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
                 contents=prompt_review,
                 config=types.GenerateContentConfig(
                     tools=[{"google_search": {}}], 
-                    response_mime_type="application/json",
-                    response_schema=ReviewBatchResponse, 
                     temperature=0.1 
                 )
             )
