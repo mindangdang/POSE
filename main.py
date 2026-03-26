@@ -2,7 +2,9 @@ import os
 import json
 import uuid
 import asyncio
-from datetime import datetime
+import httpx
+from fastapi import Query
+from fastapi.responses import Response
 from typing import List, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
@@ -179,7 +181,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 print(f"[백그라운드] 크롤링 실패: {crawl_result.get('error')}")
                 return
 
-            raw_downloaded_files = download_images(crawl_result.get("image_urls", []), "insta_vibes")
+            raw_downloaded_files = await download_images(crawl_result.get("image_urls", []), "insta_vibes")
             downloaded_files = []
             
             for old_path in raw_downloaded_files:
@@ -492,6 +494,19 @@ def debug_dist():
 
 if os.path.exists("dist"):
     app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
+
+@app.get("/api/proxy-image")
+async def proxy_image(url: str = Query(..., description="가져올 원본 이미지 URL")):
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="유효하지 않은 URL입니다.")
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, follow_redirects=True, timeout=10.0)
+        content_type = response.headers.get("Content-Type", "image/jpeg")
+        return Response(content=response.content, media_type=content_type)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="이미지를 로드할 수 없습니다.")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
