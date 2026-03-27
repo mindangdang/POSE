@@ -1,12 +1,14 @@
 import os
 import json
 import asyncio
-import psycopg # 
-from psycopg.rows import dict_row #
-from pydantic import BaseModel, Field # 
+import psycopg 
+from psycopg.rows import dict_row 
+from pydantic import BaseModel, Field 
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+import httpx
+from io import BytesIO
 
 # ==========================================
 # 1. 환경 변수 및 설정
@@ -38,8 +40,8 @@ class TasteProfileResult(BaseModel):
 # ==========================================
 SYSTEM_PROMPT = """
 [System Persona]
-주어진 데이터는 유저가 자신의 취향이거나 유용하다고 생각하여 저장해둔 컨텐츠들이다. 당신은 데이터들의 표면에서는 드러나지 않는 공통적인 패턴과 경향을 파악하여 유저의 취향과 페르소나를 추론해내는 human-data 분석가다. 
-당신의 목표는 단순 요약이 아니라 유저가 어떤 미학적 취향과 감각적 편향을 가진 사람인지 밝혀내는 것이다. 
+주어진 데이터는 유저의 평소취향(current_profile)과 유저가 평소에 저장해둔 컨텐츠(사진+description)들이다. 당신은 유저의 평소취향과 저장해둔 컨텐츠들을 이용해 
+표면적으로는 보이지 않는 취향 패턴을 파악하여 유저의 취향과 페르소나를 업데이트하는 human-data 분석가다. 당신의 목표는 단순 요약이 아니라 유저가 어떤 미학적 취향과 감각적 편향을 가진 사람인지 밝혀내는 것이다. 
 
 [Core Analysis Rules]
 -"카페를 좋아하고 옷에 관심이 많다" 식의 1차원적 요약 절대 금지
@@ -52,7 +54,7 @@ SYSTEM_PROMPT = """
 
 [Thinking Process (내부 사고 과정)]
 결과물을 작성하기 전, 반드시 다음 단계에 따라 데이터를 해석하라.
-- Taste Patterns: Vibe와 Key Details 속에서 시각적/감각적 공통점 추출
+- Taste Patterns: 이미지에서 시각적/감각적 공통점 추출
 - Identity Interpretation: 이 사람이 끌리는 공간과 사물들이 공유하는 ‘분위기’와 이 취향의 이면에 있는 페르소나를 추론.
 
 [tone and manner]
@@ -71,6 +73,7 @@ recommendation:"유저의 취향에 정합하는 새로운 키워드 제시 및 
 # ==========================================
 # 4. 데이터 로드 및 포맷팅 함수 (비동기화)
 # ==========================================
+
 async def fetch_user_data_from_neon(user_id: int):
     try:
         # 비동기 DB 커넥션 및 dict_row 적용
@@ -81,7 +84,7 @@ async def fetch_user_data_from_neon(user_id: int):
                     FROM saved_posts
                     WHERE user_id = %s
                     ORDER BY created_at DESC
-                    LIMIT 20;
+                    LIMIT 10;
                 """
                 await cur.execute(query, (str(user_id),))
                 rows = await cur.fetchall()
@@ -90,57 +93,80 @@ async def fetch_user_data_from_neon(user_id: int):
         print(f"DB 조회 실패: {e}")
         return []
 
-def format_data_for_prompt(items: list) -> str:
-    formatted_posts = []
-    
-    for idx, item in enumerate(items, 1):
-        facts = item.get("facts") or {}
-        title = facts.get("title", "알 수 없음")
-        location = facts.get("location_text", "위치 정보 없음")
-        key_details = facts.get("key_details", [])
-        
-        # key_details가 리스트가 아니라 문자열일 경우를 대비한 방어 코드
-        if isinstance(key_details, list):
-            details_str = ", ".join(key_details) if key_details else "특징 없음"
-        else:
-            details_str = str(key_details)
+async def fetch_image_bytes(url: str):
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=5.0)
+            if resp.status_code == 200:
+                # Gemini SDK가 인식할 수 있는 형태(bytes 또는 types.Part)로 변환
+                return resp.content
+    except Exception as e:
+        print(f"이미지 로드 실패 ({url}): {e}")
+    return None
 
-        post_text = f"""[Item {idx}]
-        - Category: {item.get('category', 'UNKNOWN')}
-        - Target: {title}
-        - Location: {location}
-        - Summary: {item.get('summary_text', '')}
-        - Vibe: {item.get('vibe_text', '')}
-        - Key Details: {details_str} """
-        
-        formatted_posts.append(post_text)
-        
-    return "\n\n".join(formatted_posts)
+def format_data_for_prompt(item: dict) -> str:
+
+    facts = item.get("facts") or {}
+    title = facts.get("title", "알 수 없음")
+    location = facts.get("location_text", "위치 정보 없음")
+    key_details = facts.get("key_details", [])
+
+    post_text = f"""[Item {title}]
+    - Category: {item.get('category', 'UNKNOWN')}
+    - Location: {location}
+    - Summary: {item.get('summary_text', '')}
+    - Vibe: {item.get('vibe_text', '')}
+    - Key Details: {key_details} """
+    
+    return post_text
+    
 
 # ==========================================
 # 5. LLM 분석 실행 함수 (비동기화)
 # ==========================================
-async def analyze_vibe(user_id: int):
+async def analyze_vibe(user_id: int, current_profile: dict):
     raw_items = await fetch_user_data_from_neon(user_id)
-        
-    post_data_string = format_data_for_prompt(raw_items)
-    
-    user_prompt = f"""
-다음 데이터는 한 유저가 저장해둔 컨텐츠들이다. 
-이 데이터들을 분석하여 유저의 취향을 추측하라.
 
-[POST DATA]
-{post_data_string}
-"""    
+    image_tasks = []
+    for item in raw_items:
+        url = item.get("image_url")
+        if url:
+            image_tasks.append(fetch_image_bytes(url))
+        else:
+            image_tasks.append(asyncio.sleep(0, result=None)) # URL 없는 경우 순서 맞추기용
+
+    # 2. 모든 이미지를 병렬로 다운로드 
+    print(f"[User {user_id}] 이미지 데이터 병렬 로딩 중...")
+    image_results = await asyncio.gather(*image_tasks)
+
+    contents = []
+
+    context = f"""
+    [Current User Profile]
+    - Persona: {current_profile.get('persona')}
+    - Previous Analysis: {current_profile.get('unconscious_taste')}
+    
+    [New Activity]
+    최근 유저가 다음 10개의 아이템을 새롭게 저장했다.평소 취향과 새로운 아이템들을 참고하여 취향의 '확장'이나 '변화'를 발견하고 업데이트된 취향을 생성하라.  
+    기존 프로필과 상충되는 데이터가 있다면 취향의 '변화'로 해석하고, 일관된다면 취향의 '심화'로 해석하라.
+    """
+    contents.append(types.Part.from_text(text=context))
+    
+    for item, img_bytes in zip(raw_items, image_results):
+        info = format_data_for_prompt(item)
+        contents.append(types.Part.from_text(text=info))
+        if img_bytes:
+            contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
+
     try:
         print(f"[User {user_id}] 취향 프로필 분석 중 (Gemini Pro)...")
         # 무거운 LLM 처리는 스레드 풀에서 실행
         response = await client.aio.models.generate_content(
             model='gemini-2.5-flash', 
-            contents=user_prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.6, 
+                temperature=0.4, 
                 response_mime_type="application/json",
                 response_schema=TasteProfileResult 
             ),

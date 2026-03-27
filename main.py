@@ -301,24 +301,37 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 @app.post("/api/generate-taste")
 async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             # 1. 아이템 존재 여부 체크
             await cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
             row = await cursor.fetchone()
-            count = row[0] if row else 0
+            count = row['total_count'] if row else 0
 
             if count == 0:
                 return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
             
-            # 2. 분석 실행 (딕셔너리 타입 수신)
-            # analyze_vibe가 data.model_dump()를 리턴하므로 summary_dict는 딕셔너리입니다.
-            summary_dict = await analyze_vibe(user_id=1)  
+            await cursor.execute("SELECT summary FROM taste_profile WHERE id = 1")
+            existing_row = await cursor.fetchone()
+            
+            current_profile = {"persona": "정보 없음", "unconscious_taste": "데이터 부족", "recommendation": "데이터 부족"}
+            
+            if existing_row and existing_row['summary']:
+                raw_summary = existing_row['summary']
+                try:
+                    # 간단한 파싱 예시 (저장 포맷에 맞춰 조절 필요)
+                    parts = raw_summary.split("\n\n")
+                    current_profile['persona'] = parts[0].replace("**페르소나**\n", "")
+                    current_profile['unconscious_taste'] = parts[1].replace("**나도 몰랐던 나의 취향**\n", "")
+                    current_profile['recommendation'] = parts[2].replace("**추천**\n", "")
+                except:
+                    pass 
+            
+            # 분석 실행 
+            summary_dict = await analyze_vibe(user_id=1, current_profile=current_profile)  
             
             if not summary_dict:
                 return {"success": False, "message": "취향 분석에 실패했습니다."}
-            
-            # 3. [핵심 수정] 딕셔너리를 마크다운 문자열로 조립 (AttributeError 방지)
-            # summary_dict는 딕셔너리이므로 .get() 사용 가능!
+    
             final_summary_text = (
                 f"**페르소나**\n{summary_dict.get('persona', '분석 불가')}\n\n"
                 f"**나도 몰랐던 나의 취향**\n{summary_dict.get('unconscious_taste', '내용 없음')}\n\n"
