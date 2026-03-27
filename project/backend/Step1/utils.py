@@ -41,7 +41,7 @@ async def analyze_description_with_gemini(description: str) -> dict:
 
     [출력 형식]
     {{
-        "vibe_text": "단순한 객관적 묘사가 아닌 아이템이 사용자의 욕구를 자극한 바로 그 '미세한 매력 포인트를 추론해 낼 것.
+        "vibe_text": "단순한 객관적 묘사가 아닌 아이템이 사용자의 욕구를 자극한 바로 그 '미세한 매력 포인트를 추론해 낼 것.(추론에 시 항상 근거를 생각해 검증할 것)
         "key_details": "핵심 특징"
     }}
     """

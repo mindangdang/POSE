@@ -77,7 +77,7 @@ async def fetch_user_data_from_neon(user_id: int):
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT facts, vibe_text, category, title, summary_text
+                    SELECT facts, vibe_text, category, title, summary_text, image_url
                     FROM saved_posts
                     WHERE user_id = %s
                     ORDER BY created_at DESC
