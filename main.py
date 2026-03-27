@@ -318,7 +318,6 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
             if existing_row and existing_row['summary']:
                 raw_summary = existing_row['summary']
                 try:
-                    # 간단한 파싱 예시 (저장 포맷에 맞춰 조절 필요)
                     parts = raw_summary.split("\n\n")
                     current_profile['persona'] = parts[0].replace("**페르소나**\n", "")
                     current_profile['unconscious_taste'] = parts[1].replace("**나도 몰랐던 나의 취향**\n", "")
