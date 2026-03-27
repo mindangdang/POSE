@@ -297,7 +297,7 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
         }]
     }
 
-# [API 2] 취향 프로필 자동 생성
+# [API 2] 취향 프로필 생성
 @app.post("/api/generate-taste")
 async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
