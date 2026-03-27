@@ -27,6 +27,8 @@ client = genai.Client(
     )
 )
 
+IMAGE_BASE_URL = os.environ.get("IMAGE_BASE_URL", "")
+
 # ==========================================
 # 2. Pydantic 스키마 
 # ==========================================
@@ -131,9 +133,16 @@ async def analyze_vibe(user_id: int, current_profile: dict):
     for item in raw_items:
         url = item.get("image_url")
         if url:
-            image_tasks.append(fetch_image_bytes(url))
+            # 프로콜이 없는 경우 베이스 URL 결합
+            if not url.startswith(('http://', 'https://')):
+                clean_url = url.lstrip('/')
+                full_url = f"{IMAGE_BASE_URL}{clean_url}"
+            else:
+                full_url = url
+            
+            image_tasks.append(fetch_image_bytes(full_url))
         else:
-            image_tasks.append(asyncio.sleep(0, result=None)) # URL 없는 경우 순서 맞추기용
+            image_tasks.append(asyncio.sleep(0, result=None))
 
     # 2. 모든 이미지를 병렬로 다운로드 
     print(f"[User {user_id}] 이미지 데이터 병렬 로딩 중...")
