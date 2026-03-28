@@ -8,7 +8,6 @@
       "version": "20",
       "nodeGypDependencies": true
     },
-    "ghcr.io/devcontainers/features": {},
     "ghcr.io/just-systems/devcontainer-features/just:1": {}
   },
   "customizations": {
@@ -16,5 +15,5 @@
       "extensions": ["ms-python.python"]
     }
   },
-  "postCreateCommand": "pip install -r requirements.txt && playwright install chromium --with-deps && cd project/frontend && npm install"
+  "postCreateCommand": "pip install -r requirements.txt && sudo npx playwright install --with-deps chromium && if [ -d \"project/frontend\" ]; then cd project/frontend && npm install; fi"
 }
