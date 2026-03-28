@@ -5,12 +5,13 @@ import html
 import asyncio
 import httpx
 import urllib.parse
+from time import time
 from fastapi import Query
 from fastapi.responses import Response
 from typing import List, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
@@ -24,12 +25,13 @@ from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
 from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step2.insert_DB import insert_items_to_db 
-from project.backend.Step2.preferance_llm import analyze_vibe
-from project.backend.Step3.main_agent import VibeSearchAgent          
+from project.backend.Step2.preferance_llm import analyze_vibe      
 from project.backend.Step1.utils import analyze_description_with_gemini
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
+PSE_API = os.environ.get("PSE_API")
+PSE_CX = os.environ.get("PSE_CX")
 
 # ==========================================
 # 1. 전역 DB 커넥션 풀 관리 & 초기화
@@ -383,46 +385,62 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
         print(traceback.format_exc()) # 어디서 .get()이 터졌는지 정확히 알려줌
         raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
-# [API 3] 에이전틱 큐레이션 검색
-@app.post("/api/agent-search")
-async def run_agentic_search(request: SearchRequest):
+# [API 3] pse
+@app.post("/api/pse")
+async def run_pse_search(request: SearchRequest):
+    if not PSE_API or not PSE_CX:
+        raise HTTPException(status_code=500, detail="Google PSE API 키가 설정되지 않았습니다.")
+
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": PSE_API,
+        "cx": PSE_CX,
+        "q": request.query,
+        "num": 6  # 카드 형태로 보여줄 개수
+    }
+    
     try:
-        agent = VibeSearchAgent(user_id=1)
-        return StreamingResponse(
-            agent.run_stream(request.query), 
-            media_type="text/plain"
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            search_data = response.json()
+            
+        items = search_data.get("items", [])
+        results = []
+        
+        for item in items:
+            # 1. 구글 검색 결과에서 썸네일/이미지 추출 (pagemap 활용)
+            image_url = ""
+            pagemap = item.get("pagemap", {})
+            if "cse_image" in pagemap and len(pagemap["cse_image"]) > 0:
+                image_url = pagemap["cse_image"][0].get("src", "")
+            elif "cse_thumbnail" in pagemap and len(pagemap["cse_thumbnail"]) > 0:
+                image_url = pagemap["cse_thumbnail"][0].get("src", "")
+                
+            # 2. 도메인 추출 (facts에 예쁘게 보여주기 위함)
+            domain = urllib.parse.urlparse(item.get("link", "")).netloc
+
+            card_item = {
+                "id": int(time.time() * 1000) + 1, 
+                "category": "WEB SEARCH",
+                "vibe": item.get("snippet", "설명이 없습니다."),
+                "image_url": image_url,
+                "url": item.get("link", ""),
+                "summary_text": item.get("snippet", ""),
+                "facts": {
+                    "title": item.get("title", ""), # ItemDetailDialog가 모달 제목으로 사용함
+                    "Source": domain,
+                    "Link": item.get("link", "")
+                }
+            }
+            results.append(card_item)
+            
+        return {"success": True, "results": results}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"에이전트 검색 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"검색 중 오류 발생: {str(e)}")
 
-# [API 4] 피드백 저장
-@app.post("/api/agentic-search/feedback")
-async def save_agent_feedback(request: FeedbackRequest, conn = Depends(get_db_connection)):
-    try:
-        async with conn.cursor() as cursor:
-            await cursor.execute("""
-              CREATE TABLE IF NOT EXISTS search_feedback (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT,
-                query TEXT,
-                result TEXT,
-                feedback_type TEXT,
-                reason TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-              );
-            """)
-            await cursor.execute(
-                "INSERT INTO search_feedback (user_id, query, result, feedback_type, reason) VALUES (%s, %s, %s, %s, %s)",
-                (str(request.user_id), request.query, request.result, request.feedback_type, request.reason)
-            )
-            await conn.commit()
-
-        return {"success": True, "message": "Feedback saved successfully"}
-    except Exception as e:
-        await conn.rollback()
-        raise HTTPException(status_code=500, detail=f"피드백 저장 실패: {str(e)}")
-
-# [API 5] 수동 저장
+# [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
 async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_connection)):
     try:
@@ -435,18 +453,19 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
                     request.url, 
                     request.category, 
                     request.vibe, 
-                    request.facts,               
+                    json.dumps(request.facts),               
                     request.facts.get("title", "Manual Item"),
                     request.image_url or ""
                 )
             )
             await conn.commit()
 
-        return {"success": True, "message": "에이전트 검색 결과가 내 피드로 이동 되었습니다."}
+        # 수정 2: 응답 메시지 업데이트
+        return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as e:
         await conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {str(e)}")
-
+    
 # ==========================================
 # 6. 일반 CRUD 및 SPA 서빙 엔드포인트
 # ==========================================
