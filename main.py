@@ -391,57 +391,59 @@ async def run_serper_search(request: SearchRequest):
     if not SERPER_API_KEY:
         raise HTTPException(status_code=500, detail="Serper API 키가 설정되지 않았습니다.")
     
-    hip_sites = [
-        "pinterest.com", "fruitsfamily.com", "farfetch.com", "hypebeast.com", "eyesmag.com",
-        "29cm.co.kr", "musinsa.com", "vogue.co.kr","kream.co.kr"
-    ]
-    
-    site_filter = " OR ".join([f"site:{site}" for site in hip_sites])
-    exclude_filters = "-inurl:search -inurl:category -inurl:categories -inurl:list -inurl:tags"
-    enriched_query = f"{request.query} {exclude_filters} ({site_filter})"
-
-    url = "https://google.serper.dev/search"
+    url = "https://google.serper.dev/shopping"
     headers = {
         'X-API-KEY': SERPER_API_KEY,
         'Content-Type': 'application/json'
     }
+
     payload = json.dumps({
-        "q": enriched_query, 
-        "num": 10,
-        "page": request.page,
+        "q": request.query, 
+        "page": request.page, # 더 보기 기능 연동
         "gl": "kr",
         "hl": "ko"
     })
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, data=payload)
             response.raise_for_status()
             search_data = response.json()
 
-        # Serper는 결과를 'organic' 리스트에 담아줘
-        items = search_data.get("organic", [])
+        items = search_data.get("shopping", [])
         results = []
+        trash_keywords = [
+            "쿠팡", "coupang", "알리", "aliexpress", "테무", "temu", 
+            "11번가", "11st", "g마켓", "gmarket", "옥션", "auction", 
+            "티몬", "tmon", "위메프", "wemakeprice", "인터파크", 
+            "스마트스토어", "smartstore", "네이버 쇼핑"
+        ]
 
         for i, item in enumerate(items):
             image_url = item.get("imageUrl", "")
+            source = item.get("source", "").lower()
+            link = item.get("link", "").lower()
             
-            # 만약 imageUrl이 없다면 사이트 아이콘이나 기본 이미지를 써도 돼
             if not image_url:
-                # 사이트의 파비콘을 가져오는 꼼수 (선택 사항)
-                domain = urllib.parse.urlparse(item.get("link", "")).netloc
-                image_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+                continue
+            is_trash = any(trash in source or trash in link for trash in trash_keywords)
+            if is_trash:
+                continue
+
+            price = item.get("price", "가격 미상")
+            title = item.get("title", "상품명 없음")
 
             card_item = {
-                "id": str(uuid.uuid4()),
-                "category": "INSIGHT",
-                "vibe": item.get("snippet", "내용 요약이 없습니다."),
+                "id": str(uuid.uuid4()), # 안전한 고유 ID
+                "category": "FASHION",   # 바이브에 맞게 카테고리 변경
+                "vibe": f"{source}에서 발견한 {price}짜리 아이템", # 센스있는 한 줄
                 "image_url": image_url,
                 "url": item.get("link", ""),
-                "summary_text": item.get("snippet", ""),
+                "summary_text": title,
                 "facts": {
-                    "title": item.get("title", ""),
-                    "source": urllib.parse.urlparse(item.get("link", "")).netloc,
-                    "snippet": item.get("snippet", "")
+                    "title": title,
+                    "Price": price,
+                    "Shop": source
                 }
             }
             results.append(card_item)
@@ -451,7 +453,7 @@ async def run_serper_search(request: SearchRequest):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Serper 검색 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}")
 
 # [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
