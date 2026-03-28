@@ -5,6 +5,7 @@ import html
 import asyncio
 import httpx
 import urllib.parse
+from time import time
 from fastapi import Query
 from fastapi.responses import Response
 from typing import List, Optional
@@ -420,7 +421,7 @@ async def run_pse_search(request: SearchRequest):
             domain = urllib.parse.urlparse(item.get("link", "")).netloc
 
             card_item = {
-                "id": int(time.time() * 1000) + i, 
+                "id": int(time.time() * 1000) + 1, 
                 "category": "WEB SEARCH",
                 "vibe": item.get("snippet", "설명이 없습니다."),
                 "image_url": image_url,
