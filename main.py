@@ -303,14 +303,14 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
         async with conn.cursor(row_factory=dict_row) as cursor:
             # 1. 아이템 존재 여부 체크
-            await cursor.execute("SELECT COUNT(*) FROM saved_posts WHERE user_id = '1'")
+            await cursor.execute("SELECT COUNT(*) AS count FROM saved_posts WHERE user_id = '1'")
             row = await cursor.fetchone()
             count = row['count'] if row else 0
 
             if count == 0:
                 return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
             
-            await cursor.execute("SELECT summary FROM taste_profile WHERE id = 1")
+            await cursor.execute(""" SELECT summary FROM taste_profile WHERE id = 1 ORDER BY updated_at DESC LIMIT 1""")
             existing_row = await cursor.fetchone()
             
             current_profile = {"persona": "정보 없음", "unconscious_taste": "데이터 부족", "recommendation": "데이터 부족"}
@@ -343,7 +343,7 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
                 VALUES (1, %s, CURRENT_TIMESTAMP) 
                 ON CONFLICT (id) 
                 DO UPDATE SET 
-                    summary = EXCLUDED.summary, 
+                    summary = EXCLUDED.summary,
                     updated_at = CURRENT_TIMESTAMP
             """
             
