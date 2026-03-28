@@ -3,6 +3,7 @@ import json
 import uuid
 import asyncio
 import httpx
+import urllib.parse
 from fastapi import Query
 from fastapi.responses import Response
 from typing import List, Optional
@@ -454,6 +455,16 @@ async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
             """
             await cursor.execute(query, (user_id,))
             items = await cursor.fetchall()
+
+        for item in items:
+            original_img = item.get("image_url")
+            if original_img:
+                if original_img.startswith("http"):
+                    # 외부 URL(자라, 크림 등)인 경우 -> 프록시 API로 감싸기
+                    encoded_url = urllib.parse.quote(original_img)
+                    item["image_url"] = f"/api/proxy-image?url={encoded_url}"
+                elif not original_img.startswith("/api/"):
+                    item["image_url"] = f"/api/images/{original_img}"
             
         print(f"프론트로 보내는 아이템 수: {len(items)}")
         return jsonable_encoder(items)

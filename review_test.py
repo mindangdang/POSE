@@ -20,4 +20,4 @@ def generate_review_links(product_name: str) -> dict:
     return links
 
 # 테스트
-# print(generate_review_links("아르떼미데 톨로메오 조명"))
+print(generate_review_links("나이키 에어맥스 95"))
