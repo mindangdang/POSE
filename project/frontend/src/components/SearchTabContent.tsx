@@ -19,15 +19,10 @@ export function SearchTabContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
-  
-  // 상태 변경: 문자열에서 SavedItem 배열로!
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
-  
+  const [currentPage, setCurrentPage] = useState(1);
   // 모달 제어 상태
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
-
-  // 이 컴포넌트에서는 전체 피드백 로직(Like/Dislike 버튼 뭉치)을 제거했어. 
-  // 카드가 여러 개 나오기 때문에, 검색 결과 전체에 대한 피드백보다는 개별 카드를 피드에 저장하는 게 자연스럽기 때문이야.
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
@@ -39,22 +34,17 @@ export function SearchTabContent({
     }
   }, [quotaCountdown]);
 
-  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!searchQuery || !user) return;
+  const fetchResults = async (page: number, isAppend: boolean) => {
     setLoading(true);
-    setSearchResults([]); // 검색 시작 시 결과 초기화
-
     try {
       const res = await fetch('/api/pse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery })
+        body: JSON.stringify({ query: searchQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
       });
 
       if (res.status === 429) {
         setQuotaCountdown(60);
-        setLoading(false);
         return;
       }
 
@@ -63,16 +53,38 @@ export function SearchTabContent({
         throw new Error(errorData.detail || "Search failed");
       }
 
-      // 백엔드에서 조립해준 카드 배열 JSON을 받음
       const data = await res.json();
-      setSearchResults(data.results || []);
-      setLoading(false);
-
+      
+      if (isAppend) {
+        // 더 보기: 기존 결과 뒤에 새 결과를 배열로 이어 붙임
+        setSearchResults(prev => [...prev, ...(data.results || [])]);
+      } else {
+        // 새 검색: 기존 결과를 싹 지우고 새 결과만 보여줌
+        setSearchResults(data.results || []);
+      }
     } catch (error: any) {
       console.error(error);
       alert(error.message);
+    } finally {
       setLoading(false);
     }
+  };
+
+  // 1. 엔터 쳐서 '새롭게 검색'할 때
+  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!searchQuery || !user) return;
+    
+    setCurrentPage(1);       // 1페이지로 리셋
+    setSearchResults([]);    // 기존 화면 싹 지우기
+    await fetchResults(1, false); // 1페이지 데이터 가져와서 덮어쓰기
+  };
+
+  // 2. '더 보기' 버튼을 눌렀을 때
+  const handleLoadMore = async () => {
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);      // 페이지 번호 1 증가
+    await fetchResults(nextPage, true); // 다음 페이지 데이터 가져와서 이어 붙이기
   };
 
   // 개별 카드를 내 피드에 저장하는 함수
@@ -176,10 +188,10 @@ export function SearchTabContent({
               </div>
             </div>
 
-            {loading ? (
+            {loading && searchResults.length === 0 ? (
               <div className="flex justify-center py-12">
                 <p className="text-sm font-medium text-gray-400 animate-pulse flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> 구글에서 이미지를 찾아오는 중...
+                  <Loader2 className="w-4 h-4 animate-spin" /> 구글에서 검색하는 중...
                 </p>
               </div>
             ) : (
@@ -245,6 +257,18 @@ export function SearchTabContent({
                     );
                   })}
                 </AnimatePresence>
+              </div>
+            )}
+            {searchResults.length > 0 && (
+              <div className="flex justify-center pt-10">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loading}
+                  className="px-10 py-3 bg-white border-2 border-black text-black rounded-full text-xs font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Load More Inspiration
+                </button>
               </div>
             )}
           </motion.div>
