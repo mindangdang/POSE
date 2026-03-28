@@ -390,6 +390,15 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 async def run_serper_search(request: SearchRequest):
     if not SERPER_API_KEY:
         raise HTTPException(status_code=500, detail="Serper API 키가 설정되지 않았습니다.")
+    
+    hip_sites = [
+        "pinterest.com", "fruitsfamily.com", "farfetch.com", "hypebeast.com", "eyesmag.com",
+        "29cm.co.kr", "musinsa.com", "vogue.co.kr","kream.co.kr"
+    ]
+    
+    site_filter = " OR ".join([f"site:{site}" for site in hip_sites])
+    exclude_filters = "-inurl:search -inurl:category -inurl:categories -inurl:list -inurl:tags"
+    enriched_query = f"{request.query} {exclude_filters} ({site_filter})"
 
     url = "https://google.serper.dev/search"
     headers = {
@@ -397,13 +406,12 @@ async def run_serper_search(request: SearchRequest):
         'Content-Type': 'application/json'
     }
     payload = json.dumps({
-        "q": request.query,
-        "num": 8,      # 카드 8개 정도면 풍성해 보임
+        "q": enriched_query, 
+        "num": 10,
         "page": request.page,
-        "gl": "kr",    # 한국 지역 결과 우선
-        "hl": "ko"     # 한국어 검색 결과 우선
+        "gl": "kr",
+        "hl": "ko"
     })
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, data=payload)
@@ -415,7 +423,6 @@ async def run_serper_search(request: SearchRequest):
         results = []
 
         for i, item in enumerate(items):
-            # Serper는 이미지 URL을 'imageUrl' 필드로 바로 주는 경우가 많아 아주 편해!
             image_url = item.get("imageUrl", "")
             
             # 만약 imageUrl이 없다면 사이트 아이콘이나 기본 이미지를 써도 돼
