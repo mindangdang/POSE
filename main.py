@@ -5,11 +5,10 @@ import html
 import asyncio
 import httpx
 import urllib.parse
-from fastapi import Query
 from fastapi.responses import Response
 from typing import List, Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, APIRouter, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -30,7 +29,7 @@ from project.backend.Step1.utils import analyze_description_with_gemini
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
-SERPER_API_KEY = os.environ.get("SERPER_API_KEY")
+SERP_API_KEY = os.environ.get("SERPER_API_KEY")
 
 # ==========================================
 # 1. 전역 DB 커넥션 풀 관리 & 초기화
@@ -387,24 +386,128 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
 
 # [API 3] pse
 @app.post("/api/pse")
-async def run_serper_search(request: SearchRequest):
-    if not SERPER_API_KEY:
-        raise HTTPException(status_code=500, detail="Serper API 키가 설정되지 않았습니다.")
-    
-    url = "https://google.serper.dev/shopping"
-    headers = {
-        'X-API-KEY': SERPER_API_KEY,
-        'Content-Type': 'application/json'
-    }
+# 주의: 기존 SERPER_API_KEY 대신 SerpApi 사이트에서 발급받은 키를 써야 해!
+# SERPAPI_API_KEY = "너의_serpapi_키"
 
-    payload = json.dumps({
-        "q": request.query, 
+@app.post("/api/pse")
+async def run_serpapi_search(request: SearchRequest):
+    if not SERP_API_KEY:
+        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
+    
+    # 1. SerpApi 엔드포인트 (GET 방식을 사용함)
+    url = "https://serpapi.com/search"
+
+    domain_map = {
+        "musinsa.com": "무신사",
+        "kream.co.kr": "KREAM",
+        "fruitsfamily.com": "후루츠패밀리"
+    }
+    
+    site_query = " | ".join([f"site:{domain}" for domain in domain_map.keys()])
+    product_hierarchy_query = "(> products)"
+    exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
+    
+    final_query = f"{request.query} ({site_query}) {product_hierarchy_query} {exclude_list_pages}"
+    print(f"SerpApi로 쏘는 쿼리: {final_query}")
+
+    # 3. 페이지네이션 (SerpApi는 page가 아니라 start 인덱스를 씀: 0, 25, 50...)
+    try:
+        current_page = max(1, int(request.page)) if request.page is not None else 1
+    except ValueError:
+        current_page = 1
+    
+    start_index = (current_page - 1) * 25
+
+    # 4. 페이로드 대신 Query Parameters 조합
+    params = {
+        "engine": "google",
+        "q": final_query,
+        "api_key": SERP_API_KEY,
         "num": 25,
-        "page": request.page,
+        "start": start_index, # 페이징 적용
         "gl": "kr",
         "hl": "ko"
-    })
+    }
 
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params)
+            
+            if response.status_code != 200:
+                print(f"SerpApi 에러 내용: {response.text}")
+                
+            response.raise_for_status()
+            search_data = response.json()
+
+        # 5. SerpApi는 'organic' 대신 'organic_results'라는 키를 씀
+        items = search_data.get("organic_results", [])
+        results = []
+
+        for i, item in enumerate(items):
+            link = item.get("link", "")
+            title = item.get("title", "상품명 없음")
+            snippet = item.get("snippet", "")
+            
+            image_url = ""
+            price = "가격 미상"
+            source = "알 수 없는 샵"
+
+            # --- [데이터 파싱: SerpApi 맞춤형 초간단 로직] ---
+            
+            # A. 출처(Source) 매핑
+            for domain, name in domain_map.items():
+                if domain in link:
+                    source = name
+                    break
+
+            # B. 이미지 추출 (pagemap을 안 뒤져도 됨!)
+            # 구글 검색 결과에 이미지가 같이 뜨면 SerpApi가 'thumbnail' 키로 바로 뽑아줌
+            image_url = item.get("thumbnail", "")
+
+            # 이미지가 구글 화면에 안 떴다면 상품 페이지로서의 매력이 떨어지니 스킵
+            if not image_url:
+                continue
+
+            # C. 가격 추출
+            # SerpApi는 가격 같은 부가 정보를 'rich_snippet'에 예쁘게 담아주는 경우가 많음
+            extracted_price = item.get("rich_snippet", {}).get("top", {}).get("detected_extensions", {}).get("price")
+            
+            if extracted_price:
+                # 숫자형(예: 129000)으로 오면 포맷팅
+                price = f"{extracted_price:,.0f}원" if isinstance(extracted_price, (int, float)) else f"{extracted_price}원"
+            else:
+                # 텍스트 형태(extensions 배열)에서 '원'이나 '₩'가 들어간 문자열 찾기
+                extensions = item.get("rich_snippet", {}).get("top", {}).get("extensions", [])
+                for ext in extensions:
+                    if "원" in ext or "₩" in ext:
+                        price = ext
+                        break
+
+            # --------------------
+
+            card_item = {
+                "id": str(uuid.uuid4()), 
+                "category": "PRODUCT",   
+                "vibe": f"{source}에서 발견한 {price}짜리 아이템", 
+                "image_url": image_url,
+                "url": link,
+                "summary_text": title,
+                "description": snippet,
+                "facts": {
+                    "title": title,
+                    "Price": price,
+                    "Shop": source
+                }
+            }
+            results.append(card_item)
+
+        return {"success": True, "results": results}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}")
+    '''
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, data=payload)
@@ -421,11 +524,11 @@ async def run_serper_search(request: SearchRequest):
             if not image_url:
                 continue
 
-            hip_sources = ["무신사", "KREAM", "솔드아웃", "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"] 
-            is_hip = any(hip in source for hip in hip_sources) 
+            #hip_sources = ["무신사", "KREAM", "솔드아웃", "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"] 
+            #is_hip = any(hip in source for hip in hip_sources) 
 
-            if not is_hip: 
-                continue
+            #if not is_hip: 
+                #continue
 
             price = item.get("price", "가격 미상")
             title = item.get("title", "상품명 없음")
@@ -450,7 +553,7 @@ async def run_serper_search(request: SearchRequest):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {str(e)}") '''
 
 # [API 4] pse 검색결과 아이템 피드로 이동
 @app.post("/api/items/manual")
