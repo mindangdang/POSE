@@ -399,21 +399,20 @@ async def run_serper_search(request: SearchRequest):
 
     payload = json.dumps({
         "q": request.query, 
-        "num": 40,
-        "page": request.page, # 더 보기 기능 연동
+        "num": 25,
+        "page": request.page,
         "gl": "kr",
         "hl": "ko"
     })
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, data=payload)
             response.raise_for_status()
             search_data = response.json()
 
         items = search_data.get("shopping", [])
         results = []
-        hip_sources = ["무신사", "KREAM", "솔드아웃" "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"]
 
         for i, item in enumerate(items):
             image_url = item.get("imageUrl", "")
@@ -421,8 +420,11 @@ async def run_serper_search(request: SearchRequest):
             
             if not image_url:
                 continue
-            is_hip = any(hip in source for hip in hip_sources)
-            if not is_hip:
+
+            hip_sources = ["무신사", "KREAM", "솔드아웃", "한섬 EQL", "필웨이", "후루츠패밀리", "bunjang"] 
+            is_hip = any(hip in source for hip in hip_sources) 
+
+            if not is_hip: 
                 continue
 
             price = item.get("price", "가격 미상")
