@@ -29,7 +29,7 @@ from project.backend.Step1.utils import analyze_description_with_gemini
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
-SERP_API_KEY = os.environ.get("SERPER_API_KEY")
+SERP_API_KEY = os.environ.get("SERP_API_KEY")
 
 # ==========================================
 # 1. 전역 DB 커넥션 풀 관리 & 초기화
@@ -385,10 +385,6 @@ async def generate_taste_profile(conn = Depends(get_db_connection)):
         raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
 
 # [API 3] pse
-@app.post("/api/pse")
-# 주의: 기존 SERPER_API_KEY 대신 SerpApi 사이트에서 발급받은 키를 써야 해!
-# SERPAPI_API_KEY = "너의_serpapi_키"
-
 @app.post("/api/pse")
 async def run_serpapi_search(request: SearchRequest):
     if not SERP_API_KEY:
