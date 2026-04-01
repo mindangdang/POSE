@@ -1,5 +1,4 @@
 import os
-import json
 import uuid
 import html
 import asyncio
@@ -12,12 +11,10 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, APIRouter,
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from time import time
 from psycopg_pool import AsyncConnectionPool
-from psycopg.rows import dict_row  
 from playwright.async_api import async_playwright
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
@@ -26,50 +23,25 @@ from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step2.insert_DB import insert_items_to_db 
 from project.backend.Step2.preferance_llm import analyze_vibe      
 from project.backend.Step1.utils import analyze_description_with_gemini
+from project.backend.db import (
+    create_db_pool,
+    create_manual_item,
+    create_processing_item,
+    delete_saved_post_by_id,
+    fetch_items,
+    fetch_taste_profile,
+    get_db_connection as get_pooled_db_connection,
+    get_latest_taste_summary,
+    init_db,
+    upsert_taste_profile,
+    count_saved_posts,
+)
 
 load_dotenv()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 SERP_API_KEY = os.environ.get("SERP_API_KEY")
 
-# ==========================================
-# 1. 전역 DB 커넥션 풀 관리 & 초기화
-# ==========================================
 pool: AsyncConnectionPool = None
-
-async def init_db(db_pool: AsyncConnectionPool):
-    """비동기 방식으로 DB 테이블 스키마를 초기화"""
-    try:
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                  CREATE TABLE IF NOT EXISTS saved_posts (
-                    id SERIAL PRIMARY KEY,
-                    user_id TEXT,
-                    source_url TEXT,
-                    title TEXT,
-                    category TEXT,
-                    summary_text TEXT,
-                    image_url TEXT,
-                    vibe_text TEXT,
-                    vibe_vector vector(768),
-                    facts JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(source_url, title)
-                  );
-                """)
-
-                await cursor.execute("""
-                  CREATE TABLE IF NOT EXISTS taste_profile (
-                    id INTEGER PRIMARY KEY DEFAULT 1,
-                    summary TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT one_row CHECK (id = 1)
-                  );
-                """)
-                await conn.commit()
-        print("DB 테이블 초기화 완료")
-    except Exception as e:
-        print(f"DB 초기화 중 경고: {e}")
 
 # FastAPI 라이프사이클
 @asynccontextmanager
@@ -79,7 +51,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("NEON_DB_URL environment variable is not set.")
     
     # 트래픽에 맞춰 최소 5개 ~ 최대 20개의 연결을 유지하는 풀 생성
-    pool = AsyncConnectionPool(conninfo=NEON_DB_URL, min_size=5, max_size=20)
+    pool = create_db_pool(conninfo=NEON_DB_URL, min_size=5, max_size=20)
     print("DB 커넥션 풀 생성 완료")
     
     # 풀이 생성되면 테이블 스키마 확인
@@ -109,13 +81,8 @@ app.add_middleware(
 
 # 의존성(Dependency) 주입 함수
 async def get_db_connection():
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database pool is not initialized")
-    conn = await pool.getconn()
-    try:
+    async for conn in get_pooled_db_connection(pool):
         yield conn
-    finally:
-        await pool.putconn(conn)
 
 # ==========================================
 # 3. Pydantic Models 
@@ -248,17 +215,15 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
 
         try:
             async with pool.connection() as conn:
-                async with conn.cursor() as cursor:
-                    # 처리 중인 임시 데이터 삭제
-                    await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
-                    
-                    # 빌려온 conn을 그대로 전달하여 내부에서 재사용
-                    user_id = "1"
-                    await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
-                    
-                    # 최종 커밋
-                    await conn.commit()
-                    print(f"[백그라운드] 작업 및 DB 저장 완료")
+                await delete_saved_post_by_id(conn, item_id)
+
+                # 빌려온 conn을 그대로 전달하여 내부에서 재사용
+                user_id = "1"
+                await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
+
+                # 최종 커밋
+                await conn.commit()
+                print(f"[백그라운드] 작업 및 DB 저장 완료")
 
         except Exception as e:
             print(f"[백그라운드] 에러: {str(e)}")
@@ -284,14 +249,7 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 
     # 1. DB에 '처리 중(PROCESSING)' 상태의 빈 껍데기 선 저장
     try:
-        async with conn.cursor() as cursor:
-            await cursor.execute("""
-                INSERT INTO saved_posts (user_id, source_url, category, title, vibe_text, image_url, facts) 
-                VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}') 
-                RETURNING id
-            """, (user_id, post_url))
-            new_item_id = (await cursor.fetchone())[0]
-            await conn.commit()
+        new_item_id = await create_processing_item(conn, user_id, post_url)
     except Exception as e:
         await conn.rollback()
         raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {str(e)}")
@@ -318,62 +276,43 @@ async def extract_and_save_url(request: UrlAnalyzeRequest, background_tasks: Bac
 @app.post("/api/generate-taste")
 async def generate_taste_profile(conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            # 1. 아이템 존재 여부 체크
-            await cursor.execute("SELECT COUNT(*) AS count FROM saved_posts WHERE user_id = '1'")
-            row = await cursor.fetchone()
-            count = row['count'] if row else 0
+        # 1. 아이템 존재 여부 체크
+        count = await count_saved_posts(conn, "1")
+        if count == 0:
+            return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
 
-            if count == 0:
-                return {"success": False, "message": "피드에 아이템이 없습니다. 먼저 아이템을 추가해 주세요."}
-            
-            await cursor.execute(""" SELECT summary FROM taste_profile WHERE id = 1 ORDER BY updated_at DESC LIMIT 1""")
-            existing_row = await cursor.fetchone()
-            
-            current_profile = {"persona": "정보 없음", "unconscious_taste": "데이터 부족", "recommendation": "데이터 부족"}
-            
-            if existing_row and existing_row['summary']:
-                raw_summary = existing_row['summary']
-                try:
-                    parts = raw_summary.split("\n\n")
-                    current_profile['persona'] = parts[0].replace("**페르소나**\n", "")
-                    current_profile['unconscious_taste'] = parts[1].replace("**나도 몰랐던 나의 취향**\n", "")
-                    current_profile['recommendation'] = parts[2].replace("**추천**\n", "")
-                except:
-                    pass 
-            
-            # 분석 실행 
-            summary_dict = await analyze_vibe(user_id=1, current_profile=current_profile)  
-            
-            if not summary_dict:
-                return {"success": False, "message": "취향 분석에 실패했습니다."}
-    
-            final_summary_text = (
-                f"**페르소나**\n{summary_dict.get('persona', '분석 불가')}\n\n"
-                f"**나도 몰랐던 나의 취향**\n{summary_dict.get('unconscious_taste', '내용 없음')}\n\n"
-                f"**추천**\n{summary_dict.get('recommendation', '추천 없음')}"
-            )
-            
-            # 4. DB 저장 실행
-            sql = """
-                INSERT INTO taste_profile (id, summary, updated_at) 
-                VALUES (1, %s, CURRENT_TIMESTAMP) 
-                ON CONFLICT (id) 
-                DO UPDATE SET 
-                    summary = EXCLUDED.summary,
-                    updated_at = CURRENT_TIMESTAMP
-            """
-            
+        existing_summary = await get_latest_taste_summary(conn)
+        current_profile = {"persona": "정보 없음", "unconscious_taste": "데이터 부족", "recommendation": "데이터 부족"}
+
+        if existing_summary:
             try:
-                # 조립된 마크다운 문자열(final_summary_text)을 전달
-                await cursor.execute(sql, (final_summary_text,)) 
-                await conn.commit() 
-                print(f"DB 저장 성공: {final_summary_text[:30]}...")
-            except Exception as db_e:
-                await conn.rollback()
-                print(f"DB 실행 중 에러 발생: {db_e}")
-                raise db_e
-            
+                parts = existing_summary.split("\n\n")
+                current_profile["persona"] = parts[0].replace("**페르소나**\n", "")
+                current_profile["unconscious_taste"] = parts[1].replace("**나도 몰랐던 나의 취향**\n", "")
+                current_profile["recommendation"] = parts[2].replace("**추천**\n", "")
+            except Exception:
+                pass
+
+        # 분석 실행
+        summary_dict = await analyze_vibe(user_id=1, current_profile=current_profile)
+
+        if not summary_dict:
+            return {"success": False, "message": "취향 분석에 실패했습니다."}
+
+        final_summary_text = (
+            f"**페르소나**\n{summary_dict.get('persona', '분석 불가')}\n\n"
+            f"**나도 몰랐던 나의 취향**\n{summary_dict.get('unconscious_taste', '내용 없음')}\n\n"
+            f"**추천**\n{summary_dict.get('recommendation', '추천 없음')}"
+        )
+
+        try:
+            await upsert_taste_profile(conn, final_summary_text)
+            print(f"DB 저장 성공: {final_summary_text[:30]}...")
+        except Exception as db_e:
+            await conn.rollback()
+            print(f"DB 실행 중 에러 발생: {db_e}")
+            raise db_e
+
         # 5. 프론트엔드 응답 (조립된 텍스트 전달)
         return {"success": True, "summary": final_summary_text}
 
@@ -482,23 +421,15 @@ async def run_serpapi_search(request: SearchRequest):
 @app.post("/api/items/manual")
 async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                """INSERT INTO saved_posts (user_id, source_url, category, vibe_text, facts, title, image_url) 
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                (
-                    str(request.user_id), 
-                    request.url, 
-                    request.category, 
-                    request.vibe, 
-                    json.dumps(request.facts),               
-                    request.facts.get("title", "Manual Item"),
-                    request.image_url or ""
-                )
-            )
-            await conn.commit()
-
-        # 수정 2: 응답 메시지 업데이트
+        await create_manual_item(
+            conn,
+            user_id=str(request.user_id),
+            url=request.url,
+            category=request.category,
+            vibe=request.vibe,
+            facts=request.facts,
+            image_url=request.image_url or "",
+        )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as e:
         await conn.rollback()
@@ -510,26 +441,9 @@ async def save_manual_item(request: ManualItemCreate, conn = Depends(get_db_conn
 @app.get("/api/items")
 async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            query = """
-                SELECT 
-                    id, 
-                    source_url as url, 
-                    category, 
-                    facts, 
-                    vibe_text as vibe, 
-                    image_url, 
-                    summary_text, 
-                    created_at 
-                FROM saved_posts 
-                WHERE user_id = %s OR user_id = 'default_user'
-                ORDER BY created_at DESC
-            """
-            await cursor.execute(query, (user_id,))
-            items = await cursor.fetchall()
-            
+        items = await fetch_items(conn, user_id)
         print(f"프론트로 보내는 아이템 수: {len(items)}")
-        return jsonable_encoder(items)
+        return items
     except Exception as e:
         print(f"조회 에러: {e}")
         return []
@@ -537,9 +451,8 @@ async def get_items(user_id: str = "1", conn = Depends(get_db_connection)):
 @app.delete("/api/items/{item_id}")
 async def delete_item(item_id: int, conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor() as cursor:
-            await cursor.execute("DELETE FROM saved_posts WHERE id = %s", (item_id,))
-            await conn.commit()
+        await delete_saved_post_by_id(conn, item_id)
+        await conn.commit()
         return {"success": True}
     except Exception as e:
         await conn.rollback()
@@ -548,10 +461,7 @@ async def delete_item(item_id: int, conn = Depends(get_db_connection)):
 @app.get("/api/taste")
 async def get_taste(conn = Depends(get_db_connection)):
     try:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            await cursor.execute("SELECT * FROM taste_profile WHERE id = 1")
-            row = await cursor.fetchone()
-        return row if row else {"summary": ""}
+        return await fetch_taste_profile(conn)
     except Exception as e:
         print(f"취향 프로필 조회 에러: {e}")
         return {"summary": ""}
