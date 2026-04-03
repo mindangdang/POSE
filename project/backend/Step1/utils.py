@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import json
 import re
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 class ProductAnalysisResult(BaseModel):
     vibe_text: str = Field(description="상품이 주는 감성, 무드, 분위기")

@@ -1,6 +1,6 @@
 import os
 import psycopg
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 # 1. 환경변수에서 Neon DB 접속 주소 불러오기
 load_backend_env()

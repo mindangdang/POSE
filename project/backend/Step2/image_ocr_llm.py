@@ -3,7 +3,7 @@ import json
 from typing import List, Optional
 from PIL import Image
 from pydantic import BaseModel, Field
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 # 제미나이 SDK
 from google import genai

@@ -9,7 +9,7 @@ from google.genai import types
 import httpx
 from pathlib import Path
 from urllib.parse import urljoin
-from project.backend.config import IMAGE_DIR, load_backend_env
+from project.backend.app.core.settings import IMAGE_DIR, load_backend_env
 
 # ==========================================
 # 1. 환경 변수 및 설정

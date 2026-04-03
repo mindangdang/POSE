@@ -2,7 +2,7 @@ import os
 from openai import OpenAI
 from google import genai
 from google.genai import types
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 def llm_model(kind):
     load_backend_env()

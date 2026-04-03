@@ -89,7 +89,7 @@ async def Rapid_crawler(post_url: str) -> dict:
 # --- 실행 테스트 (비동기에 맞게 수정) ---
 if __name__ == "__main__":
     import asyncio
-    from project.backend.config import load_backend_env
+    from project.backend.app.core.settings import load_backend_env
     
     load_backend_env()
 

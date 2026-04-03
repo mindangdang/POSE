@@ -6,7 +6,7 @@ from pgvector.psycopg import register_vector_async
 from google import genai
 from google.genai import types
 from psycopg.types.json import Json
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 # 환경변수 세팅 
 load_backend_env()

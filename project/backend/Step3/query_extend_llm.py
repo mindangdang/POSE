@@ -2,7 +2,7 @@ import json
 from google import genai
 import os
 from google.genai import types
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 
 load_backend_env()

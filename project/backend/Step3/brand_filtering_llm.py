@@ -3,7 +3,7 @@ import json
 import asyncio
 from google import genai
 from google.genai import types
-from project.backend.config import load_backend_env
+from project.backend.app.core.settings import load_backend_env
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")

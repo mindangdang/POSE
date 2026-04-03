@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-BACKEND_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROJECT_DIR = BACKEND_DIR.parent
 REPO_ROOT = PROJECT_DIR.parent
 ENV_FILE = BACKEND_DIR / ".env"
