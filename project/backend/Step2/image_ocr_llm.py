@@ -2,8 +2,8 @@ import os
 import json
 from typing import List, Optional
 from PIL import Image
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+from project.backend.config import load_backend_env
 
 # 제미나이 SDK
 from google import genai
@@ -14,7 +14,7 @@ from google.genai import types
 # 1. 환경변수 및 API, AI 모델 설정
 # ---------------------------------------------------------
 
-load_dotenv()
+load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")

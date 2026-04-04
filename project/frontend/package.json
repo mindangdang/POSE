@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"BACKEND_PORT=8000 python3 main.py\" \"vite --port 3000 --host 0.0.0.0\"",
-    "start": "python main.py",
+    "dev": "vite --port 3000 --host 0.0.0.0",
+    "start": "vite --port 3000 --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -23,7 +23,6 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
-    "concurrently": "^9.2.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "fs-extra": "^11.3.4",

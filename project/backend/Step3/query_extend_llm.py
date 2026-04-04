@@ -1,11 +1,11 @@
 import json
 from google import genai
 import os
-from dotenv import load_dotenv
 from google.genai import types
+from project.backend.config import load_backend_env
 
 
-load_dotenv()
+load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")

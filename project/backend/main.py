@@ -12,10 +12,10 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from dotenv import load_dotenv
 from time import time
 from psycopg_pool import AsyncConnectionPool
 from playwright.async_api import async_playwright
+from project.backend.config import FRONTEND_DIST_DIR, IMAGE_DIR, load_backend_env
 from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.instagram_crawler import download_images, crawl_instagram_post
@@ -31,7 +31,7 @@ from project.backend.db import (
     init_db,
 )
 
-load_dotenv()
+load_backend_env()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 SERP_API_KEY = os.environ.get("SERP_API_KEY")
 
@@ -80,9 +80,8 @@ app = FastAPI(lifespan=lifespan)
 # ==========================================
 # 2. 앱 설정 및 미들웨어
 # ==========================================
-if not os.path.exists("insta_vibes"):
-    os.makedirs("insta_vibes")
-app.mount("/api/images", StaticFiles(directory="insta_vibes"), name="images")
+IMAGE_DIR.mkdir(exist_ok=True)
+app.mount("/api/images", StaticFiles(directory=str(IMAGE_DIR)), name="images")
 
 app.add_middleware(
     CORSMiddleware,
@@ -157,14 +156,14 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
                 print(f"[백그라운드] 크롤링 실패: {crawl_result.get('error')}")
                 return
 
-            raw_downloaded_files = await download_images(crawl_result.get("image_urls", []), "insta_vibes")
+            raw_downloaded_files = await download_images(crawl_result.get("image_urls", []), str(IMAGE_DIR))
             downloaded_files = []
             
             for old_path in raw_downloaded_files:
                 if os.path.exists(old_path):
                     ext = os.path.splitext(old_path)[1] or '.jpg'
                     new_filename = f"{uuid.uuid4().hex}{ext}"
-                    new_path = os.path.join("insta_vibes", new_filename)
+                    new_path = str(IMAGE_DIR / new_filename)
                     os.rename(old_path, new_path)
                     downloaded_files.append(new_path)
                     
@@ -200,7 +199,7 @@ async def background_crawl_and_save(item_id: int, user_id: str, post_url: str, s
 
             local_image_url = ""
             if normalized_image_url.startswith("http://") or normalized_image_url.startswith("https://"):
-                downloaded_files = await download_images([normalized_image_url], "insta_vibes")
+                downloaded_files = await download_images([normalized_image_url], str(IMAGE_DIR))
                 if downloaded_files:
                     local_image_url = os.path.basename(downloaded_files[0])
                     print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_image_url}")
@@ -489,12 +488,13 @@ async def get_taste(repos: Repositories = Depends(get_repos)):
 
 @app.get("/api/debug/dist")
 def debug_dist():
-    exists = os.path.exists("dist")
-    contents = os.listdir("dist") if exists else []
+    exists = FRONTEND_DIST_DIR.exists()
+    contents = [path.name for path in FRONTEND_DIST_DIR.iterdir()] if exists else []
     return {"exists": exists, "contents": contents, "cwd": os.getcwd()}
 
-if os.path.exists("dist"):
-    app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
+assets_dir = FRONTEND_DIST_DIR / "assets"
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
@@ -502,19 +502,21 @@ async def serve_spa(full_path: str):
         raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
     
     if not full_path or full_path == "/":
-        if os.path.exists("dist/index.html"):
-            return FileResponse("dist/index.html")
+        index_file = FRONTEND_DIST_DIR / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
     
-    file_path = os.path.join("dist", full_path)
-    if os.path.isfile(file_path):
+    file_path = FRONTEND_DIST_DIR / full_path
+    if file_path.is_file():
         return FileResponse(file_path)
     
-    if os.path.exists("dist/index.html"):
-        return FileResponse("dist/index.html")
+    index_file = FRONTEND_DIST_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
     
     return {"error": "Frontend not built or route not found"}
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 8000)))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("project.backend.main:app", host="0.0.0.0", port=port, reload=True)

@@ -4,12 +4,12 @@ import asyncio
 import psycopg 
 from pgvector.psycopg import register_vector_async
 from google import genai
-from dotenv import load_dotenv
 from google.genai import types
 from psycopg.types.json import Json
+from project.backend.config import load_backend_env
 
 # 환경변수 세팅 
-load_dotenv()
+load_backend_env()
 neon_url = os.environ.get("NEON_DB_URL") 
 api_key = os.environ.get("GOOGLE_API_KEY")
 

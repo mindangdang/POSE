@@ -89,9 +89,9 @@ async def Rapid_crawler(post_url: str) -> dict:
 # --- 실행 테스트 (비동기에 맞게 수정) ---
 if __name__ == "__main__":
     import asyncio
-    from dotenv import load_dotenv
+    from project.backend.config import load_backend_env
     
-    load_dotenv() # .env 파일에서 키를 불러옵니다.
+    load_backend_env()
 
     async def test():
         test_url = "https://www.instagram.com/p/DThhqQAjxcW/"

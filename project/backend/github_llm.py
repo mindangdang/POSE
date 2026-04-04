@@ -1,12 +1,12 @@
 import os
 from openai import OpenAI
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from project.backend.config import load_backend_env
 
 def llm_model(kind):
+    load_backend_env()
     if kind == 'gemini':
-        load_dotenv()
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")

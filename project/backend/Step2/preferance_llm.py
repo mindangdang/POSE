@@ -6,15 +6,15 @@ from psycopg.rows import dict_row
 from pydantic import BaseModel, Field 
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 import httpx
 from pathlib import Path
 from urllib.parse import urljoin
+from project.backend.config import IMAGE_DIR, load_backend_env
 
 # ==========================================
 # 1. 환경 변수 및 설정
 # ==========================================
-load_dotenv()
+load_backend_env()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
@@ -28,7 +28,7 @@ client = genai.Client(
     )
 )
 
-LOCAL_IMAGE_DIR = Path("insta_vibes")
+LOCAL_IMAGE_DIR = IMAGE_DIR
 
 # ==========================================
 # 2. Pydantic 스키마 
