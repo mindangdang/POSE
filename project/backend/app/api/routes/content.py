@@ -10,6 +10,7 @@ from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import DEFAULT_USER_ID, background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
+from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 
 
 load_backend_env()
@@ -88,10 +89,12 @@ async def run_serpapi_search(payload: SearchRequest):
         "empty.seoul.kr": "무신사 엠프티"
     }
 
+    extended_query = await optimize_query_with_llm(payload.query)
+
     site_query = " | ".join([f"site:{domain}" for domain in domain_map])
     product_hierarchy_query = "(> products)"
     exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
-    final_query = f"{payload.query} ({site_query}) {product_hierarchy_query} {exclude_list_pages}"
+    final_query = f"{extended_query} ({site_query}) {product_hierarchy_query} {exclude_list_pages}"
     print(f"SerpApi로 쏘는 쿼리: {final_query}")
 
     try:
