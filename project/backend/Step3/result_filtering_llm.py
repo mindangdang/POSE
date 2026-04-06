@@ -24,12 +24,7 @@ JUNK_BRAND_DB = {"탑텐", "스파오", "지오다노", "양산형도매택A", "
 # 동시에 처리할 최대 API 요청 수 (안전성을 위해 5~10 권장)
 MAX_CONCURRENT_VISION_CALLS = 5
 
-async def check_vibe_with_vision(
-    http_client: httpx.AsyncClient, 
-    semaphore: asyncio.Semaphore, 
-    item: dict, 
-    user_vibe: str
-) -> dict:
+async def check_vibe_with_vision(http_client: httpx.AsyncClient, semaphore: asyncio.Semaphore, item: dict, user_vibe: str) -> dict:
     """
     세마포어를 통해 동시 실행 수를 제한하며 Vision LLM 이진 분류를 수행합니다.
     """
