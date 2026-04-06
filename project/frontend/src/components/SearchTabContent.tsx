@@ -3,12 +3,13 @@ import { Search, Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import type { SavedItem } from '../types/item';
+import type { AppUser } from '../types/user';
 import { ItemDetailDialog } from './ItemDetailDialog'; 
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
   refreshTaste: () => Promise<void>;
-  user: { id: number; username: string } | null;
+  user: AppUser | null;
 };
 
 export function SearchTabContent({

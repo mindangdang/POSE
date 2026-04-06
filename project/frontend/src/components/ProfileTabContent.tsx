@@ -3,6 +3,7 @@ import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram } from 'lucide-
 import { useState } from 'react';
 
 import type { SavedItem } from '../types/item';
+import type { AppUser } from '../types/user';
 
 type TasteProfileSection = {
   title: string;
@@ -87,7 +88,7 @@ type ProfileTabContentProps = {
   onSelectItem: (item: SavedItem) => void;
   onTasteChange: React.Dispatch<React.SetStateAction<string>>;
   taste: string;
-  user: { id: number; username: string } | null;
+  user: AppUser | null;
 };
 
 export function ProfileTabContent({
