@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import {
@@ -12,45 +12,17 @@ import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { NavItem } from './components/NavItem';
 import { ProfileTabContent } from './components/ProfileTabContent';
 import { SearchTabContent } from './components/SearchTabContent';
+import { useItems } from './hooks/useItems';
+import { useTaste } from './hooks/useTaste';
 import type { SavedItem } from './types/item';
+import type { AppUser } from './types/user';
 
 export default function App() {
-  const [user] = useState<{ id: number; username: string }>({ id: 1, username: 'guest' });
-  const [items, setItems] = useState<SavedItem[]>([]);
+  const [user] = useState<AppUser>({ id: 1, username: 'guest' });
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
-  const [taste, setTaste] = useState<string>('');
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('feed');
-
-  useEffect(() => {
-    if (user) {
-      void fetchItems();
-      void fetchTaste();
-    }
-  }, [user]);
-
-  const fetchItems = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`/api/items?user_id=${user.id}`, { cache: 'no-store' });
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to fetch items:', error);
-      setItems([]);
-    }
-  };
-
-  const fetchTaste = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`/api/taste?user_id=${user.id}`, { cache: 'no-store' });
-      const data = await res.json();
-      setTaste(data?.summary || '');
-    } catch (error) {
-      console.error('Failed to fetch taste:', error);
-      setTaste('');
-    }
-  };
+  const { items, setItems, refreshItems } = useItems(user);
+  const { taste, setTaste, refreshTaste } = useTaste(user);
 
   return (
     <>
@@ -103,8 +75,8 @@ export default function App() {
                   items={items}
                   onItemsChange={setItems}
                   onSelectItem={setSelectedItem}
-                  refreshItems={fetchItems}
-                  refreshTaste={fetchTaste}
+                  refreshItems={refreshItems}
+                  refreshTaste={refreshTaste}
                   user={user}
                 />
               </Tabs.Content>
@@ -114,7 +86,7 @@ export default function App() {
               <Tabs.Content value="search" forceMount>
                 <SearchTabContent
                   onItemsChange={setItems}
-                  refreshTaste={fetchTaste}
+                  refreshTaste={refreshTaste}
                   user={user}
                 />
               </Tabs.Content>

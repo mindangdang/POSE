@@ -3,6 +3,7 @@ import { Plus, Loader2, Trash2, Instagram, Sparkles, Zap } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 
 import type { SavedItem } from '../types/item';
+import type { AppUser } from '../types/user';
 
 type FeedTabContentProps = {
   items: SavedItem[];
@@ -10,7 +11,7 @@ type FeedTabContentProps = {
   onSelectItem: (item: SavedItem) => void;
   refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
-  user: { id: number; username: string } | null;
+  user: AppUser | null;
 };
 
 export function FeedTabContent({
