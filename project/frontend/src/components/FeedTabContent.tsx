@@ -1,3 +1,4 @@
+import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Loader2, Zap } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
@@ -26,7 +27,6 @@ export function FeedTabContent({
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [loading, setLoading] = useState(false);
 
   const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
   const categories = useMemo(
@@ -38,15 +38,12 @@ export function FeedTabContent({
     [items, selectedCategory]
   );
 
-  const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!newUrl || !user) return;
-    setLoading(true);
-    try {
+  const addItemMutation = useMutation({
+    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
       const res = await fetch('/api/extract-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newUrl, session_id: sessionId, user_id: user.id })
+        body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
 
       if (!res.ok) {
@@ -54,13 +51,18 @@ export function FeedTabContent({
         throw new Error(error.detail || "Failed to analyze URL");
       }
 
-      const responseData = await res.json();
-      if (responseData.success && responseData.status === 'processing') {
-        alert(`✨ ${responseData.message}`);
-      } else if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
-        const newItems = responseData.data.map((item: any, index: number) => ({
+      return {
+        nextUrl,
+        data: await res.json(),
+      };
+    },
+    onSuccess: ({ nextUrl, data }) => {
+      if (data.success && data.status === 'processing') {
+        alert(`✨ ${data.message}`);
+      } else if (data.success && data.data && Array.isArray(data.data)) {
+        const newItems = data.data.map((item: any, index: number) => ({
           id: Date.now() + index,
-          url: newUrl,
+          url: nextUrl,
           category: item.category || 'General',
           facts: item.facts || {},
           vibe: item.vibe_text || 'Extracted',
@@ -68,7 +70,7 @@ export function FeedTabContent({
           created_at: new Date().toISOString(),
           summary_text: item.summary_text || ''
         }));
-        onItemsChange([...newItems, ...items]);
+        onItemsChange((prev) => [...newItems, ...prev]);
       }
 
       setNewUrl("");
@@ -78,30 +80,52 @@ export function FeedTabContent({
         void refreshItems();
         void refreshTaste();
       }, 3000);
-
-    } catch (error: any) {
+    },
+    onError: (error: Error) => {
       console.error(error);
       alert(`분석 요청 중 오류가 발생했습니다: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async ({ id, userId }: { id: number; userId: number }) => {
+      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { method: 'DELETE' });
+
+      if (!res.ok) {
+        throw new Error('Failed to delete item');
+      }
+
+      return id;
+    },
+    onMutate: async ({ id }) => {
+      const previousItems = items;
+      onItemsChange((currentItems) => currentItems.filter((item) => item.id !== id));
+      return { previousItems };
+    },
+    onError: (error, _variables, context) => {
+      console.error('Delete failed:', error);
+      if (context?.previousItems) {
+        onItemsChange(context.previousItems);
+      }
+      alert('삭제 중 오류가 발생했습니다.');
+    },
+  });
+
+  const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newUrl || !user) return;
+    await addItemMutation.mutateAsync({
+      nextSessionId: sessionId,
+      nextUrl: newUrl,
+      userId: user.id,
+    });
   };
 
   const handleDelete = async (id: number) => {
     if (!user) return;
     const shouldDelete = window.confirm('정말로 삭제하십니까?');
     if (!shouldDelete) return;
-
-    const previousItems = items;
-    onItemsChange((currentItems) => currentItems.filter((item) => item.id !== id));
-
-    try {
-      await fetch(`/api/items/${id}?user_id=${user.id}`, { method: 'DELETE' });
-    } catch (error) {
-      console.error('Delete failed:', error);
-      onItemsChange(previousItems);
-      alert('삭제 중 오류가 발생했습니다.');
-    }
+    await deleteItemMutation.mutateAsync({ id, userId: user.id });
   };
 
   return (
@@ -139,10 +163,10 @@ export function FeedTabContent({
             />
           </div>
           <button
-            disabled={loading}
+            disabled={addItemMutation.isPending}
             className="w-full sm:w-auto px-8 py-3 bg-black text-white rounded-2xl hover:bg-gray-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:transform-none transition-all flex items-center justify-center gap-2 text-sm font-black tracking-widest uppercase h-[44px]"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {addItemMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Add
           </button>
         </form>
@@ -179,7 +203,7 @@ export function FeedTabContent({
         ))}
       </div>
 
-      {items.length === 0 && !loading && (
+      {items.length === 0 && !addItemMutation.isPending && (
         <div className="text-center py-32 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
             <Zap className="w-10 h-10 text-yellow-400" fill="currentColor" />
