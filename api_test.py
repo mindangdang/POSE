@@ -3,11 +3,11 @@ import httpx
 import urllib.parse
 import json
 
-async def fetch_musinsa_direct(query: str, size: int = 15) -> list:
+async def fetch_musinsa_direct(query: str, size: int) -> list:
     # 1. 쿼리 완벽하게 URL 인코딩 ("숏패딩" -> "%EC%88%8F%ED%8C%A8%EB%94%A9")
     encoded_query = urllib.parse.quote(query)
     
-    # 2. ⭐️ httpx의 params 파라미터를 쓰지 않고, 브라우저가 쏘는 그대로 URL을 수제 조립!
+    # 2.httpx의 params 파라미터를 쓰지 않고, 브라우저가 쏘는 그대로 URL을 수제 조립
     # 빈 값(testGroup=, seenAds=)과 caller=SEARCH 등을 하나도 빠짐없이 넣어야 함.
     raw_url = (
         f"https://api.musinsa.com/api2/dp/v2/plp/goods"
@@ -60,7 +60,7 @@ async def fetch_musinsa_direct(query: str, size: int = 15) -> list:
             return results
             
         except Exception as e:
-            print(f"🚨 무신사 다이렉트 검색 실패 ({query}): {e}")
+            print(f"무신사 다이렉트 검색 실패 ({query}): {e}")
             if hasattr(e, 'response') and e.response is not None:
                 print(f"응답 코드: {e.response.status_code}")
                 print(f"응답 본문: {e.response.text}") # 400 에러일 때 서버가 뱉는 진짜 이유가 여기 찍힘
@@ -70,13 +70,13 @@ async def fetch_musinsa_direct(query: str, size: int = 15) -> list:
 async def run_test():
     test_queries = ["숏패딩", "오버핏 스트릿 후드티"]
     for q in test_queries:
-        print(f"\n🔍 검색어: '{q}' API 찌르는 중...")
-        results = await fetch_musinsa_direct(q, size=5)
+        print(f"\n검색어: '{q}' API 찌르는 중...")
+        results = await fetch_musinsa_direct(q, size=150)
         if results:
-            print(f"✅ 추출 성공! (총 {len(results)}개)")
+            print(f"추출 성공! (총 {len(results)}개)")
             print(json.dumps(results, ensure_ascii=False, indent=2))
         else:
-            print("❌ 결과를 가져오지 못했습니다.")
+            print("결과를 가져오지 못했습니다.")
 
 if __name__ == "__main__":
     asyncio.run(run_test())
