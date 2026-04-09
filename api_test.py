@@ -71,7 +71,7 @@ async def run_test():
     test_queries = ["숏패딩", "오버핏 스트릿 후드티"]
     for q in test_queries:
         print(f"\n검색어: '{q}' API 찌르는 중...")
-        results = await fetch_musinsa_direct(q, size=150)
+        results = await fetch_musinsa_direct(q, size=100)
         if results:
             print(f"추출 성공! (총 {len(results)}개)")
             print(json.dumps(results, ensure_ascii=False, indent=2))
