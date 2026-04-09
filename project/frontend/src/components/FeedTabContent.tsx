@@ -1,9 +1,11 @@
+import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Loader2, Trash2, Instagram, Sparkles, Zap } from 'lucide-react';
+import { Plus, Loader2, Zap } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
+import { FeedItemCard } from './FeedItemCard';
 
 type FeedTabContentProps = {
   items: SavedItem[];
@@ -25,7 +27,6 @@ export function FeedTabContent({
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [loading, setLoading] = useState(false);
 
   const factKeysToShow = ['title', 'price_info', 'location_text', 'time_info', 'key_details'];
   const categories = useMemo(
@@ -37,15 +38,12 @@ export function FeedTabContent({
     [items, selectedCategory]
   );
 
-  const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!newUrl || !user) return;
-    setLoading(true);
-    try {
+  const addItemMutation = useMutation({
+    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: number }) => {
       const res = await fetch('/api/extract-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newUrl, session_id: sessionId, user_id: user.id })
+        body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
 
       if (!res.ok) {
@@ -53,13 +51,18 @@ export function FeedTabContent({
         throw new Error(error.detail || "Failed to analyze URL");
       }
 
-      const responseData = await res.json();
-      if (responseData.success && responseData.status === 'processing') {
-        alert(`✨ ${responseData.message}`);
-      } else if (responseData.success && responseData.data && Array.isArray(responseData.data)) {
-        const newItems = responseData.data.map((item: any, index: number) => ({
+      return {
+        nextUrl,
+        data: await res.json(),
+      };
+    },
+    onSuccess: ({ nextUrl, data }) => {
+      if (data.success && data.status === 'processing') {
+        alert(`✨ ${data.message}`);
+      } else if (data.success && data.data && Array.isArray(data.data)) {
+        const newItems = data.data.map((item: any, index: number) => ({
           id: Date.now() + index,
-          url: newUrl,
+          url: nextUrl,
           category: item.category || 'General',
           facts: item.facts || {},
           vibe: item.vibe_text || 'Extracted',
@@ -67,7 +70,7 @@ export function FeedTabContent({
           created_at: new Date().toISOString(),
           summary_text: item.summary_text || ''
         }));
-        onItemsChange([...newItems, ...items]);
+        onItemsChange((prev) => [...newItems, ...prev]);
       }
 
       setNewUrl("");
@@ -77,30 +80,52 @@ export function FeedTabContent({
         void refreshItems();
         void refreshTaste();
       }, 3000);
-
-    } catch (error: any) {
+    },
+    onError: (error: Error) => {
       console.error(error);
       alert(`분석 요청 중 오류가 발생했습니다: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async ({ id, userId }: { id: number; userId: number }) => {
+      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { method: 'DELETE' });
+
+      if (!res.ok) {
+        throw new Error('Failed to delete item');
+      }
+
+      return id;
+    },
+    onMutate: async ({ id }) => {
+      const previousItems = items;
+      onItemsChange((currentItems) => currentItems.filter((item) => item.id !== id));
+      return { previousItems };
+    },
+    onError: (error, _variables, context) => {
+      console.error('Delete failed:', error);
+      if (context?.previousItems) {
+        onItemsChange(context.previousItems);
+      }
+      alert('삭제 중 오류가 발생했습니다.');
+    },
+  });
+
+  const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newUrl || !user) return;
+    await addItemMutation.mutateAsync({
+      nextSessionId: sessionId,
+      nextUrl: newUrl,
+      userId: user.id,
+    });
   };
 
   const handleDelete = async (id: number) => {
     if (!user) return;
     const shouldDelete = window.confirm('정말로 삭제하십니까?');
     if (!shouldDelete) return;
-
-    const previousItems = items;
-    onItemsChange((currentItems) => currentItems.filter((item) => item.id !== id));
-
-    try {
-      await fetch(`/api/items/${id}?user_id=${user.id}`, { method: 'DELETE' });
-    } catch (error) {
-      console.error('Delete failed:', error);
-      onItemsChange(previousItems);
-      alert('삭제 중 오류가 발생했습니다.');
-    }
+    await deleteItemMutation.mutateAsync({ id, userId: user.id });
   };
 
   return (
@@ -138,10 +163,10 @@ export function FeedTabContent({
             />
           </div>
           <button
-            disabled={loading}
+            disabled={addItemMutation.isPending}
             className="w-full sm:w-auto px-8 py-3 bg-black text-white rounded-2xl hover:bg-gray-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:transform-none transition-all flex items-center justify-center gap-2 text-sm font-black tracking-widest uppercase h-[44px]"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {addItemMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Add
           </button>
         </form>
@@ -168,83 +193,17 @@ export function FeedTabContent({
 
       <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
         {filteredItems.map((item) => (
-          <motion.div
-            layout
+          <FeedItemCard
             key={item.id}
-            onClick={() => onSelectItem(item)}
-            className="break-inside-avoid group relative bg-white rounded-3xl overflow-hidden border border-black/5 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-          >
-            <div className="relative overflow-hidden">
-              <img
-                src={item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
-                alt={item.category}
-                className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=POSE+Not+Found';
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-                  {item.category}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(item.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-all"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-              <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{item.vibe}</p>
-
-              {item.facts && typeof item.facts === 'object' && (
-                <>
-                  {Object.entries(item.facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
-                    <div className="space-y-1.5 mt-3 border-t border-gray-100 pt-3">
-                      {Object.entries(item.facts)
-                        .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
-                        .map(([key, value]) => (
-                          <div key={key} className="flex flex-col gap-0.5">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</span>
-                            <p className="text-[11px] text-gray-600 line-clamp-1 font-medium">
-                              {Array.isArray(value) ? value.join(', ') : String(value)}
-                            </p>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div className="pt-3 flex items-center gap-2">
-                {item.url && item.url.startsWith('http') ? (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
-                  >
-                    <Instagram className="w-3 h-3" /> View Source
-                  </a>
-                ) : (
-                  <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> AI Curated
-                  </span>
-                )}
-              </div>
-            </div>
-          </motion.div>
+            factKeysToShow={factKeysToShow}
+            item={item}
+            onDelete={handleDelete}
+            onSelect={() => onSelectItem(item)}
+          />
         ))}
       </div>
 
-      {items.length === 0 && !loading && (
+      {items.length === 0 && !addItemMutation.isPending && (
         <div className="text-center py-32 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
             <Zap className="w-10 h-10 text-yellow-400" fill="currentColor" />
