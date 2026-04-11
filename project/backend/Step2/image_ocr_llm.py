@@ -50,7 +50,7 @@ class InstaAnalysisResult(BaseModel):
     extracted_items: List[ExtractedItem]
 
 # ---------------------------------------------------------
-# 3. Gemini 2.5 Flash 분석 엔진 & 멀티모달 파이프라인
+# 3. Gemini 분석 엔진 & 멀티모달 파이프라인
 # ---------------------------------------------------------
 
 async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):
@@ -92,7 +92,7 @@ async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: 
     contents = [prompt_ocr] + images + [text_input]
 
     response_ocr = await client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-pro",
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
