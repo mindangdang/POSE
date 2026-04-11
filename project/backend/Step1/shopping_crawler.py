@@ -5,7 +5,6 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from urllib.parse import urljoin
 from pydantic import BaseModel,Field
 from typing import Optional
 
@@ -240,10 +239,13 @@ async def scrape_product_metadata(url: str) -> dict:
     except Exception as e:
         # --- 2차 방어막: 크롤링 자체가 에러나면 Gemini 폴백 ---
         print(f"[{url}] 파이프라인 에러 발생({e}). Gemini 폴백 실행...")
-        # 에러가 났더라도 여기까지 받아둔 html이 있다면 그걸 LLM에 넘겨서 살려낸다.
-        gemini_result = await fallback_with_gemini(url, html)
-        if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
-            return gemini_result
+        if html and len(html.strip()) > 100:
+            print(f"[{url}] 확보된 HTML로 Gemini 폴백 실행...")
+            gemini_result = await fallback_with_gemini(url, html)
+            if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
+                return gemini_result
+        else:
+            print(f"[{url}] 파싱할 HTML 소스가 없어 Gemini 폴백을 스킵합니다.")
 
         return {
             "url": url,
