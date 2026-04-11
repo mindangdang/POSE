@@ -1,7 +1,6 @@
 import json
 from google import genai
 import os
-import asyncio
 from google.genai import types
 from project.backend.app.core.settings import load_backend_env
 
