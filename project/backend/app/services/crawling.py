@@ -72,25 +72,28 @@ async def _crawl_instagram_post(
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-        if session_id:
-            await context.add_cookies(
-                [
-                    {
-                        "name": "sessionid",
-                        "value": session_id,
-                        "domain": ".instagram.com",
-                        "path": "/",
-                        "httpOnly": True,
-                        "secure": True,
-                    }
-                ]
-            )
-        page = await context.new_page()
-        await stealth_async(page)
-        crawl_result = await crawl_instagram_post(page, post_url)
-        await browser.close()
-        return crawl_result
+        try:
+            context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+            if session_id:
+                await context.add_cookies(
+                    [
+                        {
+                            "name": "sessionid",
+                            "value": session_id,
+                            "domain": ".instagram.com",
+                            "path": "/",
+                            "httpOnly": True,
+                            "secure": True,
+                        }
+                    ]
+                )
+            page = await context.new_page()
+            await stealth_async(page)
+            crawl_result = await crawl_instagram_post(page, post_url)
+            return crawl_result
+        finally:
+            await browser.close()
+
 
 
 async def _extract_instagram_items(crawl_result: dict) -> list[dict]:
@@ -153,6 +156,8 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         fetch_image_task(),
         parse_description_task()
     )
+
+    ai_parsed_data = ai_parsed_data or {}
 
     brand_info = data.get("brand", "")
     final_key_details = ai_parsed_data.get("key_details", "")
