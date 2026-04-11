@@ -8,7 +8,7 @@ psycopg[pool,binary]
 fastmcp
 pgvector==0.2.5
 fastapi
-openai
 beautifulsoup4
 httpx 
 uvicorn[standard]
+supabase
