@@ -37,7 +37,7 @@ async def analyze_description_with_gemini(description: str) -> dict:
 
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt, 
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
