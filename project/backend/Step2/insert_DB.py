@@ -26,11 +26,7 @@ client = genai.Client(
 )
 MODEL_NAME = "gemini-embedding-2-preview" 
 
-# ==========================================
-# 1. Vibe 텍스트 -> 벡터 '일괄(Batch)' 변환 함수
-# ==========================================
 async def get_vibe_vectors_batch(texts: list[str]) -> dict:
-    """여러 개의 바이브 텍스트를 한 번의 API 통신으로 임베딩합니다."""
     # 빈 문자열이나 None은 걸러내고 유효한 텍스트만 추출
     valid_texts = [t for t in texts if t and t.strip()]
     if not valid_texts:
@@ -39,10 +35,9 @@ async def get_vibe_vectors_batch(texts: list[str]) -> dict:
     try:
         print(f"{len(valid_texts)}개의 바이브 텍스트를 한 번에 임베딩합니다...")
         # 동기식 API 호출을 방어하기 위해 스레드 풀로 넘김
-        response = await asyncio.to_thread(
-            client.models.embed_content,
+        response = await client.aio.models.embed_content(
             model=MODEL_NAME,
-            contents=valid_texts, # 배열을 통째로 넘김!
+            contents=valid_texts, 
             config=types.EmbedContentConfig(output_dimensionality=768)
         )
         
