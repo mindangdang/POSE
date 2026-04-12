@@ -18,8 +18,6 @@ BUCKET_NAME = "vibe-images"
 if not url or not key:
     raise ValueError("Supabase 환경 변수가 설정되지 않았습니다.")
 
-GENERATION_MODEL = "imagen-3.0-generate-002"
-
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
@@ -43,23 +41,27 @@ async def generate_image_from_query(user_query: str) -> bytes:
     """
     
     try:
-        generate_response = await client.aio.models.generate_image(
-            model=GENERATION_MODEL,
-            prompt=prompt,
-            config=types.GenerateImageConfig(
-                number_of_images=1,
-                aspect_ratio="3:4", # 룩북 감성
-                add_watermark=False, # 워터마크 제거 (렌즈 검색 정확도 상승)
-                include_rai_reasoning=True, # 안전성 검사 결과 포함
-                output_mime_type="image/jpeg"
+        generate_response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"], # "나 텍스트 말고 이미지로 줘!" 라고 강제함
+                image_config=types.ImageConfig(
+                    aspect_ratio="3:4" # 룩북 감성의 비율 유지
+                )
             )
         )
-        generated_image = generate_response.generated_images[0]
-
-        if not generated_image.image_bytes:
-            raise ValueError("생성된 이미지 데이터가 비어 있습니다.")
+        part = generate_response.candidates[0].content.parts[0]
+        
+        # 구글 SDK 응답 구조에 따라 바이트 데이터가 들어있는 위치를 찾아 반환
+        if getattr(part, 'inline_data', None) and part.inline_data.data:
+            return part.inline_data.data
+        elif getattr(part, 'image', None) and part.image.image_bytes:
+            return part.image.image_bytes
+        elif getattr(part, 'image_bytes', None):
+            return part.image_bytes
             
-        return generated_image.image_bytes
+        raise ValueError("생성된 이미지 데이터를 찾을 수 없습니다.")
 
     except Exception as e:
         print(f"이미지 생성 실패: {e}")
