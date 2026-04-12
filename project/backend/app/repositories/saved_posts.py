@@ -70,7 +70,7 @@ class SavedPostsRepository:
                     source_url as url,
                     category,
                     facts,
-                    recommend as vibe,
+                    recommend as recommend,
                     image_url,
                     summary_text,
                     created_at

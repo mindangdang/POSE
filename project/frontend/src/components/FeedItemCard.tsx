@@ -49,7 +49,7 @@ export function FeedItemCard({
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
-        <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{item.vibe}</p>
+        <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{item.recommend}</p>
 
         {item.facts && typeof item.facts === 'object' && (
           <>

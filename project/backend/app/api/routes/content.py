@@ -260,7 +260,7 @@ async def save_manual_item(
             user_id=str(payload.user_id),
             url=payload.url,
             category=payload.category,
-            vibe=payload.vibe,
+            recommend=payload.recommend,
             facts=payload.facts,
             image_url=payload.image_url or "",
         )

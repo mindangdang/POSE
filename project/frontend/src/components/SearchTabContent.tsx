@@ -101,7 +101,7 @@ export function SearchTabContent({
         body: JSON.stringify({
           user_id: user.id,
           category: "WEB SEARCH",
-          vibe: item.vibe,
+          recommend: item.recommend,
           facts: item.facts,
           url: item.url,
           image_url: item.image_url

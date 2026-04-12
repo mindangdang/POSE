@@ -31,7 +31,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
     (facts && typeof facts === 'object' && 'title' in facts && typeof facts.title === 'string' && facts.title) ||
     (facts && typeof facts === 'object' && 'Title' in facts && typeof facts.Title === 'string' && facts.Title) ||
     item.summary_text ||
-    item.vibe;
+    item.recommend;
   const factEntries =
     facts && typeof facts === 'object'
       ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
@@ -100,7 +100,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Zap className="w-4 h-4 text-yellow-400" fill="currentColor" /> Vibe Analysis
                       </h3>
-                      <p className="text-lg font-bold leading-relaxed text-black tracking-tight">{item.vibe}</p>
+                      <p className="text-lg font-bold leading-relaxed text-black tracking-tight">{item.recommend}</p>
                     </section>
 
                     <section>
