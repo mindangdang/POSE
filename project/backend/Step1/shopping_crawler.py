@@ -106,44 +106,8 @@ def _extract_meta_content(soup: BeautifulSoup, property_name: str) -> str:
         
     return ""
 
-async def fallback_with_serpapi_google(url: str) -> dict:
-    print(f"[{url}] 악성 도메인 감지. SerpApi(Google Cache)로 우회합니다...")
-    serp_api_key = os.environ.get("SERP_API_KEY")
-    if not serp_api_key: return None
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get("https://serpapi.com/search", params={
-                "engine": "google", "q": url, "api_key": serp_api_key, "hl": "ko", "gl": "kr"
-            })
-            response.raise_for_status()
-            search_data = response.json()
-
-        organic_results = search_data.get("organic_results", [])
-        if not organic_results: return None
-
-        first_hit = organic_results[0]
-        title = first_hit.get("title", "").split(" | ")[0].split(" - ")[0]
-        price = ""
-        for ext in first_hit.get("rich_snippet", {}).get("top", {}).get("extensions", []):
-            if "₩" in ext or "원" in ext: price = ext; break
-
-        return {
-            "url": url, "title": title, "brand": "", "price": price,
-            "currency": "KRW", "image_url": first_hit.get("thumbnail", ""),
-            "description": first_hit.get("snippet", ""), "availability": "",
-            "source": "serpapi-google-cache"
-        }
-    except Exception as e:
-        print(f"SerpApi 캐시 폴백 실패: {e}")
-        return None
-
 async def _load_product_page(url: str) -> dict:
-
-    if any(domain in url for domain in ["kream.co.kr", "zara.com"]):
-        raise ValueError("Strict WAF Domain - Route to SerpApi")
     
-    #헤더 변경
     headers = {
         "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -159,8 +123,7 @@ async def _load_product_page(url: str) -> dict:
             if "cf-browser-verification" in html or "Just a moment..." in html:
                 raise ValueError("WAF Challenge intercepted")
 
-            is_js_heavy = any(domain in url for domain in ["m.bunjang.co.kr", "musinsa.com"])
-            if is_js_heavy or ("og:title" not in html and "application/ld+json" not in html):
+            if ("og:title" not in html and "application/ld+json" not in html):
                 raise ValueError("Need JS rendering")
 
             return {"html": html, "finalUrl": str(response.url)}
@@ -184,7 +147,6 @@ async def _load_product_page(url: str) -> dict:
                 viewport={"width": 1920, "height": 1080}
             )
             page = await context.new_page()
-            
             stealth = Stealth()
             await stealth.apply_stealth_async(page)
 
@@ -202,10 +164,6 @@ async def _load_product_page(url: str) -> dict:
 async def scrape_product_metadata(url: str) -> dict:
     print(f"[{url}] 메타데이터 추출 파이프라인 시작...")
 
-    if any(domain in url for domain in ["kream.co.kr", "zara.com"]):
-        serp_data = await fallback_with_serpapi_google(url)
-        if serp_data: return serp_data
-    
     final_url = url
     # 파이프라인 중간에 터져도 HTML을 살려서 폴백으로 넘기기 위해 최상단에 선언
     html = "" 
@@ -313,19 +271,5 @@ async def scrape_product_metadata(url: str) -> dict:
             gemini_result = await fallback_with_gemini(url, html)
             if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
                 return gemini_result
-        
-        print(f"[{url}] 최후의 수단: SerpApi 캐시 탐색...")
-        serp_data = await fallback_with_serpapi_google(url)
-        if serp_data: return serp_data
 
-        return {
-            "url": url,
-            "title": "추출 실패",
-            "brand": "",
-            "price": "",
-            "currency": "",
-            "availability": "",
-            "image_url": "",
-            "description": "데이터를 불러올 수 없습니다.",
-            "source": "error-fallback",
-        }
+        raise ValueError("크롤링 실패. 검색탭에서 찾아 추가해주세요.")
