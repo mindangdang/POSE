@@ -6,3 +6,5 @@ RUN apt-get update \
     && git lfs install --system \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
