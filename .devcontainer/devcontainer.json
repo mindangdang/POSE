@@ -14,5 +14,5 @@
       "extensions": ["ms-python.python"]
     }
   },
-  "postCreateCommand": "pip install -r requirements.txt && playwright install chromium --with-deps && cd project/frontend && npm install"
+  "postCreateCommand": "pip install -r project/backend/requirements.txt && playwright install chromium --with-deps && cd project/frontend && npm install"
 }
