@@ -36,8 +36,7 @@ class VibeGenerateRequest(BaseModel):
 async def generate_image_from_query(user_query: str) -> bytes:
 
     prompt = f"""
-    High-end fashion editorial photography, a single clothing item: {user_query}.  
-    Clean white studio background, photorealistic, 8k resolution, highly detailed texture and fabric.
+    generate isolated fashion product shot of {user_query}, plain white background, no human, no mannequin.
     """
     
     try:
