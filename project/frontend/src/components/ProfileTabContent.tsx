@@ -11,6 +11,11 @@ type TasteProfileSection = {
   accent: string;
 };
 
+type TasteBodyParagraph = {
+  description: string;
+  title?: string;
+};
+
 type ProfileTabContentProps = {
   items: SavedItem[];
   onGoToFeed: () => void;
@@ -72,9 +77,100 @@ function normalizeTasteValue(value: unknown): string[] {
     });
   }
   return String(value)
-    .split(/\n+/)
-    .map((line) => line.trim())
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+}
+
+function cleanTasteParagraph(text: string) {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function cleanTasteHeading(text: string) {
+  return text.replace(/^\*+/, '').replace(/\*+$/, '').trim();
+}
+
+function parseTasteBodyParagraphs(body: string[]): TasteBodyParagraph[] {
+  const rawText = body.join('\n\n').trim();
+  if (!rawText) return [];
+
+  const headingRegex = /\*+[^*]+?\*+/g;
+  const headingMatches = Array.from(rawText.matchAll(headingRegex));
+
+  if (headingMatches.length > 0) {
+    const paragraphs = headingMatches
+      .map((match, index) => {
+        const matchText = match[0] ?? '';
+        const title = cleanTasteHeading(matchText);
+        const start = (match.index ?? 0) + matchText.length;
+        const end = index < headingMatches.length - 1
+          ? (headingMatches[index + 1].index ?? rawText.length)
+          : rawText.length;
+        const description = cleanTasteParagraph(rawText.slice(start, end));
+
+        return {
+          title: title || undefined,
+          description,
+        };
+      })
+      .filter((paragraph) => paragraph.title || paragraph.description);
+
+    if (paragraphs.length > 0) {
+      return paragraphs;
+    }
+  }
+
+  const lines = rawText
+    .split('\n')
+    .map((line) => line.trim());
+  const starredHeadingRegex = /^\*+\s*(.+?)\s*\*+$/;
+  const paragraphs: TasteBodyParagraph[] = [];
+  let currentTitle: string | undefined;
+  let currentLines: string[] = [];
+
+  const flushParagraph = () => {
+    const description = cleanTasteParagraph(currentLines.join('\n'));
+    if (!currentTitle && !description) return;
+
+    paragraphs.push({
+      title: currentTitle,
+      description,
+    });
+
+    currentTitle = undefined;
+    currentLines = [];
+  };
+
+  lines.forEach((line) => {
+    if (!line) {
+      return;
+    }
+
+    const headingMatch = line.match(starredHeadingRegex);
+    if (headingMatch) {
+      flushParagraph();
+      currentTitle = headingMatch[1].trim();
+      currentLines = [];
+      return;
+    }
+
+    currentLines.push(line);
+  });
+
+  flushParagraph();
+
+  if (paragraphs.length > 0) {
+    return paragraphs;
+  }
+
+  return body
+    .map((entry) => cleanTasteParagraph(entry))
+    .filter(Boolean)
+    .map((description) => ({ description }));
 }
 
 function buildTasteProfileSections(taste: string): TasteProfileSection[] {
@@ -111,8 +207,9 @@ function buildTasteProfileSections(taste: string): TasteProfileSection[] {
       const title = headingMatch ? headingMatch[1] : `Taste Point ${index + 1}`;
       const contentSource = headingMatch ? rest : lines;
       const body = contentSource
-        .flatMap((line) => line.split(/(?<=\.)\s+|•\s+|^-\s+/))
-        .map((line) => line.replace(/^[-*]\s*/, '').trim())
+        .join('\n')
+        .split(/\n{2,}/)
+        .map((paragraph) => cleanTasteParagraph(paragraph))
         .filter(Boolean);
       return {
         title,
@@ -176,6 +273,8 @@ function TasteAnalysisHeader(_: TasteAnalysisHeaderProps) {
 }
 
 function TasteSectionCard({ section }: TasteSectionCardProps) {
+  const paragraphs = parseTasteBodyParagraphs(section.body);
+
   return (
     <div className={`rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 backdrop-blur-sm`}>
       <div className="flex items-start justify-between gap-3">
@@ -187,13 +286,19 @@ function TasteSectionCard({ section }: TasteSectionCardProps) {
         <Compass className="h-5 w-5 text-gray-400" />
       </div>
       <div className="mt-5 space-y-3">
-        {section.body.map((line, lineIndex) => (
+        {paragraphs.map((paragraph, lineIndex) => (
           <div
             key={`${section.title}-${lineIndex}`}
-            className="flex gap-3 rounded-2xl bg-white/80 px-4 py-3 shadow-sm shadow-black/5"
+            className="rounded-2xl bg-white/80 px-4 py-4 shadow-sm shadow-black/5"
           >
-            <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-black" />
-            <p className="text-sm font-medium leading-6 text-gray-700">{line}</p>
+            {paragraph.title ? (
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
+                {paragraph.title}
+              </p>
+            ) : null}
+            <p className="mt-2 text-sm font-medium leading-6 text-gray-700">
+              {paragraph.description}
+            </p>
           </div>
         ))}
       </div>
