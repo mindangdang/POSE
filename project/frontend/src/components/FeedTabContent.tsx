@@ -191,7 +191,7 @@ export function FeedTabContent({
         </div>
       )}
 
-      <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4 mt-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch">
         {filteredItems.map((item) => (
           <FeedItemCard
             key={item.id}

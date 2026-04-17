@@ -19,18 +19,23 @@ export function FeedItemCard({
 }: FeedItemCardProps) {
   const facts = parseItemFacts(item);
   const title = getItemTitle(item);
+  const visibleFacts = facts
+    ? Object.entries(facts).filter(
+        ([key]) => key.toLowerCase() !== 'title' && factKeysToShow.includes(key.toLowerCase())
+      )
+    : [];
 
   return (
     <motion.div
       layout
       onClick={onSelect}
-      className="break-inside-avoid group relative bg-white rounded-3xl overflow-hidden border border-black/5 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+      className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-2xl"
     >
-      <div className="relative overflow-hidden">
+      <div className="relative aspect-[4/4.6] overflow-hidden bg-gray-100">
         <img
           src={item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x500?text=No+Image'}
           alt={item.category}
-          className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
+          className="h-full w-full object-cover transform transition-transform duration-700 group-hover:scale-105"
           referrerPolicy="no-referrer"
           onError={(e) => {
             (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x500?text=POSE+Not+Found';
@@ -38,7 +43,7 @@ export function FeedItemCard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
-      <div className="p-4 space-y-2">
+      <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
             {item.category}
@@ -53,28 +58,28 @@ export function FeedItemCard({
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
-        <p className="text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
+        <p className="mt-2 text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
 
-        {facts && (
-          <>
-            {Object.entries(facts).filter(([key]) => factKeysToShow.includes(key.toLowerCase())).length > 0 && (
-              <div className="space-y-1.5 mt-3 border-t border-gray-100 pt-3">
-                {Object.entries(facts)
-                  .filter(([key]) => factKeysToShow.includes(key.toLowerCase()))
-                  .map(([key, value]) => (
-                    <div key={key} className="flex flex-col gap-0.5">
-                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</span>
-                      <p className="text-[11px] text-gray-600 line-clamp-1 font-medium">
-                        {Array.isArray(value) ? value.join(', ') : String(value)}
-                      </p>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </>
-        )}
+        <div className="mt-3 min-h-[104px] border-t border-gray-100 pt-3">
+          {visibleFacts.length > 0 ? (
+            <div className="space-y-1.5">
+              {visibleFacts.map(([key, value]) => (
+                <div key={key} className="flex flex-col gap-0.5">
+                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{key.replace(/_/g, ' ')}</span>
+                  <p className="text-[11px] text-gray-600 line-clamp-1 font-medium">
+                    {Array.isArray(value) ? value.join(', ') : String(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full items-center">
+              <p className="text-[11px] font-medium text-gray-300">No extracted details</p>
+            </div>
+          )}
+        </div>
 
-        <div className="pt-3 flex items-center gap-2">
+        <div className="mt-auto pt-3 flex items-center gap-2">
           {item.url && item.url.startsWith('http') ? (
             <a
               href={item.url}
