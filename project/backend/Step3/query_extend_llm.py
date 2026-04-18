@@ -37,23 +37,24 @@ async def optimize_query_with_llm(user_query: str):
     입력: "스트릿한 배기진"
     출력: 
     {{
-    "final_query": "(\"데님 팬츠\" OR \"데님 진\" OR \"청바지\") AND (\"배기 핏\" OR \"스트릿\" OR \"벌룬 핏\" OR \"와이드\" OR \"플레어\")"
+    "final_query": "(\\"데님 팬츠\\" OR \\"데님 진\\" OR \\"청바지\\") AND (\\"배기 핏\\" OR \\"스트릿\\" OR \\"벌룬 핏\\" OR \\"와이드\\" OR \\"플레어\\")"
     }}
     입력: "어깨 넓어보이는 숏자켓"
     출력:
     {{
-    "final_query": "(\"자켓\" OR \"블루종\" OR \"아우터\") AND (\"크롭\" OR \"숏기장\") AND (\"와이드 숄더\" OR \"파워 숄더\" OR \"오버 핏\" OR \"스트릿\")"
+    "final_query": "(\\"자켓\\" OR \\"블루종\\" OR \\"아우터\\") AND (\\"크롭\\" OR \\"숏기장\\") AND (\\"와이드 숄더\\" OR \\"파워 숄더\\" OR \\"오버 핏\\" OR \\"스트릿\\")"
     }}
 
     입력: "워싱 들어간 롱슬리브"
     출력:
     {{
-    "final_query": "(\"롱슬리브\" OR \"긴팔 티셔츠\" OR \"롱티\") AND (\"가먼트 다잉\" OR \"피그먼트\" OR \"빈티지 워싱\")"
+    "final_query": "(\\"롱슬리브\\" OR \\"긴팔 티셔츠\\" OR \\"롱티\\") AND (\\"가먼트 다잉\\" OR \\"피그먼트\\" OR \\"빈티지 워싱\\")"
     }}
 
     반드시 순수 JSON 객체 포맷으로만 반환하라.
 
-현재 입력: {user_query} """
+    현재 입력: {user_query} 
+    """
 
     response = await client.aio.models.generate_content(
         model="gemini-2.5-flash",
