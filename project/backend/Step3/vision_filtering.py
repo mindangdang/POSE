@@ -38,7 +38,7 @@ async def rerank_with_gemini_embedding(user_vibe_text: str, search_results: list
     if not search_results:
         return []
 
-    print(f"🔥 [Gemini Embedding] {len(search_results)}개 썸네일 이미지 병렬 다운로드 시작...")
+    print(f"[Gemini Embedding] {len(search_results)}개 썸네일 이미지 병렬 다운로드 시작...")
     
     # 2. 50개 썸네일 병렬 다운로드 (네트워크 I/O 최적화)
     valid_items = [item for item in search_results if item.get("image_url")]
@@ -58,7 +58,7 @@ async def rerank_with_gemini_embedding(user_vibe_text: str, search_results: list
     if not batch_images:
         return search_results
 
-    print("🧠 [Gemini Embedding] 텍스트 및 이미지 벡터화 및 유사도 계산 중...")
+    print("[Gemini Embedding] 텍스트 및 이미지 벡터화 및 유사도 계산 중...")
 
     # 3. 유저 텍스트 임베딩 추출
     text_response = await client.aio.models.embed_content(
@@ -107,5 +107,5 @@ async def rerank_with_gemini_embedding(user_vibe_text: str, search_results: list
     # 최종 점수 기준 내림차순 정렬
     reranked = sorted(final_items, key=lambda x: x["vibe_score"], reverse=True)
     
-    print("✅ 리랭킹 완료. 가장 미학적으로 일치하는 매물이 상단에 배치되었습니다.")
+    print("리랭킹 완료. 가장 미학적으로 일치하는 매물이 상단에 배치되었습니다.")
     return reranked
