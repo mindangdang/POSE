@@ -21,7 +21,7 @@ client = genai.Client(
         base_url=my_proxy_url
     )
 )
-MODEL_NAME = "text-embedding-004"
+MODEL_NAME = "gemini-embedding-2-preview"
 
 async def fetch_image(url: str, client: httpx.AsyncClient) -> Image.Image | None:
     """비동기로 단일 썸네일 이미지를 다운로드하여 PIL 객체로 반환"""
