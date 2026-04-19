@@ -9,6 +9,7 @@ from google.genai import types
 from pathlib import Path
 
 from project.backend.app.core.settings import IMAGE_DIR, load_backend_env
+from project.backend.app.core.resilience import with_llm_resilience
 
 # ==========================================
 # 1. 환경 변수 및 설정
@@ -132,6 +133,7 @@ def format_data_for_prompt(item: dict) -> str:
 # ==========================================
 # 5. LLM 분석 실행 함수
 # ==========================================
+@with_llm_resilience(fallback_default=None)
 async def analyze_vibe(user_id: int, current_profile: dict):
     raw_items = await fetch_user_data_from_neon(user_id)
     if not raw_items:
@@ -158,21 +160,16 @@ async def analyze_vibe(user_id: int, current_profile: dict):
         if img_bytes:
             contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
 
-    try:
-        print(f"[User {user_id}] 취향 프로필 분석 중 (Gemini 2.5 Flash)...")
-        response = await client.aio.models.generate_content(
-            model='gemini-2.5-flash', 
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.4, 
-                response_mime_type="application/json",
-                response_schema=TasteProfileResult # 
-            ),
-        )
+    print(f"[User {user_id}] 취향 프로필 분석 중 (Gemini 2.5 Flash)...")
+    response = await client.aio.models.generate_content(
+        model='gemini-2.5-flash', 
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.4, 
+            response_mime_type="application/json",
+            response_schema=TasteProfileResult # 
+        ),
+    )
 
-        return response.parsed.model_dump()
-        
-    except Exception as e:
-        print(f"LLM 프로필 생성 중 오류 발생: {e}") 
-        return None
+    return response.parsed.model_dump()
