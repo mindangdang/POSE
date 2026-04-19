@@ -143,7 +143,7 @@ export function FeedTabContent({
         </div>
         <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row gap-2 items-end w-full xl:w-auto">
           <div className="flex-1 w-full xl:w-64 space-y-1.5">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Instagram or Product URL or just a name</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL or Product Name</label>
             <input
               type="url"
               placeholder="Paste link..."
