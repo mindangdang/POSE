@@ -236,9 +236,6 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
     
     url = "https://serpapi.com/search"
-    extended_query = await optimize_query_with_llm(user_text)
-    extended_query = extended_query.get('final_query', user_text)
-    print(f"SerpApi로 쏘는 쿼리: {extended_query}")
     print(f"[Multisearch] 파일 업로드 방식 검색 시작...")
     
     image_bytes = await image.read()
@@ -246,7 +243,7 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
 
     params = {
         "engine": "google_lens",
-        "q": extended_query,
+        "q": user_text,
         "url": search_image_url,
         "tbm": "isch", 
         "type": "visual_matches",
