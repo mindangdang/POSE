@@ -1,6 +1,7 @@
 import os
 import traceback
 import uuid
+import asyncio
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -16,7 +17,6 @@ from project.backend.Step3.image_search import generate_image_from_query,upload_
 load_backend_env()
 
 router = APIRouter()
-
 
 @router.post("/extract-url")
 async def extract_and_save_url(
@@ -72,7 +72,6 @@ async def run_serpapi_search(payload: SearchRequest):
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 
-    url = "https://serpapi.com/search"
     domain_map = {
         "musinsa.com": "무신사",
         "kream.co.kr": "KREAM",
@@ -91,75 +90,82 @@ async def run_serpapi_search(payload: SearchRequest):
 
     extended_query = await optimize_query_with_llm(payload.query)
     extended_query = extended_query.get('final_query', payload.query)
+    print(f"SerpApi로 쏘는 쿼리: {extended_query}")
 
-    site_query = " | ".join([f"site:{domain}" for domain in domain_map])
-    product_hierarchy_query = "(> products)"
-    exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
-    final_query = f"{extended_query} ({site_query}) {product_hierarchy_query} {exclude_list_pages}"
-    print(f"SerpApi로 쏘는 쿼리: {final_query}")
+    async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+        product_hierarchy_query = "(> products)"
+        exclude_list_pages = "-inurl:search -inurl:category -inurl:tags"
+        final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
+        
+        params = {
+            "engine": "google",
+            "q": final_query,
+            "api_key": serp_api_key,
+            "num": 5, # 각 사이트당 상위 5개씩 빠르게 추출
+            "tbm": "isch",
+            "start": (current_page - 1) * 5,
+            "gl": "kr",
+            "hl": "ko",
+            "tbs": "qdr:m"
+        }
+        
+        try:
+            response = await client.get("https://serpapi.com/search", params=params)
+            response.raise_for_status()
+            items = response.json().get("images_results", [])
+            print(f"[{site_name}] 검색 성공")
+            
+            return [{
+                "id": str(uuid.uuid4()),
+                "category": "PRODUCT",
+                "recommend": f"{site_name}에서 발견한 힙한 아이템",
+                "image_url": item.get("original", "") or item.get("thumbnail", ""),
+                "url": item.get("link", ""),
+                "summary_text": item.get("title", "상품명 없음"),
+                "facts": {
+                    "title": item.get("title", "상품명 없음"),
+                    "Price": item.get("price", "가격 미상"),
+                    "Shop": site_name,
+                },
+            } for item in items]
+
+        except Exception as e:
+            print(f"[{domain}] 검색 실패: {e}")
+            return []
 
     try:
         current_page = max(1, int(payload.page)) if payload.page is not None else 1
     except ValueError:
         current_page = 1
 
-    params = {
-        "engine": "google",
-        "q": final_query,
-        "api_key": serp_api_key,
-        "num": 25,
-        "tbm": "isch",
-        "start": (current_page - 1) * 25,
-        "gl": "kr",
-        "hl": "ko",
-        "tbs": "qdr:m"
-    }
-
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            if response.status_code != 200:
-                print(f"SerpApi 에러 내용: {response.text}")
-            response.raise_for_status()
-            search_data = response.json()
+            # 1. Scatter: 모든 타겟 사이트에 동시에 요청
+            tasks = [
+                fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
+                for domain, name in domain_map.items()
+            ]
+            results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
 
-        items = search_data.get("images_results", [])
-        print(f"SerpApi가 가져온 전체 원본 데이터 개수: {len(items)}")
+        mixed_results = []
+        
+        # 2. Gather & Interleave: 라운드 로빈 방식으로 골고루 섞기
+        valid_lists = [res for res in results_per_site if isinstance(res, list) and res]
+        
+        while valid_lists:
+            for site_items in valid_lists[:]: # 복사본을 순회하며 pop
+                if site_items:
+                    mixed_results.append(site_items.pop(0))
+                if not site_items:
+                    valid_lists.remove(site_items)
 
-        results = []
-        for item in items:
-            link = item.get("link", "")
-            title = item.get("title", "상품명 없음")
-            image_url = item.get("original", "") or item.get("thumbnail", "")
-
-            extracted_price = item.get("price", "가격 미상")
-            source = item.get("source", "알 수 없는 샵")
-            for domain, name in domain_map.items():
-                if domain in link:
-                    source = name
-                    break
-
-            results.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "category": "PRODUCT",
-                    "recommend": f"{source}에서 발견한 힙한 아이템",
-                    "image_url": image_url,
-                    "url": link,
-                    "summary_text": title,
-                    "facts": {
-                        "title": title,
-                        "Price": extracted_price,
-                        "Shop": source,
-                    },
-                }
-            )
-
-        print(f"최종결과 개수: {len(results)}")
-        return {"success": True, "results": results}
+        print(f"최종결과 개수: {len(mixed_results)}")
+        return {"success": True, "results": mixed_results}
+    
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {exc}") from exc
+
 
 @router.post("/lens")
 async def run_serpapi_lens_search(payload: SearchRequest):
