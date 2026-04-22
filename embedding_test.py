@@ -14,7 +14,7 @@ from transformers import CLIPProcessor, CLIPModel
 # 1. Fashion-CLIP 모델 초기화
 # ==========================================
 model_id = "patrickjohncyh/fashion-clip"
-print(f"🔄 [{model_id}] 모델 및 프로세서 로드 중 (초기 다운로드에 시간이 소요될 수 있습니다)...")
+print(f"[{model_id}] 모델 및 프로세서 로드 중 (초기 다운로드에 시간이 소요될 수 있습니다)...")
 processor = CLIPProcessor.from_pretrained(model_id)
 model = CLIPModel.from_pretrained(model_id)
 
@@ -42,20 +42,7 @@ async def run_similarity_poc():
     centroid_text = "스트릿,엘레강스,빈티지,섹시한,유니크한,차분한 색감,슬림한"
     text_vector = await get_embedding(centroid_text)
     test_images = {
-        # [Match Group] 취향에 부합하는 그룹
-        "Match 1 (나이키 샥스 오렌지)": "project/backend/insta_vibes/1fbe38c616db4a0ebffb8791932031a6.jpg",
-        "Match 2 (시그니처 버뮤다)": "project/backend/insta_vibes/19047a9f77434385900a3e971b018316.jpg",
-        "Match 3 (나폴레옹 자켓)": "project/backend/insta_vibes/873424eca62440a69bc7a2bc52434ea9.jpg",
-        "(apuee)": "project/backend/insta_vibes/9f9e22ed641b45d6b2f1888eb30fc0e6.jpg",
-        "(예쁜 후집)": "project/backend/insta_vibes/55aad7feb5fe4c07baca853790c9a55f.jpg",
-        "(두가티)": "project/backend/insta_vibes/40450bef65c04c06a5b6b2851ed566a6.jpg",
-        "(자수 포인트 바지)": "project/backend/insta_vibes/42549f6dfa1047068e901d2efa5eff7d.jpg",
-        "(오퍼스 반팔)": "project/backend/insta_vibes/a8b5d9090f28489494290d387c6452e4.jpg",
-        "(헨리넥)": "project/backend/insta_vibes/fa2b59eee03e4cfe8e775d3f85b4f47f.jpg",
-        # [Mismatch Group] 취향과 거리가 먼 극단적 효율성/깔끔함 추구 그룹
-        "Mismatch 1 (이상한 후드집업)": "project/backend/insta_vibes/9d0f55cafd8b43849454a115e0b240ea.jpg",
-        "Mismatch 2 (이상한 셔츠)": "project/backend/insta_vibes/088db874a8614aa9ae9df1f1d8860bed.jpg",
-        "Mismatch 3 (이상한 바지)": "project/backend/insta_vibes/a676ca5a70e240979e44a8e6e261c733.jpg"
+
     }
 
     results = []
