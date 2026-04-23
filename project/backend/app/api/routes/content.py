@@ -75,16 +75,7 @@ async def run_serpapi_search(payload: SearchRequest):
         "musinsa.com": "무신사",
         "kream.co.kr": "KREAM",
         "fruitsfamily.com": "후루츠패밀리",
-        "kasina.co.kr": "카시나",
-        "heights-store.com": "하이츠스토어",
-        "8division.com": "에잇디비젼",
-        "worksout.co.kr": "웍스아웃",
-        "iamshop-online.com": "아이엠샵",
-        "samplas.co.kr": "샘플라스",
-        "etcseoul.com": "etcseoul",
-        "zara.com": "자라",
-        "fetching.co.kr": "페칭",
-        "empty.seoul.kr": "무신사 엠프티"
+        "zara.com": "자라"
     }
 
     extended_query = await optimize_query_with_llm(payload.query)
