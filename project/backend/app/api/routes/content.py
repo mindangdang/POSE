@@ -101,8 +101,7 @@ async def run_serpapi_search(payload: SearchRequest):
             "tbm": "isch",
             "start": (current_page - 1) * 5,
             "gl": "kr",
-            "hl": "ko",
-            "sort": "date" 
+            "hl": "ko"
         }
         
         try:
@@ -121,7 +120,7 @@ async def run_serpapi_search(payload: SearchRequest):
                 "summary_text": item.get("title", "상품명 없음"),
                 "facts": {
                     "title": item.get("title", "상품명 없음"),
-                    "Price": item.get("price", "가격 미상"),
+                    "Price": item.get("price") or item.get("snippet") or "가격 미상",
                     "Shop": site_name,
                 },
             } for item in items]
