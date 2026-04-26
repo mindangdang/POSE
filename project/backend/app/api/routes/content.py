@@ -12,6 +12,9 @@ from project.backend.app.services.crawling import DEFAULT_USER_ID, background_cr
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
+from project.backend.Step1.utils import analyze_description_with_gemini
+from project.backend.Step1.instagram_crawler import download_images
+from project.backend.app.core.settings import IMAGE_DIR
 
 load_backend_env()
 
@@ -57,6 +60,7 @@ async def extract_and_save_url(
                 "id": new_item_id,
                 "url": post_url,
                 "category": "PROCESSING ",
+                "sub_category": "PROCESSING ",
                 "recommend": "AI가 열심히 바이브를 추출하고 있어요 ",
                 "facts": {"title": "분석 중..."},
                 "image_url": "",
@@ -110,7 +114,8 @@ async def run_serpapi_search(payload: SearchRequest):
             return [{
                 "id": str(uuid.uuid4()),
                 "category": "PRODUCT",
-                "recommend": f"{site_name}에서 발견한 힙한 아이템",
+                "sub_category": "PRODUCT",
+                "recommend": f"{site_name}에서 발견한 아이템",
                 "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
                 "url": item.get("link", ""),
                 "summary_text": item.get("title", "상품명 없음"),
@@ -202,6 +207,7 @@ async def run_serpapi_lens_search(payload: SearchRequest):
                 {
                     "id": str(uuid.uuid4()),
                     "category": "PRODUCT",
+                    "sub_category": "PRODUCT",
                     "recommend": f"{source}에서 발견한 힙한 아이템",
                     "image_url": image_url,
                     "url": link,
@@ -267,7 +273,8 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
                 {
                     "id": str(uuid.uuid4()),
                     "category": "PRODUCT",
-                    "recommend": f"{source}에서 발견한 힙한 아이템",
+                    "sub_category": "PRODUCT",
+                    "recommend": f"{source}에서 발견한 아이템",
                     "image_url": image_url,
                     "url": link,
                     "summary_text": title,
@@ -292,13 +299,39 @@ async def save_manual_item(
     repos: Repositories = Depends(get_repos),
 ):
     try:
+        async def fetch_image_task() -> str:
+            if payload.image_url and payload.image_url.startswith(("http://", "https://")):
+                files = await download_images([payload.image_url], str(IMAGE_DIR))
+                if files:
+                    return os.path.basename(files[0])
+            return payload.image_url or ""
+
+        async def parse_description_task() -> dict:
+            title = payload.facts.get("title", "") if isinstance(payload.facts, dict) else ""
+            if title:
+                return await analyze_description_with_gemini(title)
+            return {}
+
+        # 1 & 2. 이미지 다운로드와 Gemini 분석을 비동기로 동시 실행하여 속도 최적화
+        local_image_url, ai_parsed_data = await asyncio.gather(
+            fetch_image_task(),
+            parse_description_task()
+        )
+        ai_parsed_data = ai_parsed_data or {}
+
+        # 3. 분석된 데이터를 기반으로 facts 키 표준화 및 업데이트
+        facts = payload.facts.copy() if isinstance(payload.facts, dict) else {}
+        if ai_parsed_data.get("key_details"):
+            facts["key_details"] = ai_parsed_data["key_details"]
+
         await repos.saved_posts.create_manual_item(
             user_id=str(payload.user_id),
             url=payload.url,
             category=payload.category,
-            recommend=payload.recommend,
-            facts=payload.facts,
-            image_url=payload.image_url or "",
+            sub_category=ai_parsed_data.get("sub_category") or payload.sub_category,
+            recommend=ai_parsed_data.get("recommend") or payload.recommend,
+            facts=facts,
+            image_url=local_image_url,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:

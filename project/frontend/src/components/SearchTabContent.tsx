@@ -167,7 +167,8 @@ export function SearchTabContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: user.id,
-          category: "WEB SEARCH",
+          category: item.category || "WEB SEARCH",
+          sub_category: item.sub_category || "WEB SEARCH",
           recommend: item.recommend,
           facts: item.facts,
           url: item.url,

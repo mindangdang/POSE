@@ -46,7 +46,7 @@ export function FeedItemCard({
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-            {item.category}
+            {item.category}{item.sub_category ? ` > ${item.sub_category}` : ''}
           </span>
           <button
             onClick={(e) => {

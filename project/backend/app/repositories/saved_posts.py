@@ -18,8 +18,8 @@ class SavedPostsRepository:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, title, recommend, image_url, facts)
-                VALUES (%s, %s, 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}')
+                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts)
+                VALUES (%s, %s, 'PROCESSING ', 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}')
                 RETURNING id
                 """,
                 (user_id, post_url),
@@ -39,6 +39,7 @@ class SavedPostsRepository:
         user_id: str,
         url: str,
         category: str,
+        sub_category: str,
         recommend: str,
         facts: dict,
         image_url: str = "",
@@ -46,17 +47,18 @@ class SavedPostsRepository:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, recommend, facts, title, image_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
                     url,
                     category,
-                    recommend,
-                    json.dumps(facts),
+                    sub_category,
                     facts.get("title", "Manual Item"),
+                    recommend,
                     image_url,
+                    json.dumps(facts),
                 ),
             )
             await self.conn.commit()
@@ -69,6 +71,7 @@ class SavedPostsRepository:
                     id,
                     source_url as url,
                     category,
+                    sub_category,
                     facts,
                     recommend as recommend,
                     image_url,

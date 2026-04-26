@@ -30,16 +30,20 @@ def initialize_database():
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(50) NOT NULL,
             source_url TEXT,
+            title TEXT,
             
             category VARCHAR(20),
+            sub_category VARCHAR(50),
             summary_text TEXT,
+            image_url TEXT,
             
             recommend TEXT,
             vibe_vector VECTOR(768), 
             
             facts JSONB,
             
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_url, title)
         );
         """
         cursor.execute(create_table_query)

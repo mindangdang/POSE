@@ -27,6 +27,7 @@ class FeedbackRequest(BaseModel):
 class ManualItemCreate(BaseModel):
     user_id: str | int
     category: str
+    sub_category: str
     recommend: str
     facts: dict
     url: str

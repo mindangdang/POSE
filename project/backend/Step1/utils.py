@@ -12,7 +12,7 @@ from project.backend.app.core.resilience import with_llm_resilience
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-
+    sub_category: Optional[str] = Field(description="카테고리 내 세부 유형 (예: PLACE > CAFE, PRODUCT > JACKET 등)", default=None)
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
@@ -32,10 +32,10 @@ client = genai.Client(
 })
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
-        return {"recommend": "", "key_details": ""}
+        return {"recommend": "", "key_details": "", "sub_category": ""}
 
     prompt = f"""
-    다음 상품설명을 분석하여 'recommend'와'key_details'로 분리해.
+    다음 상품설명을 분석하여 'recommend'와'key_details','sub_category'로 분리해.
 
     [상품 설명]
     {description} """
@@ -53,5 +53,6 @@ async def analyze_description_with_gemini(description: str) -> dict:
     
     return {
         "recommend": data.recommend,
-        "key_details": data.key_details
+        "key_details": data.key_details,
+        "sub_category": data.sub_category
     }

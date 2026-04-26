@@ -169,6 +169,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "category": "PRODUCT",
             "title": data.get("title", "Unknown"),
             "recommend": ai_parsed_data.get("recommend", ""),
+            "sub_category": ai_parsed_data.get("sub_category", ""),
             "image_url": local_image_url or normalized_image_url,
             "facts": {
                 "title": data.get("title", ""),

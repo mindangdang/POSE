@@ -63,8 +63,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, summary_text, image_url, recommend, facts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (user_id, source_url, title, category, sub_category, summary_text, image_url, recommend, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
 
@@ -72,6 +72,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
             batch_data = []
             for item in extracted_items:
                 recommend = item.get("recommend", "")
+                sub_category = item.get("sub_category", "")
                 #vibe_vector = vector_map.get(recommend)
                 
                 facts_data = item.get("facts", {})
@@ -82,6 +83,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     source_url, 
                     title,         
                     item.get("category"), 
+                    sub_category,
                     item.get("summary_text"),
                     item.get("image_url") or item.get("local_path") or "",
                     recommend, 
