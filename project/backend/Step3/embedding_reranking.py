@@ -9,7 +9,19 @@ from transformers import AutoProcessor, AutoModel
 os.environ["OMP_NUM_THREADS"] = "1"
 
 class FashionSiglipReRankingPipeline:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(FashionSiglipReRankingPipeline, cls).__new__(cls)
+            cls._instance._is_initialized = False
+        return cls._instance
+
     def __init__(self, lambda_weight=0.6):
+        if self._is_initialized:
+            self.lambda_weight = lambda_weight
+            return
+            
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.lambda_weight = lambda_weight
         
@@ -19,13 +31,18 @@ class FashionSiglipReRankingPipeline:
         # SigLIP 아키텍처에 맞춘 Auto 클래스 적용 및 BF16 메모리 최적화
         self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
         self.model = AutoModel.from_pretrained(
-            self.model_id, 
-            torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+            self.model_id,
             trust_remote_code=True,
-            device_map={"": self.device}
-        ).to(self.device)
+            low_cpu_mem_usage=False,
+            _fast_init=False
+        )
+        
+        if self.device == "cuda":
+            self.model = self.model.to(torch.bfloat16)
+        self.model = self.model.to(self.device)
         self.model.eval()
         
+        self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
 
     def preprocess_image(self, img: Image.Image) -> Image.Image:
@@ -157,5 +174,3 @@ class FashionSiglipReRankingPipeline:
         gc.collect()
                 
         return sorted(valid_results, key=lambda x: x["aesthetic_score"], reverse=True)
-
-
