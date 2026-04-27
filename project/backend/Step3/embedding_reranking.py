@@ -3,7 +3,7 @@ import gc
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from transformers import AutoProcessor, AutoModel
+import open_clip
 
 # 멀티스레딩 억제로 CPU/RAM 스파이크 방지
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -26,16 +26,11 @@ class FashionSiglipReRankingPipeline:
         self.lambda_weight = lambda_weight
         
         print("Marqo-FashionSigLIP 모델 로드 중 (In-Memory 모드)...")
-        self.model_id = "Marqo/marqo-fashionSigLIP"
+        self.model_id = "hf-hub:Marqo/marqo-fashionSigLIP"
         
-        # SigLIP 아키텍처에 맞춘 Auto 클래스 적용 및 BF16 메모리 최적화
-        self.processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(
-            self.model_id,
-            trust_remote_code=True,
-            low_cpu_mem_usage=False,
-            _fast_init=False
-        )
+        # open_clip을 통한 모델, 전처리 모듈 및 토크나이저 로드
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms(self.model_id)
+        self.tokenizer = open_clip.get_tokenizer(self.model_id)
         
         if self.device == "cuda":
             self.model = self.model.to(torch.bfloat16)
@@ -61,11 +56,16 @@ class FashionSiglipReRankingPipeline:
             clean_img = self.preprocess_image(item["image_obj"])
             
             # 텍스트 & 이미지 인코딩
-            inputs = self.processor(text=[item["category"]], images=clean_img, padding="max_length", return_tensors="pt").to(self.device)
-            outputs = self.model(**inputs)
+            image_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
+            if self.device == "cuda":
+                image_input = image_input.to(torch.bfloat16)
+            text_input = self.tokenizer([item["category"]]).to(self.device)
             
-            text_vec = F.normalize(outputs.text_embeds, p=2, dim=1)
-            img_vec = F.normalize(outputs.image_embeds, p=2, dim=1)
+            image_features = self.model.encode_image(image_input)
+            text_features = self.model.encode_text(text_input)
+            
+            text_vec = F.normalize(text_features, p=2, dim=1)
+            img_vec = F.normalize(image_features, p=2, dim=1)
             
             vibe_vector = img_vec - (self.lambda_weight * text_vec)
             vibe_vectors.append(F.normalize(vibe_vector, p=2, dim=1))
@@ -86,8 +86,8 @@ class FashionSiglipReRankingPipeline:
     def encode_text(self, text: str) -> torch.Tensor:
         """쿼리 텍스트를 SigLIP 텍스트 임베딩으로 인코딩"""
         with torch.no_grad():
-            inputs = self.processor(text=[text], padding="max_length", return_tensors="pt").to(self.device)
-            text_vector = F.normalize(self.model.get_text_features(**inputs), p=2, dim=1)
+            text_input = self.tokenizer([text]).to(self.device)
+            text_vector = F.normalize(self.model.encode_text(text_input), p=2, dim=1)
         return text_vector
 
     def calculate_cosine_similarity(self, vec1: torch.Tensor, vec2: torch.Tensor) -> float:
@@ -130,12 +130,14 @@ class FashionSiglipReRankingPipeline:
             return []
         
         # 배치로 이미지 벡터 추출
-        img_inputs = self.processor(images=images, return_tensors="pt").to(self.device)
-        raw_img_vectors = F.normalize(self.model.get_image_features(**img_inputs), p=2, dim=1)
+        img_inputs = torch.stack([self.preprocess(img) for img in images]).to(self.device)
+        if self.device == "cuda":
+            img_inputs = img_inputs.to(torch.bfloat16)
+        raw_img_vectors = F.normalize(self.model.encode_image(img_inputs), p=2, dim=1)
         
         # 배치로 카테고리 벡터 추출
-        cat_inputs = self.processor(text=categories, padding="max_length", return_tensors="pt").to(self.device)
-        cat_vectors = F.normalize(self.model.get_text_features(**cat_inputs), p=2, dim=1)
+        cat_inputs = self.tokenizer(categories).to(self.device)
+        cat_vectors = F.normalize(self.model.encode_text(cat_inputs), p=2, dim=1)
         
         for i, idx in enumerate(indices):
             item = search_results[idx]

@@ -163,7 +163,7 @@ async def run_serpapi_search(payload: SearchRequest):
                     
                 # 디스크에서 읽어 즉시 PIL 객체로 변환
                 item["image_obj"] = Image.open(local_path).convert("RGB")
-                item["category"] = item.get("category", "")
+                item["category"] = item.get("sub_category", "")
                 valid_list.append(item)
             except Exception as e:
                 print(f"로컬 이미지 로드 에러 ({local_path}): {e}")
