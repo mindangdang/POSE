@@ -149,9 +149,9 @@ class FashionSiglipReRankingPipeline:
             # ==========================================================
             semantic_score = self.calculate_cosine_similarity(query_vector, raw_img_vector)
             
-            if semantic_score < semantic_thresh:
-                print(f"  [의미 탈락] {item.get('title')} (Score: {semantic_score:.4f})")
-                continue
+            #if semantic_score < semantic_thresh:
+                #print(f"  [의미 탈락] {item.get('title')} (Score: {semantic_score:.4f})")
+                #continue
             
             # ==========================================================
             # [Stage 2] Aesthetic 필터링 (취향 벡터 vs 잔차 벡터)
@@ -161,9 +161,9 @@ class FashionSiglipReRankingPipeline:
             
             aesthetic_score = self.calculate_cosine_similarity(user_taste_vector, pure_vibe_vector)
             
-            if aesthetic_score < aesthetic_thresh:
-                print(f"[취향 탈락] {item.get('title')} (Score: {aesthetic_score:.4f})")
-                continue
+            #if aesthetic_score < aesthetic_thresh:
+                #print(f"[취향 탈락] {item.get('title')} (Score: {aesthetic_score:.4f})")
+                #continue
                 
             # 두 스테이지를 모두 통과한 생존 데이터 기록
             item["semantic_score"] = round(semantic_score, 4)

@@ -204,7 +204,8 @@ async def run_serpapi_search(payload: SearchRequest):
 
     try:
         # 2. Scatter: 타겟 사이트 병렬 검색
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # timeout=None으로 설정하여 SerpApi 응답이 아무리 느려도 끝까지 대기
+        async with httpx.AsyncClient(timeout=None) as client:
             tasks = [
                 fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
                 for domain, name in domain_map.items()
@@ -224,26 +225,29 @@ async def run_serpapi_search(payload: SearchRequest):
         }
         
         async def download_image_to_memory(dl_client: httpx.AsyncClient, item: dict):
-            target_urls = [item.get("original"), item.get("thumbnail")]
-            for url in target_urls:
-                if not url: continue
-                try:
-                    resp = await dl_client.get(url, headers=headers, timeout=5.0, follow_redirects=True)
-                    resp.raise_for_status()
-                    
-                    # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
-                    item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                    return item
-                except Exception:
-                    continue
+            target_url = item.get("image_url")
+            if not target_url:
+                return None
+                
+            try:
+                resp = await dl_client.get(target_url, headers=headers, timeout=7.0, follow_redirects=True)
+                resp.raise_for_status()
+                
+                # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
+                item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                return item
+            except Exception as e:
+                print(f"이미지 스트리밍 다운로드 실패 ({target_url[:50]}...): {e}")
             return None
 
         print(f"{len(raw_items)}개 이미지 In-Memory 다운로드 시작...")
-        async with httpx.AsyncClient(timeout=10.0) as dl_client:
+        # 전체 클라이언트 타임아웃 해제 (단, 개별 이미지 다운로드 요청은 7초로 유지하여 죽은 이미지 서버 방어)
+        async with httpx.AsyncClient(timeout=None) as dl_client:
             download_tasks = [download_image_to_memory(dl_client, item) for item in raw_items]
             downloaded_items = await asyncio.gather(*download_tasks)
             
         valid_items = [item for item in downloaded_items if item is not None]
+        print(f"{len(valid_items)}개 이미지 다운로드 성공, 리랭킹 준비 완료.")
 
         # 6. 머신러닝 리랭킹 (워커 스레드 위임)
         if valid_items:
@@ -293,7 +297,8 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     print(f"SerpApi(Google Lens)로 디깅 시작: {search_image_url}")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # timeout=None으로 구글 렌즈 검색이 끝날 때까지 무조건 대기
+        async with httpx.AsyncClient(timeout=None) as client:
             response = await client.get(url, params=params)
             if response.status_code != 200:
                 print(f"SerpApi 에러 내용: {response.text}")
@@ -359,7 +364,8 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # timeout=None으로 구글 렌즈 멀티모달 검색이 끝날 때까지 무조건 대기
+        async with httpx.AsyncClient(timeout=None) as client:
             response = await client.get(url, params=params)
             if response.status_code != 200:
                 print(f"SerpApi 에러 내용: {response.text}")
