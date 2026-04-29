@@ -38,7 +38,7 @@ def initialize_database():
             image_url TEXT,
             
             recommend TEXT,
-            vibe_vector VECTOR(768), 
+            image_vector VECTOR(768), 
             
             facts JSONB,
             

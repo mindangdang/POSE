@@ -2,12 +2,11 @@ import os
 import json
 import asyncio
 import psycopg 
-from pgvector.psycopg import register_vector_async
-from google import genai
-from google.genai import types
 from psycopg.types.json import Json
-from project.backend.app.core.settings import load_backend_env
+from PIL import Image
+from project.backend.app.core.settings import load_backend_env, IMAGE_DIR
 from project.backend.app.core.resilience import with_llm_resilience
+from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
 
 # 환경변수 세팅 
 load_backend_env()
@@ -17,31 +16,18 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
-# 구글 API 클라이언트 초기화
-my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(
-        base_url=my_proxy_url
-    )
-)
-MODEL_NAME = "gemini-embedding-2-preview" 
-
-@with_llm_resilience(fallback_default={})
-async def get_vibe_vectors_batch(texts: list[str]) -> dict:
-    # 빈 문자열이나 None은 걸러내고 유효한 텍스트만 추출
-    valid_texts = [t for t in texts if t and t.strip()]
-    if not valid_texts:
-        return {}
-
-    print(f"{len(valid_texts)}개의 바이브 텍스트를 한 번에 임베딩합니다...")
-    response = await client.aio.models.embed_content(
-        model=MODEL_NAME,
-        contents=valid_texts, 
-        config=types.EmbedContentConfig(output_dimensionality=768)
-    )
-    
-    return {text: emb.values for text, emb in zip(valid_texts, response.embeddings)}
+def _extract_vector_sync(image_url: str, category: str):
+    try:
+        pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
+        local_path = image_url
+        if local_path and not local_path.startswith(('http://', 'https://')):
+            local_path = os.path.join(str(IMAGE_DIR), os.path.basename(local_path))
+            if os.path.exists(local_path):
+                with Image.open(local_path) as img:
+                    return pipeline.get_image_vector(img, category)
+    except Exception as e:
+        print(f"벡터 추출 에러: {e}")
+    return None
 
 # ==========================================
 # 2. 비동기 일괄 DB Insert 함수
@@ -49,22 +35,17 @@ async def get_vibe_vectors_batch(texts: list[str]) -> dict:
 async def insert_items_to_db(user_id: str, source_url: str, extracted_items: list, conn=None):
     if not extracted_items:
         return
-
-    #recommends = [item.get("recommend", "") for item in extracted_items]
-    #vector_map = await get_vibe_vectors_batch(recommends)
-
     try:
         # 2. 외부에서 conn을 넘겨받지 않았다면 새로 연결 (유연성 확보)
         # 만약 pool에서 관리하는 conn을 넘겨받는다면 context manager를 쓰지 않도록 주의
         
-        # DB 커넥션에 벡터 타입 등록 (필요 시)
-        #await register_vector_async(conn)
+
         
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, sub_category, summary_text, image_url, recommend, facts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (user_id, source_url, title, category, sub_category, summary_text, image_url, recommend, image_vector, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
 
@@ -73,21 +54,25 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
             for item in extracted_items:
                 recommend = item.get("recommend", "")
                 sub_category = item.get("sub_category", "")
-                #vibe_vector = vector_map.get(recommend)
-                
+                category = item.get("category", "")
                 facts_data = item.get("facts", {})
                 title = facts_data.get("title", "Unknown Item")
+                image_url = item.get("image_url") or item.get("local_path") or ""
+
+                # 이미지 벡터 추출 (비동기 스레드 실행)
+                vector_list = await asyncio.to_thread(_extract_vector_sync, image_url, sub_category or category)
+                vector_str = str(vector_list) if vector_list else None
                 
                 batch_data.append((
                     str(user_id), 
                     source_url, 
                     title,         
-                    item.get("category"), 
+                    category, 
                     sub_category,
                     item.get("summary_text"),
-                    item.get("image_url") or item.get("local_path") or "",
+                    image_url,
                     recommend, 
-                    #vibe_vector, 
+                    vector_str, 
                     Json(facts_data)
                 ))
 
