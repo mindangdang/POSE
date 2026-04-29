@@ -4,6 +4,7 @@ import uuid
 import asyncio
 import io
 import traceback
+import json
 import torch
 from PIL import Image
 import httpx
@@ -150,57 +151,36 @@ async def run_serpapi_search(payload: SearchRequest):
     pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
     wishlist_db_items = await fetch_user_data_from_neon(user_id)
     
-    def _load_local_images_and_build_vector(items: list[dict], pipeline_instance) -> torch.Tensor:
-        """디스크 I/O와 벡터 수학 연산을 스레드 하나에서 일괄 처리합니다."""
-        valid_list = []
-        for item in items:
-            try:
-                # DB에 저장된 필드명에 맞춰 로컬 경로 추출
-                local_path = item.get("image_url") 
-
-                # 단순 파일명인 경우 IMAGE_DIR과 결합하여 절대 경로 생성
-                if local_path and not local_path.startswith(('http://', 'https://')):
-                    local_path = os.path.join(str(LOCAL_IMAGE_DIR), os.path.basename(local_path))
-                
-                if not local_path or not os.path.exists(local_path):
-                    print(f"파일을 찾을 수 없음: {local_path}")
-                    continue
-                    
-                # 디스크에서 읽어 즉시 PIL 객체로 변환
-                item["image_obj"] = Image.open(local_path).convert("RGB")
-                item["category"] = item.get("sub_category", "")
-                valid_list.append(item)
-            except Exception as e:
-                print(f"로컬 이미지 로드 에러 ({local_path}): {e}")
-                
-        if not valid_list:
-            return None
-            
-        # 1-2. 메모리에 올라간 객체들로 SVD 연산 수행
-        taste_vector = pipeline_instance.build_user_taste_vector(valid_list)
-        
-        # 1-3. 연산 완료 후 메모리 소각 (필수)
-        for item in valid_list:
-            if "image_obj" in item:
-                item["image_obj"].close()
-                
-        return taste_vector
-
+    user_taste_vector = None
     if wishlist_db_items:
-        print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 로컬 로딩 및 합성 시작...")
+        print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
         
-        # 이벤트 루프 방어를 위해 디스크 읽기 + 딥러닝 연산을 통째로 스레드에 던집니다.
-        user_taste_vector = await asyncio.to_thread(
-            _load_local_images_and_build_vector,
-            wishlist_db_items,
-            pipeline
-        )
+        def _parse_vector_sync(v_str: str):
+            try:
+                vec = json.loads(v_str)
+                if isinstance(vec, list) and len(vec) == 768:
+                    return vec
+            except Exception as e:
+                print(f"벡터 파싱 에러: {e}")
+            return None
+
+        parse_tasks = [
+            asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
+            for item in wishlist_db_items if item.get("image_vector")
+        ]
+        parsed_results = await asyncio.gather(*parse_tasks)
+        image_vectors = [vec for vec in parsed_results if vec is not None]
+        
+        if image_vectors:
+            user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
 
     # 예외 처리 (위시리스트가 없거나 경로 에러로 다 날아간 경우 Cold Start 대비)
     if user_taste_vector is None:
         print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
         dummy = torch.zeros(1, 768).to(pipeline.device) # SigLIP 768차원 기준
         user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
+        if pipeline.device == "cuda":
+            user_taste_vector = user_taste_vector.to(torch.bfloat16)
 
     try:
         # 2. Scatter: 타겟 사이트 병렬 검색
@@ -221,29 +201,37 @@ async def run_serpapi_search(payload: SearchRequest):
         # 4. In-Memory 스트리밍 다운로드 파이프라인
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://www.google.com/"
+            "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://www.google.com/",
         }
         
-        async def download_image_to_memory(dl_client: httpx.AsyncClient, item: dict):
+        async def download_image_to_memory(dl_client: httpx.AsyncClient, item: dict, semaphore: asyncio.Semaphore):
             target_url = item.get("image_url")
             if not target_url:
                 return None
                 
-            try:
-                resp = await dl_client.get(target_url, headers=headers, timeout=7.0, follow_redirects=True)
-                resp.raise_for_status()
-                
-                # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
-                item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                return item
-            except Exception as e:
-                print(f"이미지 스트리밍 다운로드 실패 ({target_url[:50]}...): {e}")
+            async with semaphore:
+                for attempt in range(3):  # 최대 3회 재시도
+                    try:
+                        resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
+                        resp.raise_for_status()
+                        
+                        # 디스크 I/O 없이 바이트 스트림을 즉시 PIL 객체로 변환
+                        item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                        return item
+                    except Exception as e:
+                        if attempt == 2:
+                            print(f"이미지 스트리밍 다운로드 3회 실패 ({target_url[:50]}...): {e}")
+                        else:
+                            await asyncio.sleep(0.5)  # 재시도 전 대기
             return None
 
         print(f"{len(raw_items)}개 이미지 In-Memory 다운로드 시작...")
-        # 전체 클라이언트 타임아웃 해제 (단, 개별 이미지 다운로드 요청은 7초로 유지하여 죽은 이미지 서버 방어)
-        async with httpx.AsyncClient(timeout=None) as dl_client:
-            download_tasks = [download_image_to_memory(dl_client, item) for item in raw_items]
+        # 전체 타임아웃 해제, http2 활성화 및 동시성 50개 제한 세마포어 적용
+        semaphore = asyncio.Semaphore(50)
+        async with httpx.AsyncClient(timeout=None, http2=True) as dl_client:
+            download_tasks = [download_image_to_memory(dl_client, item, semaphore) for item in raw_items]
             downloaded_items = await asyncio.gather(*download_tasks)
             
         valid_items = [item for item in downloaded_items if item is not None]
