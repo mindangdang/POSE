@@ -31,7 +31,7 @@ export default function App() {
         value={currentTab}
         onValueChange={(value) => setCurrentTab(value as 'feed' | 'search' | 'profile')}
         orientation="vertical"
-        className="relative min-h-screen bg-white text-black font-sans selection:bg-yellow-300 selection:text-black"
+        className="relative h-screen overflow-hidden bg-white text-black font-sans selection:bg-yellow-300 selection:text-black"
       >
         <div
           className={[
@@ -104,10 +104,15 @@ export default function App() {
           </div>
         </div>
 
-        <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center p-4 md:p-8 overflow-x-hidden">
+        <main
+          className={[
+            "mx-auto flex h-screen w-full max-w-5xl justify-center overflow-x-hidden p-4 md:p-8",
+            currentTab === 'feed' ? "items-stretch overflow-hidden" : "items-center overflow-y-auto",
+          ].join(" ")}
+        >
           <AnimatePresence mode="wait">
             {currentTab === 'feed' && (
-              <Tabs.Content value="feed" forceMount className="w-full">
+              <Tabs.Content value="feed" forceMount className="h-full w-full">
                 <FeedTabContent
                   items={items}
                   onItemsChange={setItems}

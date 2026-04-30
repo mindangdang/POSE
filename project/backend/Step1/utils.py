@@ -29,10 +29,11 @@ client = genai.Client(
 @with_llm_resilience(fallback_default=lambda description: {
     "recommend": "", 
     "key_details": description[:100].strip() + "..." if len(description) > 100 else description,
+    "sub_category": "미분류",
 })
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
-        return {"recommend": "", "key_details": "", "sub_category": ""}
+        return {"recommend": "", "key_details": "", "sub_category": "미분류"}
 
     prompt = f"""
     다음 상품설명을 분석하여 'recommend'와'key_details','sub_category'로 분리해.
