@@ -43,12 +43,13 @@ class SavedPostsRepository:
         recommend: str,
         facts: dict,
         image_url: str = "",
+        image_vector: str | None = None,
     ) -> None:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts, image_vector)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
@@ -59,6 +60,7 @@ class SavedPostsRepository:
                     recommend,
                     image_url,
                     json.dumps(facts),
+                    image_vector,
                 ),
             )
             await self.conn.commit()

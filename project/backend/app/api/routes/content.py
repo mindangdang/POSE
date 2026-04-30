@@ -22,6 +22,7 @@ from project.backend.Step1.utils import analyze_description_with_gemini
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
+from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 
 
@@ -29,6 +30,8 @@ load_backend_env()
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
 router = APIRouter()
+
+search_tasks: dict = {}
 
 @router.post("/extract-url")
 async def extract_and_save_url(
@@ -79,110 +82,108 @@ async def extract_and_save_url(
     }
 
 
-@router.post("/pse")
-async def run_serpapi_search(payload: SearchRequest):
+async def background_serpapi_search(task_id: str, payload: SearchRequest):
+    try:
+        #1.serpapi 검색
+        serp_api_key = os.environ.get("SERP_API_KEY")
+        if not serp_api_key:
+            raise ValueError("SerpApi 키가 설정되지 않았습니다.")
 
-    #1.serpapi 검색
-    serp_api_key = os.environ.get("SERP_API_KEY")
-    if not serp_api_key:
-        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
-
-    domain_map = {
-        "musinsa.com": "무신사",
-        #"kream.co.kr": "KREAM",
-        "m.bunjang.co.kr" : "번개장터",
-        "fruitsfamily.com": "후루츠패밀리",
-        "zara.com": "자라",
-        "instagram.com": "인스타그램"
-    }
-
-    extended_query = await optimize_query_with_llm(payload.query)
-    extended_query = extended_query.get('final_query', payload.query)
-    print(f"SerpApi로 쏘는 쿼리: {extended_query}")
-
-    async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
-        product_hierarchy_query = "(> products)"
-        exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
-        final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
-        
-        params = {
-            "engine": "google",
-            "q": final_query,
-            "api_key": serp_api_key,
-            "num": 5, 
-            "tbm": "isch",
-            "start": (current_page - 1) * 5,
-            "gl": "kr",
-            "hl": "ko"
+        domain_map = {
+            "musinsa.com": "무신사",
+            #"kream.co.kr": "KREAM",
+            "m.bunjang.co.kr" : "번개장터",
+            "fruitsfamily.com": "후루츠패밀리",
+            "zara.com": "자라",
+            "instagram.com": "인스타그램"
         }
-        
-        try:
-            response = await client.get("https://serpapi.com/search", params=params)
-            response.raise_for_status()
-            items = response.json().get("images_results", [])
-            print(f"[{site_name}] 검색 성공")
+
+        extended_query = await optimize_query_with_llm(payload.query)
+        extended_query = extended_query.get('final_query', payload.query)
+        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+
+        async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+            product_hierarchy_query = "(> products)"
+            exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
+            final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
             
-            return [{
-                "id": str(uuid.uuid4()),
-                "category": "PRODUCT",
-                "sub_category": "PRODUCT",
-                "recommend": f"{site_name}에서 발견한 아이템",
-                "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
-                "url": item.get("link", ""),
-                "summary_text": item.get("title", "상품명 없음"),
-                "facts": {
-                    "title": item.get("title", "상품명 없음"),
-                    "Price": item.get("price") or item.get("snippet") or "가격 미상",
-                    "Shop": site_name,
-                },
-            } for item in items]
-
-        except Exception as e:
-            print(f"[{domain}] 검색 실패: {e}")
-            return []
-
-    try:
-        current_page = max(1, int(payload.page)) if payload.page is not None else 1
-    except ValueError:
-        current_page = 1
-
-    #2. 리랭킹 파이프라인
-    user_id=1
-    pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
-    wishlist_db_items = await fetch_user_data_from_neon(user_id)
-    
-    user_taste_vector = None
-    if wishlist_db_items:
-        print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
-        
-        def _parse_vector_sync(v_str: str):
+            params = {
+                "engine": "google",
+                "q": final_query,
+                "api_key": serp_api_key,
+                "num": 5, 
+                "tbm": "isch",
+                "start": (current_page - 1) * 5,
+                "gl": "kr",
+                "hl": "ko"
+            }
+            
             try:
-                vec = json.loads(v_str)
-                if isinstance(vec, list) and len(vec) == 768:
-                    return vec
+                response = await client.get("https://serpapi.com/search", params=params)
+                response.raise_for_status()
+                items = response.json().get("images_results", [])
+                print(f"[{site_name}] 검색 성공")
+                
+                return [{
+                    "id": str(uuid.uuid4()),
+                    "category": "PRODUCT",
+                    "sub_category": "PRODUCT",
+                    "recommend": f"{site_name}에서 발견한 아이템",
+                    "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
+                    "url": item.get("link", ""),
+                    "summary_text": item.get("title", "상품명 없음"),
+                    "facts": {
+                        "title": item.get("title", "상품명 없음"),
+                        "Price": item.get("price") or item.get("snippet") or "가격 미상",
+                        "Shop": site_name,
+                    },
+                } for item in items]
+
             except Exception as e:
-                print(f"벡터 파싱 에러: {e}")
-            return None
+                print(f"[{domain}] 검색 실패: {e}")
+                return []
 
-        parse_tasks = [
-            asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
-            for item in wishlist_db_items if item.get("image_vector")
-        ]
-        parsed_results = await asyncio.gather(*parse_tasks)
-        image_vectors = [vec for vec in parsed_results if vec is not None]
+        try:
+            current_page = max(1, int(payload.page)) if payload.page is not None else 1
+        except ValueError:
+            current_page = 1
+
+        #2. 리랭킹 파이프라인
+        user_id=1
+        pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
+        wishlist_db_items = await fetch_user_data_from_neon(user_id)
         
-        if image_vectors:
-            user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
+        user_taste_vector = None
+        if wishlist_db_items:
+            print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
+            
+            def _parse_vector_sync(v_str: str):
+                try:
+                    vec = json.loads(v_str)
+                    if isinstance(vec, list) and len(vec) == 768:
+                        return vec
+                except Exception as e:
+                    print(f"벡터 파싱 에러: {e}")
+                return None
 
-    # 예외 처리 (위시리스트가 없거나 경로 에러로 다 날아간 경우 Cold Start 대비)
-    if user_taste_vector is None:
-        print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
-        dummy = torch.zeros(1, 768).to(pipeline.device) # SigLIP 768차원 기준
-        user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
-        if pipeline.device == "cuda":
-            user_taste_vector = user_taste_vector.to(torch.bfloat16)
+            parse_tasks = [
+                asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
+                for item in wishlist_db_items if item.get("image_vector")
+            ]
+            parsed_results = await asyncio.gather(*parse_tasks)
+            image_vectors = [vec for vec in parsed_results if vec is not None]
+            
+            if image_vectors:
+                user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
 
-    try:
+        # 예외 처리 (위시리스트가 없거나 경로 에러로 다 날아간 경우 Cold Start 대비)
+        if user_taste_vector is None:
+            print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
+            dummy = torch.zeros(1, 768).to(pipeline.device) # SigLIP 768차원 기준
+            user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
+            if pipeline.device == "cuda":
+                user_taste_vector = user_taste_vector.to(torch.bfloat16)
+
         # 2. Scatter: 타겟 사이트 병렬 검색
         # timeout=None으로 설정하여 SerpApi 응답이 아무리 느려도 끝까지 대기
         async with httpx.AsyncClient(timeout=None) as client:
@@ -196,7 +197,9 @@ async def run_serpapi_search(payload: SearchRequest):
         raw_items = [item for sublist in results_per_site if isinstance(sublist, list) for item in sublist]
         
         if not raw_items:
-            return {"success": True, "results": []}
+            search_tasks[task_id]["status"] = "completed"
+            search_tasks[task_id]["results"] = []
+            return
 
         # 4. In-Memory 스트리밍 다운로드 파이프라인
         headers = {
@@ -257,11 +260,27 @@ async def run_serpapi_search(payload: SearchRequest):
             item.pop("thumbnail_url", None)
 
         print(f"최종결과 개수: {len(ranked_results)}")
-        return {"success": True, "results": ranked_results}
+        search_tasks[task_id]["status"] = "completed"
+        search_tasks[task_id]["results"] = ranked_results
     
     except Exception as exc:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"쇼핑 검색 중 오류: {exc}") from exc
+        search_tasks[task_id]["status"] = "failed"
+        search_tasks[task_id]["error"] = f"쇼핑 검색 중 오류: {exc}"
+
+@router.post("/pse")
+async def start_serpapi_search(payload: SearchRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    search_tasks[task_id] = {"status": "processing", "results": [], "error": None}
+    background_tasks.add_task(background_serpapi_search, task_id, payload)
+    return {"success": True, "task_id": task_id, "message": "Search task started."}
+
+@router.get("/pse/status/{task_id}")
+async def get_search_status(task_id: str):
+    task = search_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"success": True, "task_id": task_id, "status": task["status"], "results": task.get("results", []), "error": task.get("error")}
 
 
 @router.post("/lens")
@@ -426,14 +445,22 @@ async def save_manual_item(
         if ai_parsed_data.get("key_details"):
             facts["key_details"] = ai_parsed_data["key_details"]
 
+        category = payload.category
+        sub_category = ai_parsed_data.get("sub_category") or payload.sub_category
+
+        # 4. 임베딩 벡터 추출 (비동기 스레드 실행)
+        vector_list = await asyncio.to_thread(_extract_vector_sync, local_image_url, sub_category or category)
+        vector_str = str(vector_list) if vector_list else None
+
         await repos.saved_posts.create_manual_item(
             user_id=str(payload.user_id),
             url=payload.url,
-            category=payload.category,
-            sub_category=ai_parsed_data.get("sub_category") or payload.sub_category,
+            category=category,
+            sub_category=sub_category,
             recommend=ai_parsed_data.get("recommend") or payload.recommend,
             facts=facts,
             image_url=local_image_url,
+            image_vector=vector_str,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
