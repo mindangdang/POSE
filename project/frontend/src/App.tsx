@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import {
-  Search,
   Grid,
+  Menu,
+  Search,
   User,
-  Zap,
 } from 'lucide-react';
 import { FeedTabContent } from './components/FeedTabContent';
 import { ItemDetailDialog } from './components/ItemDetailDialog';
@@ -20,7 +20,8 @@ import type { AppUser } from './types/user';
 export default function App() {
   const [user] = useState<AppUser>({ id: 1, username: 'guest' });
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
-  const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('feed');
+  const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
+  const [isNavExpanded, setIsNavExpanded] = useState(true);
   const { items, setItems, refreshItems } = useItems(user);
   const { taste, setTaste, refreshTaste } = useTaste(user);
 
@@ -30,47 +31,83 @@ export default function App() {
         value={currentTab}
         onValueChange={(value) => setCurrentTab(value as 'feed' | 'search' | 'profile')}
         orientation="vertical"
-        className="min-h-screen bg-white text-black font-sans flex selection:bg-yellow-300 selection:text-black"
+        className="relative min-h-screen bg-white text-black font-sans selection:bg-yellow-300 selection:text-black"
       >
-        <nav className="w-20 md:w-64 border-r border-black/10 h-screen sticky top-0 bg-white flex flex-col p-4 z-10">
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentTab('feed');
-              setSelectedItem(null);
-            }}
-            className="mb-12 px-2 flex items-center gap-3 text-left transition-transform hover:scale-[1.02]"
+        <div
+          className={[
+            "group fixed z-20 top-0 bottom-0 bg-linear-to-b from-blue-500 via-yellow-300 to-purple-500 shadow-2xl shadow-black rounded-r-4xl",
+            "transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            isNavExpanded ? "w-50" : "w-20",
+          ].join(" ")}
+        >
+          <div className="absolute left-0 top-0 z-10 h-full w-0.5 bg-black" />
+          <div
+            className="absolute bottom-0 left-0.5 right-0.5 top-0 flex flex-col overflow-visible bg-black rounded-r-[calc(2.2rem)]"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 via-yellow-300 to-purple-500 p-[2px] shadow-sm shrink-0">
-              <div className="w-full h-full bg-black rounded-[10px] flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" fill="white" />
-              </div>
-            </div>
-            <h1 className="text-3xl font-black tracking-tighter uppercase hidden md:block">
-              POSE!
-            </h1>
-          </button>
+            <button
+              type="button"
+              aria-label={isNavExpanded ? "Hide navigation tabs" : "Show navigation tabs"}
+              onClick={() => setIsNavExpanded((expanded) => !expanded)}
+              className="mt-8 flex h-10 w-full items-center overflow-hidden rounded-xl text-left text-white transition-colors duration-200"
+            >
+              <span className="flex h-10 w-17.5 shrink-0 items-center justify-center">
+                <Menu className="h-5 w-5 transition-transform hover:scale-120"/>
+              </span>
+              <span
+                className={[
+                  "block overflow-hidden whitespace-nowrap text-xs font-black uppercase tracking-widest transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  isNavExpanded ? "max-w-0 translate-x-0 delay-75" : "max-w-0 -translate-x-1 opacity-0",
+                ].join(" ")}
+              >
+              </span>
+            </button>
 
-          <Tabs.List aria-label="POSE sections" className="space-y-3 flex-1">
-            <NavItem value="feed" icon={<Grid className="w-5 h-5" />} label="Feed" />
-            <NavItem value="search" icon={<Search className="w-5 h-5" />} label="Agentic Search" />
-            <NavItem value="profile" icon={<User className="w-5 h-5" />} label="Taste Profile" />
-          </Tabs.List>
+            <Tabs.List
+              aria-label="POSE sections"
+              className="flex w-full flex-1 flex-col items-center justify-start gap-4 overflow-visible pt-10"
+            >
+              <NavItem
+                expanded={isNavExpanded}
+                value="search"
+                icon={<Search className="w-5 h-5" />}
+                label="검색"
+              />
+              <NavItem
+                expanded={isNavExpanded}
+                value="feed"
+                icon={<Grid className="w-5 h-5" />}
+                label="피드"
+              />
+              <NavItem
+                expanded={isNavExpanded}
+                value="profile"
+                icon={<User className="w-5 h-5" />}
+                label="테이스팅"
+              />
+            </Tabs.List>
 
-          <div className="mt-auto space-y-2">
-            <div className="flex items-center gap-3 p-3 w-full rounded-2xl bg-gray-50 border border-black/5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-yellow-300 to-purple-500 p-[2px]">
-                <div className="w-full h-full bg-white rounded-full"></div>
-              </div>
-              <span className="hidden md:block font-bold text-sm tracking-tight">@{user.username}</span>
+            <div className="mb-6 flex h-12 w-full items-center overflow-hidden rounded-xl text-left text-white/80">
+              <span className="flex h-12 w-17 shrink-0 items-center justify-center">
+                <span className="h-8 w-8 rounded-full bg-linear-to-tr from-blue-500 via-yellow-300 to-purple-500 p-0.5">
+                  <span className="block h-full w-full rounded-full bg-black" />
+                </span>
+              </span>
+              <span
+                className={[
+                  "block overflow-hidden whitespace-nowrap text-sm font-bold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  isNavExpanded ? "max-w-28 translate-x-0 opacity-100 delay-75" : "max-w-0 -translate-x-1 opacity-0",
+                ].join(" ")}
+              >
+                @{user.username}
+              </span>
             </div>
           </div>
-        </nav>
+        </div>
 
-        <main className="flex-1 max-w-5xl mx-auto p-4 md:p-8 overflow-x-hidden">
+        <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center p-4 md:p-8 overflow-x-hidden">
           <AnimatePresence mode="wait">
             {currentTab === 'feed' && (
-              <Tabs.Content value="feed" forceMount>
+              <Tabs.Content value="feed" forceMount className="w-full">
                 <FeedTabContent
                   items={items}
                   onItemsChange={setItems}
@@ -83,7 +120,7 @@ export default function App() {
             )}
 
             {currentTab === 'search' && (
-              <Tabs.Content value="search" forceMount>
+              <Tabs.Content value="search" forceMount className="w-full">
                 <SearchTabContent
                   onItemsChange={setItems}
                   refreshTaste={refreshTaste}
@@ -93,7 +130,7 @@ export default function App() {
             )}
 
             {currentTab === 'profile' && (
-              <Tabs.Content value="profile" forceMount>
+              <Tabs.Content value="profile" forceMount className="w-full">
                 <ProfileTabContent
                   items={items}
                   onGoToFeed={() => setCurrentTab('feed')}

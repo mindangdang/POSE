@@ -7,8 +7,13 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['"Gilda Display"', 'serif'], // Serif 폰트 등록
-        sans: ['Inter', 'sans-serif'],        // Sans-serif 폰트 등록
+        serif: ['Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
+      colors: {
+        primary: 'var(--color-primary)',
+        secondary: 'var(--color-secondary)',
+        tertiary: 'var(--color-tertiary)',
       },
     },
   },
