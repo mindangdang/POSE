@@ -78,39 +78,56 @@ export function SearchTabContent({
     const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
     let ws: WebSocket;
 
-    try {
+   try {
+      console.log(`[웹소켓] 연결 시도 중... (${wsUrl})`);
       ws = new WebSocket(wsUrl);
 
+      ws.onopen = () => {
+        console.log("[웹소켓] 연결 성공!");
+      };
+
+      ws.onerror = (error) => {
+        console.error("[웹소켓] 에러 발생:", error);
+      };
+
+      ws.onclose = (event) => {
+        console.log(`[웹소켓] 연결 종료 (코드: ${event.code}, 이유: ${event.reason})`);
+      };
+
       ws.onmessage = (event) => {
+        console.log("[웹소켓] 메시지 수신 (raw):", event.data);
         try {
           const data = JSON.parse(event.data);
+          console.log("[웹소켓] 메시지 파싱 완료:", data);
           
           if (data.type === "SEARCH_SUCCESS") {
+            console.log(`[웹소켓] 검색 결과(SEARCH_SUCCESS) ${data.results?.length || 0}개 수신, is_append: ${data.is_append}`);
+            
             if (data.is_append) {
               setSearchResults(prev => {
-                    // 검색 결과에 고유 id가 없는 경우를 대비해 프론트에서 임시 id 생성
-                    const newItems = (data.results || []).map((item: any) => ({
-                      ...item,
-                      id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                    }));
+                // 검색 결과에 고유 id가 없는 경우 프론트에서 임시 id 생성
+                const newItems = (data.results || []).map((item: any) => ({
+                  ...item,
+                  id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                }));
 
                 const uniqueItems = newItems.filter(
-                      (newItem: SavedItem) => !prev.some(item => 
-                        (item.id && item.id === newItem.id) || 
-                        (item.url && item.url === newItem.url) // URL을 기준으로 안전하게 중복 검사
-                      )
+                  (newItem: SavedItem) => !prev.some(item => item.id === newItem.id)
                 );
+                
                 return [...prev, ...uniqueItems];
               });
             } else {
-                  setSearchResults((data.results || []).map((item: any) => ({
-                    ...item,
-                    id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                  })));
+              setSearchResults((data.results || []).map((item: any) => ({
+                ...item,
+                id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+              })));
             }
           } else if (data.type === "SEARCH_FINISHED") {
+            console.log("[웹소켓] 검색 완료(SEARCH_FINISHED). 로딩 상태 해제.");
             setLoading(false);
           } else if (data.type === "SEARCH_ERROR") {
+            console.log("[웹소켓] 검색 에러(SEARCH_ERROR):", data.message);
             alert(data.message || "검색 중 오류가 발생했습니다.");
             setLoading(false);
           }
@@ -123,7 +140,13 @@ export function SearchTabContent({
     }
 
     return () => {
-      if (ws) ws.close();
+      if (ws) {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.addEventListener('open', () => ws.close());
+        } else {
+          ws.close();
+        }
+      }
     };
   }, [user]);
 

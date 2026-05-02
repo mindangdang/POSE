@@ -160,31 +160,35 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         dl_semaphore = asyncio.Semaphore(20)
         model_semaphore = asyncio.Semaphore(4)
         
-        async def process_single_item(item: dict):
+        async def process_single_item(item: dict, dl_client: httpx.AsyncClient):
             target_url = item.get("image_url")
             if not target_url:
                 return
                 
             async with dl_semaphore:
                 image_obj = None
-                async with httpx.AsyncClient(timeout=None, http2=True) as dl_client:
-                    for attempt in range(3):
-                        try:
-                            resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
-                            resp.raise_for_status()
-                            image_obj = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                            break
-                        except Exception as e:
-                            if attempt == 2:
-                                print(f"이미지 다운로드 실패 ({target_url[:50]}...): {e}")
-                            else:
-                                await asyncio.sleep(0.5)
+                for attempt in range(3):
+                    try:
+                        resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
+                        resp.raise_for_status()
+                        
+                        # 이미지 디코딩/변환(CPU 바운드 작업)을 스레드로 넘겨 이벤트 루프 블로킹 방지
+                        def _load_image():
+                            return Image.open(io.BytesIO(resp.content)).convert("RGB")
+                        image_obj = await asyncio.to_thread(_load_image)
+                        break
+                    except Exception as e:
+                        if attempt == 2:
+                            print(f"이미지 다운로드 실패 ({target_url[:50]}...): {e}")
+                        else:
+                            await asyncio.sleep(0.5)
                 
                 if image_obj is None:
                     return
                 item["image_obj"] = image_obj
 
             async with model_semaphore:
+                await asyncio.sleep(0.01)
                 evaluated_item = await asyncio.to_thread(
                     pipeline.evaluate_single_item,
                     item,
@@ -207,29 +211,29 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         "is_append": True
                     }
                     await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                    # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
+                    await asyncio.sleep(0.01)
                     print("아이템이 프론트로 전송되었습니다.")
 
-        async def process_site_future(coro):
+        async def process_site(domain: str, name: str, client: httpx.AsyncClient, dl_client: httpx.AsyncClient):
             try:
-                site_items = await coro
+                site_items = await fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
                 if isinstance(site_items, list) and site_items:
                     if user_taste_vector is not None:
-                        eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
+                        eval_tasks = [asyncio.create_task(process_single_item(item, dl_client)) for item in site_items]
                         await asyncio.gather(*eval_tasks, return_exceptions=True)
                     else:
                         if manager:
                             payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
                             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                            await asyncio.sleep(0.01)
             except Exception as e:
                 print(f"쇼핑몰 검색 스트리밍 처리 에러: {e}")
 
         print("여러 쇼핑몰 병렬 검색 및 실시간 평가 시작...")
-        async with httpx.AsyncClient(timeout=None) as client:
-            tasks = [fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
-                for domain, name in domain_map.items()]
-            
-            # asyncio.as_completed로 쇼핑몰 응답이 올 때마다 즉각 파이프라인 처리
-            site_tasks = [asyncio.create_task(process_site_future(fut)) for fut in asyncio.as_completed(tasks)]
+        # 모든 이미지 다운로드를 위한 단일 HTTP/2 클라이언트를 공유하여 속도 개선
+        async with httpx.AsyncClient(timeout=None) as client, httpx.AsyncClient(timeout=None, http2=True) as dl_client:
+            site_tasks = [asyncio.create_task(process_site(domain, name, client, dl_client)) for domain, name in domain_map.items()]
             await asyncio.gather(*site_tasks)
             
         print("모든 쇼핑몰 검색 및 스트리밍 완료.")
