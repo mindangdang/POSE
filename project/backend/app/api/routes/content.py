@@ -29,7 +29,7 @@ from project.backend.app.services.crawling import DEFAULT_USER_ID, background_cr
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
-from project.backend.Step1.utils import analyze_description_with_gemini, ConnectionManager
+from project.backend.Step1.utils import *
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
@@ -92,6 +92,8 @@ async def extract_and_save_url(
         ],
     }
 
+######################################################################################
+
 async def background_pse_search(app: FastAPI, user_id: str, query: str, page: int):
     manager = getattr(app.state, "websocket_manager", None)
     serp_api_key = os.environ.get("SERP_API_KEY")
@@ -102,103 +104,52 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
             await manager.broadcast_to_user(user_id, json.dumps(payload))
         return
 
-    domain_map = {
-        "musinsa.com": "무신사",
-        "m.bunjang.co.kr" : "번개장터",
-        "fruitsfamily.com": "후루츠패밀리",
-        "zara.com": "자라",
-        "instagram.com": "인스타그램"
-    }
-
     try:
-        extended_query = await optimize_query_with_llm(query)
-        extended_query = extended_query.get('final_query', query)
+        pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
+
+        # 1 & 2. 유저 취향 벡터 합성과 LLM 쿼리 확장을 비동기 병렬 처리
+        async def build_taste_vector():
+            wishlist_db_items = await fetch_user_data_from_neon(int(user_id))
+            if not wishlist_db_items:
+                return None
+            print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
+            
+            def _parse_vectors_batch(items):
+                vectors = []
+                for item in items:
+                    v_str = item.get("image_vector")
+                    if v_str:
+                        try:
+                            vec = json.loads(v_str)
+                            if isinstance(vec, list) and len(vec) == 768:
+                                vectors.append(vec)
+                        except Exception as e:
+                            print(f"벡터 파싱 에러: {e}")
+                return vectors
+
+            image_vectors = await asyncio.to_thread(_parse_vectors_batch, wishlist_db_items)
+            
+            if image_vectors:
+                return pipeline.build_user_taste_vector(image_vectors)
+            return None
+
+        user_taste_vector, extended_query_result = await asyncio.gather(
+            build_taste_vector(),
+            optimize_query_with_llm(query)
+        )
+
+        extended_query = extended_query_result.get('final_query', query)
         print(f"SerpApi로 쏘는 쿼리: {extended_query}")
 
-        async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
-            product_hierarchy_query = "(> products)"
-            exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
-            final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
-            
-            params = {
-                "engine": "google",
-                "q": final_query,
-                "api_key": serp_api_key,
-                "num": 5, 
-                "tbm": "isch",
-                "start": (current_page - 1) * 5,
-                "gl": "kr",
-                "hl": "ko"
-            }
-            
-            try:
-                response = await client.get("https://serpapi.com/search", params=params)
-                response.raise_for_status()
-                items = response.json().get("images_results", [])
-                print(f"[{site_name}] 검색 성공")
-                
-                return [{
-                    "id": str(uuid.uuid4()),
-                    "category": "PRODUCT",
-                    "sub_category": "PRODUCT",
-                    "recommend": f"{site_name}에서 발견한 아이템",
-                    "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
-                    "url": item.get("link", ""),
-                    "summary_text": item.get("title", "상품명 없음"),
-                    "facts": {
-                        "title": item.get("title", "상품명 없음"),
-                        "Price": item.get("price") or item.get("snippet") or "가격 미상",
-                        "Shop": site_name,
-                    },
-                } for item in items]
-
-            except Exception as e:
-                print(f"[{domain}] 검색 실패: {e}")
-                return []
-
+        # 3. SerpApi로 여러 쇼핑몰에서 검색 (병렬)
         try:
             current_page = max(1, int(page)) if page is not None else 1
         except ValueError:
             current_page = 1
 
-        pipeline = FashionSiglipReRankingPipeline(lambda_weight=0.6)
-        wishlist_db_items = await fetch_user_data_from_neon(int(user_id))
-        
-        user_taste_vector = None
-        if wishlist_db_items:
-            print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
-            
-            def _parse_vector_sync(v_str: str):
-                try:
-                    vec = json.loads(v_str)
-                    if isinstance(vec, list) and len(vec) == 768:
-                        return vec
-                except Exception as e:
-                    print(f"벡터 파싱 에러: {e}")
-                return None
-
-            parse_tasks = [
-                asyncio.to_thread(_parse_vector_sync, item.get("image_vector"))
-                for item in wishlist_db_items if item.get("image_vector")
-            ]
-            parsed_results = await asyncio.gather(*parse_tasks)
-            image_vectors = [vec for vec in parsed_results if vec is not None]
-            
-            if image_vectors:
-                user_taste_vector = pipeline.build_user_taste_vector(image_vectors)
-
-        if user_taste_vector is None:
-            print("유저 취향 데이터가 부족하여 더미(Neutral) 벡터로 대체합니다.")
-            dummy = torch.zeros(1, 768).to(pipeline.device)
-            user_taste_vector = torch.nn.functional.normalize(dummy, p=2, dim=1)
-            if pipeline.device == "cuda":
-                user_taste_vector = user_taste_vector.to(torch.bfloat16)
-
         async with httpx.AsyncClient(timeout=None) as client:
-            tasks = [
-                fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
-                for domain, name in domain_map.items()
-            ]
+            tasks = [fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
+                for domain, name in domain_map.items()]
             results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
 
         raw_items = [item for sublist in results_per_site if isinstance(sublist, list) for item in sublist]
@@ -207,6 +158,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
             if manager:
                 payload = {"type": "SEARCH_SUCCESS", "results": [], "is_append": current_page > 1}
                 await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
             return
 
         headers = {
@@ -215,60 +167,70 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "Referer": "https://www.google.com/",
         }
+
+        query_vector = pipeline.encode_text(query)
+        dl_semaphore = asyncio.Semaphore(20)
+        model_semaphore = asyncio.Semaphore(4)
         
-        async def download_image_to_memory(dl_client: httpx.AsyncClient, item: dict, semaphore: asyncio.Semaphore):
+        async def process_single_item(item: dict):
             target_url = item.get("image_url")
             if not target_url:
-                return None
+                return
                 
-            async with semaphore:
-                for attempt in range(3):  # 최대 3회 재시도
-                    try:
-                        resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
-                        resp.raise_for_status()
-                        item["image_obj"] = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                        return item
-                    except Exception as e:
-                        if attempt == 2:
-                            print(f"이미지 스트리밍 다운로드 3회 실패 ({target_url[:50]}...): {e}")
-                        else:
-                            await asyncio.sleep(0.5)  # 재시도 전 대기
-            return None
+            async with dl_semaphore:
+                image_obj = None
+                async with httpx.AsyncClient(timeout=None, http2=True) as dl_client:
+                    for attempt in range(3):
+                        try:
+                            resp = await dl_client.get(target_url, headers=headers, timeout=12.0, follow_redirects=True)
+                            resp.raise_for_status()
+                            image_obj = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                            break
+                        except Exception as e:
+                            if attempt == 2:
+                                print(f"이미지 다운로드 실패 ({target_url[:50]}...): {e}")
+                            else:
+                                await asyncio.sleep(0.5)
+                
+                if image_obj is None:
+                    return
+                item["image_obj"] = image_obj
 
-        print(f"{len(raw_items)}개 이미지 In-Memory 다운로드 시작...")
-        semaphore = asyncio.Semaphore(50)
-        async with httpx.AsyncClient(timeout=None, http2=True) as dl_client:
-            download_tasks = [download_image_to_memory(dl_client, item, semaphore) for item in raw_items]
-            downloaded_items = await asyncio.gather(*download_tasks)
-            
-        valid_items = [item for item in downloaded_items if item is not None]
-        print(f"{len(valid_items)}개 이미지 다운로드 성공, 리랭킹 준비 완료.")
+            async with model_semaphore:
+                evaluated_item = await asyncio.to_thread(
+                    pipeline.evaluate_single_item,
+                    item,
+                    user_taste_vector,
+                    query_vector,
+                    0.10,
+                    0.0
+                )
 
-        if valid_items:
-            ranked_results = await asyncio.to_thread(
-                pipeline.rerank_search_results,
-                search_results=valid_items,
-                user_taste_vector=user_taste_vector,
-                query_text=query,
-                semantic_thresh=0.10,
-                aesthetic_thresh=0.0
-            )
+            if evaluated_item:
+                evaluated_item.pop("image_obj", None)
+                evaluated_item.pop("original_url", None)
+                evaluated_item.pop("thumbnail_url", None)
+                
+                if manager:
+                    payload = {
+                        "type": "SEARCH_SUCCESS",
+                        "results": [evaluated_item],
+                        "is_append": True
+                    }
+                    await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+
+        if user_taste_vector is not None:
+            print(f"{len(raw_items)}개 아이템 병렬/스트리밍 평가 시작...")
+            tasks = [process_single_item(item) for item in raw_items]
+            await asyncio.gather(*tasks)
+            print("스트리밍 평가 및 프론트 전송 완료.")
         else:
-            ranked_results = []
-
-        for item in ranked_results:
-            item.pop("image_obj", None)
-            item.pop("original_url", None)
-            item.pop("thumbnail_url", None)
-
-        print(f"최종결과 개수: {len(ranked_results)}")
-        if manager:
-            payload = {
-                "type": "SEARCH_SUCCESS",
-                "results": ranked_results,
-                "is_append": current_page > 1
-            }
+            print("유저 취향 벡터가 없어서 평가 없이 바로 전송.")
+            payload = {"type": "SEARCH_SUCCESS", "results": raw_items, "is_append": current_page > 1}
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+        
+        if manager:
+            await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
     
     except Exception as exc:
         traceback.print_exc()
@@ -290,6 +252,7 @@ async def run_serpapi_search(
 
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
 
+######################################################################################
 
 @router.post("/lens")
 async def run_serpapi_lens_search(payload: SearchRequest):
@@ -354,6 +317,8 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
+
+######################################################################################
 
 @router.post("/multimodal")
 async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = Form(...)):  
@@ -422,6 +387,8 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
 
+######################################################################################
+
 @router.post("/items/manual")
 async def save_manual_item(
     payload: ManualItemCreate,
@@ -466,7 +433,8 @@ async def save_manual_item(
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc
-
+    
+######################################################################################
 
 @router.get("/items")
 async def get_items(user_id: str = "1", repos: Repositories = Depends(get_repos)):

@@ -87,10 +87,28 @@ export function SearchTabContent({
           
           if (data.type === "SEARCH_SUCCESS") {
             if (data.is_append) {
-              setSearchResults(prev => [...prev, ...(data.results || [])]);
+              setSearchResults(prev => {
+                    // 검색 결과에 고유 id가 없는 경우를 대비해 프론트에서 임시 id 생성
+                    const newItems = (data.results || []).map((item: any) => ({
+                      ...item,
+                      id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                    }));
+
+                const uniqueItems = newItems.filter(
+                      (newItem: SavedItem) => !prev.some(item => 
+                        (item.id && item.id === newItem.id) || 
+                        (item.url && item.url === newItem.url) // URL을 기준으로 안전하게 중복 검사
+                      )
+                );
+                return [...prev, ...uniqueItems];
+              });
             } else {
-              setSearchResults(data.results || []);
+                  setSearchResults((data.results || []).map((item: any) => ({
+                    ...item,
+                    id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                  })));
             }
+          } else if (data.type === "SEARCH_FINISHED") {
             setLoading(false);
           } else if (data.type === "SEARCH_ERROR") {
             alert(data.message || "검색 중 오류가 발생했습니다.");
@@ -525,54 +543,91 @@ export function SearchTabContent({
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="min-h-[60vh] bg-gray-50/70 p-6 md:p-10 rounded-4xl border border-black/5 shadow-xl shadow-gray-200/60 items-center justify-center flex"
           >
-            {loading && searchResults.length === 0 ? (
-              <div className="flex justify-center flex-col items-center gap-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-gray-500 animate-pulse text-center">
-                  {searchMode === "digging"
-                    ? "검색 중..."
-                    : searchMode === "ai"
-                    ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
-                    : "이미지 분석 중...\n 10~15초 소요될 수 있어요"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {searchMode === "ai" && generatedImage && (
+            <div className="w-full flex flex-col space-y-8">
+              <AnimatePresence>
+                {loading && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                    key="loading-indicator"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex flex-col items-center justify-center gap-4 py-4 overflow-hidden"
                   >
-                    <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" /> Generated Vibe
-                    </span>
-                    <img
-                      src={generatedImage}
-                      alt="AI Generated Vibe"
-                      className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
-                    />
-                    <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                    <Loader2 className="w-8 h-8 animate-spin text-black" />
+                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-bold text-gray-500 animate-pulse text-center">
+                      {searchResults.length > 0
+                        ? `분석 중... (현재까지 발견된 아이템: ${searchResults.length}개)`
+                        : searchMode === "digging"
+                        ? "검색 중..."
+                        : searchMode === "ai"
+                        ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
+                        : "이미지 분석 중...\n 10~15초 소요될 수 있어요"}
+                    </p>
                   </motion.div>
                 )}
+              </AnimatePresence>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  <AnimatePresence>
-                    {searchResults.map((item, index) => {
-                      return (
-                        <SearchResultCard
-                          key={item.id}
-                          delay={index * 0.1}
-                          item={item}
-                          onClick={() => setSelectedItem(item)}
-                          onSave={handleSaveToFeed}
-                        />
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
+              {searchMode === "ai" && generatedImage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm"
+                >
+                  <span className="text-xs font-black tracking-widest uppercase text-purple-600 mb-4 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" /> Generated Vibe
+                  </span>
+                  <img
+                    src={generatedImage}
+                    alt="AI Generated Vibe"
+                    className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
+                  />
+                  <p className="text-xs text-gray-400 mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                </motion.div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <AnimatePresence>
+                  {searchResults.map((item) => (
+                    <SearchResultCard
+                      key={item.id}
+                      delay={0}
+                      item={item}
+                      onClick={() => setSelectedItem(item)}
+                      onSave={handleSaveToFeed}
+                    />
+                  ))}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {loading && Array.from({ length: Math.max(3, 6 - searchResults.length) }).map((_, i) => (
+                    <motion.div
+                      key={`skeleton-${i}`}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 flex flex-col h-full min-h-[360px]"
+                    >
+                      <div className="aspect-square w-full bg-gray-100 animate-pulse relative">
+                        <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                          <Zap className="w-8 h-8 opacity-20" fill="currentColor" />
+                        </div>
+                      </div>
+                      <div className="p-5 flex flex-col flex-1 gap-4">
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-200 rounded-md w-3/4 animate-pulse" />
+                          <div className="h-4 bg-gray-200 rounded-md w-1/2 animate-pulse" />
+                        </div>
+                        <div className="h-3 bg-gray-100 rounded-md w-full animate-pulse mt-1" />
+                        <div className="mt-auto">
+                          <div className="h-10 bg-gray-50 rounded-xl animate-pulse" />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
-            )}
+            </div>
             {searchResults.length > 0 && (
               <div className="flex justify-center pt-10">
                 <button
