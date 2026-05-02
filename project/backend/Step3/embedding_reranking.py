@@ -37,6 +37,7 @@ class FashionSiglipReRankingPipeline:
             self.model = self.model.to(torch.bfloat16)
         self.model = self.model.to(self.device)
         self.model.eval()
+        self.model = torch.compile(self.model)
         
         self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
@@ -148,4 +149,3 @@ class FashionSiglipReRankingPipeline:
         except Exception as e:
             print(f"'{item.get('summary_text', 'Unknown')}' 단일 평가 에러: {e}")
             return None
-
