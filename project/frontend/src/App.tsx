@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import {
@@ -9,7 +9,8 @@ import {
   User,
 } from 'lucide-react';
 import { GoogleLoginButton } from './components/GoogleLoginButton';
-import { FeedTabContent } from './components/FeedTabContent';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { FeedTabContent } from './components/FeedTabContent';``
 import { ItemDetailDialog } from './components/ItemDetailDialog';
 import { NavItem } from './components/NavItem';
 import { ProfileTabContent } from './components/ProfileTabContent';
@@ -19,37 +20,22 @@ import { useTaste } from './hooks/useTaste';
 import type { SavedItem } from './types/item';
 import type { AppUser } from './types/user';
 
-export default function App() {
-  const [user, setUser] = useState<AppUser | null>(null);
+// 유저가 로그인되었을 때만 렌더링될 메인 앱 컴포넌트
+function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [isNavExpanded, setIsNavExpanded] = useState(true);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const { items, setItems, refreshItems } = useItems(user as AppUser);
-  const { taste, setTaste, refreshTaste } = useTaste(user as AppUser);
+  
+  // MainApp은 user가 반드시 존재할 때만 렌더링되므로, Null 에러가 발생하지 않습니다.
+  const { items, setItems, refreshItems } = useItems(user);
+  const { taste, setTaste, refreshTaste } = useTaste(user);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     setIsLogoutModalOpen(false);
-    setUser(null);
+    onLogout();
   };
-
-  if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
-        <div className="flex flex-col items-center gap-8 p-10 bg-white rounded-3xl shadow-xl border border-gray-100">
-          <div className="text-center space-y-2">
-            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-500 via-yellow-400 to-purple-500">POSE!</h1>
-            <p className="text-gray-500 font-medium">당신의 취향에서 시작되는 새로운 발견</p>
-          </div>
-          <GoogleLoginButton
-            onSuccess={(userData) => setUser(userData)}
-            onError={(msg) => alert(msg)}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -236,4 +222,74 @@ export default function App() {
       </AnimatePresence>
     </>
   );
+}
+
+const GOOGLE_CLIENT_ID = "217086331535-n1na3k15bd6c6cllpj1am8hamjsl1ah9.apps.googleusercontent.com";
+
+// 로그인 상태와 화면 분기를 관리하는 진입점
+export default function App() {
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setIsInitializing(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        } else {
+          // 토큰이 만료되었거나 조작된 경우 강제 로그아웃
+          localStorage.removeItem('access_token');
+        }
+      } catch (error) {
+        console.error("Auto login failed:", error);
+        localStorage.removeItem('access_token');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  if (isInitializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 font-sans">
+          <div className="flex flex-col items-center gap-8 p-10 bg-white rounded-3xl shadow-xl border border-gray-100">
+            <div className="text-center space-y-2">
+              <h1 className="text-5xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-500 via-yellow-400 to-purple-500">POSE!</h1>
+              <p className="text-gray-500 font-medium">당신의 취향에서 시작되는 새로운 발견</p>
+            </div>
+            <GoogleLoginButton
+              onSuccess={(userData) => setUser(userData)}
+              onError={(msg) => alert(msg)}
+            />
+          </div>
+        </div>
+      </GoogleOAuthProvider>
+    );
+  }
+
+  return <MainApp user={user} onLogout={() => setUser(null)} />;
 }
