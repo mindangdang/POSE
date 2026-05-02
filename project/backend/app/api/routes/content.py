@@ -207,6 +207,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         "is_append": True
                     }
                     await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                    print("아이템이 프론트로 전송되었습니다.")
 
         async def process_site_future(coro):
             try:
