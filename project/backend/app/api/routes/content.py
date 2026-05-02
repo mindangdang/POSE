@@ -207,6 +207,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                 )
 
             if evaluated_item:
+                print("아이템이 임계값 통과, 프론트로 전송 준비 완료.")
                 evaluated_item.pop("image_obj", None)
                 evaluated_item.pop("original_url", None)
                 evaluated_item.pop("thumbnail_url", None)
