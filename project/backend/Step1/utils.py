@@ -44,8 +44,7 @@ class ConnectionManager:
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-    sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리 중 1택", default=None)
-    
+    sub_category: Optional[str] = Field(description="아우터(패딩,코트 등),자켓(블레이저,가죽자켓 등),상의,하의,주얼리,액세서리 중 1택", default=None)
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
@@ -62,10 +61,11 @@ client = genai.Client(
 @with_llm_resilience(fallback_default=lambda description: {
     "recommend": "", 
     "key_details": description[:100].strip() + "..." if len(description) > 100 else description,
+    "sub_category": "미분류",
 })
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
-        return {"recommend": "", "key_details": "", "sub_category": ""}
+        return {"recommend": "", "key_details": "", "sub_category": "미분류"}
 
     prompt = f"""
     다음 상품설명을 분석하여 'recommend'와'key_details','sub_category'로 분리해.

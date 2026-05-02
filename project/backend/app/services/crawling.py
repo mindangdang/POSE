@@ -49,6 +49,8 @@ async def background_crawl_and_save(
         if not extracted_items:
             raise RuntimeError("아이템 정보를 추출하지 못했습니다.")
 
+        _mark_feed_add_items(extracted_items)
+
         async with app.state.db_pool.connection() as conn:
             repos = get_repositories(conn)
             await repos.saved_posts.delete_by_id(item_id)
@@ -90,6 +92,15 @@ async def background_crawl_and_save(
                 "message": "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
+
+
+def _mark_feed_add_items(items: list[dict]) -> None:
+    for item in items:
+        facts = item.get("facts")
+        if not isinstance(facts, dict):
+            facts = {}
+            item["facts"] = facts
+        facts["_source"] = "feed_add"
 
 
 async def _crawl_instagram_post(
@@ -180,11 +191,13 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         return ""
     
     async def parse_description_task() -> dict:
-        desc = data.get("description", "").strip()        
-        if not desc or len(desc) < 10 or desc.lower() == "no description available":
-            return {"recommend": "", "key_details": ""}
+        title = data.get("title", "").strip()
+        desc = data.get("description", "").strip()
+        analysis_text = "\n".join(part for part in [title, desc] if part and part.lower() != "no description available")
+        if len(analysis_text) < 3:
+            return {"recommend": "", "key_details": "", "sub_category": "미분류"}
             
-        return await analyze_description_with_gemini(desc)
+        return await analyze_description_with_gemini(analysis_text)
 
     local_image_url, ai_parsed_data = await asyncio.gather(
         fetch_image_task(),
@@ -197,13 +210,14 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     final_key_details = ai_parsed_data.get("key_details", "")
     if brand_info:
         final_key_details = f"[{brand_info}] {final_key_details}".strip()
+    sub_category = ai_parsed_data.get("sub_category") or "미분류"
 
     return [
         {
             "category": "PRODUCT",
             "title": data.get("title", "Unknown"),
             "recommend": ai_parsed_data.get("recommend", ""),
-            "sub_category": ai_parsed_data.get("sub_category", ""),
+            "sub_category": sub_category,
             "image_url": local_image_url or normalized_image_url,
             "facts": {
                 "title": data.get("title", ""),

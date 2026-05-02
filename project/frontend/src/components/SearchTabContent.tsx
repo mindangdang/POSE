@@ -166,23 +166,27 @@ export function SearchTabContent({
       let res;
       const currentQuery = queryOverride !== undefined ? queryOverride : searchQuery;
 
+      const token = localStorage.getItem('access_token');
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
       if (searchMode === "multimodal") {
         if (!imageFile) {
           throw new Error("검색을 위해 이미지를 붙여넣기 해주세요. (Ctrl+V / Cmd+V)");
         }
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('user_text', currentQuery || '비슷한 상품 찾아줘');
+        formData.append('user_text', currentQuery || 'find similiar product');
 
         res = await fetch('/api/multimodal', {
           method: 'POST',
+          headers: authHeaders,
           body: formData
         });
       } else {
         const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
         res = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
         });
       }
@@ -311,9 +315,13 @@ export function SearchTabContent({
     if (!user) return;
 
     try {
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/items/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           user_id: user.id,
           category: item.category || "WEB SEARCH",
@@ -529,7 +537,7 @@ export function SearchTabContent({
                       ? "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
                       : searchMode === "ai"
                       ? "떠오르는 스타일을 자유롭게 입력해보세요"
-                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능)"
+                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능 ex: similiar color)"
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}

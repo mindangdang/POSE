@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Trash2, Instagram, Sparkles } from 'lucide-react';
+import { Instagram, Sparkles, Trash2 } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -19,6 +19,11 @@ export function FeedItemCard({
 }: FeedItemCardProps) {
   const facts = parseItemFacts(item);
   const title = getItemTitle(item);
+  const isProcessingItem =
+    item.category.trim().toUpperCase() === 'PROCESSING' ||
+    item.sub_category.trim().toUpperCase() === 'PROCESSING' ||
+    facts?._source === 'feed_add';
+  const categoryLabel = `${item.category}${item.sub_category ? ` > ${item.sub_category}` : ''}`;
   const visibleFacts = facts
     ? Object.entries(facts).filter(
         ([key]) => key.toLowerCase() !== 'title' && factKeysToShow.includes(key.toLowerCase())
@@ -45,15 +50,20 @@ export function FeedItemCard({
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center justify-between">
-          <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-            {item.category}{item.sub_category ? ` > ${item.sub_category}` : ''}
-          </span>
+          {isProcessingItem ? (
+            <span aria-hidden="true" />
+          ) : (
+            <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+              {categoryLabel}
+            </span>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete(item.id);
             }}
             className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-all"
+            aria-label="Delete item"
           >
             <Trash2 className="w-3 h-3" />
           </button>

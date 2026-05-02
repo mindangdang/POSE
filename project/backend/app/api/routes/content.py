@@ -33,6 +33,7 @@ from project.backend.Step1.utils import *
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step3.embedding_reranking import FashionSiglipReRankingPipeline
+from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 
 
@@ -428,14 +429,22 @@ async def save_manual_item(
         if ai_parsed_data.get("key_details"):
             facts["key_details"] = ai_parsed_data["key_details"]
 
+        category = payload.category
+        sub_category = ai_parsed_data.get("sub_category") or payload.sub_category
+
+        # 4. 임베딩 벡터 추출 (비동기 스레드 실행)
+        vector_list = await asyncio.to_thread(_extract_vector_sync, local_image_url, sub_category or category)
+        vector_str = str(vector_list) if vector_list else None
+
         await repos.saved_posts.create_manual_item(
             user_id=str(payload.user_id),
             url=payload.url,
-            category=payload.category,
-            sub_category=ai_parsed_data.get("sub_category") or payload.sub_category,
+            category=category,
+            sub_category=sub_category,
             recommend=ai_parsed_data.get("recommend") or payload.recommend,
             facts=facts,
             image_url=local_image_url,
+            image_vector=vector_str,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
