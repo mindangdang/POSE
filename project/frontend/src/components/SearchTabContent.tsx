@@ -585,8 +585,8 @@ export function SearchTabContent({
                 </motion.div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                <AnimatePresence>
+              <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                <AnimatePresence mode="popLayout">
                   {searchResults.map((item) => (
                     <SearchResultCard
                       key={item.id}
@@ -596,12 +596,11 @@ export function SearchTabContent({
                       onSave={handleSaveToFeed}
                     />
                   ))}
-                </AnimatePresence>
 
-                <AnimatePresence>
                   {loading && Array.from({ length: Math.max(3, 6 - searchResults.length) }).map((_, i) => (
                     <motion.div
                       key={`skeleton-${i}`}
+                      layout
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
@@ -626,7 +625,7 @@ export function SearchTabContent({
                     </motion.div>
                   ))}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             </div>
             {searchResults.length > 0 && (
               <div className="flex justify-center pt-10">

@@ -147,20 +147,6 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         except ValueError:
             current_page = 1
 
-        async with httpx.AsyncClient(timeout=None) as client:
-            tasks = [fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
-                for domain, name in domain_map.items()]
-            results_per_site = await asyncio.gather(*tasks, return_exceptions=True)
-
-        raw_items = [item for sublist in results_per_site if isinstance(sublist, list) for item in sublist]
-        
-        if not raw_items:
-            if manager:
-                payload = {"type": "SEARCH_SUCCESS", "results": [], "is_append": current_page > 1}
-                await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
-            return
-
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -220,15 +206,30 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                     }
                     await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
 
-        if user_taste_vector is not None:
-            print(f"{len(raw_items)}개 아이템 병렬/스트리밍 평가 시작...")
-            tasks = [process_single_item(item) for item in raw_items]
-            await asyncio.gather(*tasks)
-            print("스트리밍 평가 및 프론트 전송 완료.")
-        else:
-            print("유저 취향 벡터가 없어서 평가 없이 바로 전송.")
-            payload = {"type": "SEARCH_SUCCESS", "results": raw_items, "is_append": current_page > 1}
-            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+        async def process_site_future(coro):
+            try:
+                site_items = await coro
+                if isinstance(site_items, list) and site_items:
+                    if user_taste_vector is not None:
+                        eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
+                        await asyncio.gather(*eval_tasks, return_exceptions=True)
+                    else:
+                        if manager:
+                            payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
+                            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+            except Exception as e:
+                print(f"쇼핑몰 검색 스트리밍 처리 에러: {e}")
+
+        print("여러 쇼핑몰 병렬 검색 및 실시간 평가 시작...")
+        async with httpx.AsyncClient(timeout=None) as client:
+            tasks = [fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
+                for domain, name in domain_map.items()]
+            
+            # asyncio.as_completed로 쇼핑몰 응답이 올 때마다 즉각 파이프라인 처리
+            site_tasks = [asyncio.create_task(process_site_future(fut)) for fut in asyncio.as_completed(tasks)]
+            await asyncio.gather(*site_tasks)
+            
+        print("모든 쇼핑몰 검색 및 스트리밍 완료.")
         
         if manager:
             await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
