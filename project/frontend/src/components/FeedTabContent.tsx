@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Zap, Folder, ArrowLeft, Grid3X3, Clock3, Package, X } from 'lucide-react';
+import { Plus, Loader2, Zap, Folder, ArrowLeft, Grid3X3, Clock3, Package, X, Check } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type WheelEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -40,8 +40,10 @@ export function FeedTabContent({
   const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
+  const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
   const menuWheelDelta = useRef(0);
+  const addSuccessTimeout = useRef<number | null>(null);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -49,6 +51,14 @@ export function FeedTabContent({
     }, 10000);
 
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (addSuccessTimeout.current) {
+        window.clearTimeout(addSuccessTimeout.current);
+      }
+    };
   }, []);
 
   const factKeysToShow = ['title', 'price_info', 'time_info', 'key_details'];
@@ -111,6 +121,15 @@ export function FeedTabContent({
       };
     },
     onSuccess: ({ nextUrl, data }) => {
+      setIsAddButtonSuccess(true);
+      if (addSuccessTimeout.current) {
+        window.clearTimeout(addSuccessTimeout.current);
+      }
+      addSuccessTimeout.current = window.setTimeout(() => {
+        setIsAddButtonSuccess(false);
+        addSuccessTimeout.current = null;
+      }, 1000);
+
       if (data.success && data.status === 'processing') {
         alert(`✨ ${data.message}`);
       } else if (data.success && data.data && Array.isArray(data.data)) {
@@ -255,7 +274,7 @@ export function FeedTabContent({
             className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 items-stretch"
           >
             {shouldGroupItems && currentFolder && (
-              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-black/60 pb-2">
+              <div className="col-span-full mb-5 flex items-center gap-4 border-b border-black/20 pb-2">
                 <h3 className="pl-2 text-xl font-bold uppercase tracking-tight text-gray-800">{currentFolder}</h3>
                 <button
                   onClick={() => setCurrentFolder(null)}
@@ -367,7 +386,7 @@ export function FeedTabContent({
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
               <div className="w-[min(calc(100vw-3rem),24rem)] rounded-[1.75rem] border border-gray-100 bg-white px-4 pb-4 pt-2 shadow-xl">
-                <div className="flex h-8 items-center justify-end">
+                <div className="flex h-10 items-center justify-end">
                   <button
                     type="button"
                     aria-label="Close add form"
@@ -378,34 +397,64 @@ export function FeedTabContent({
                   </button>
                 </div>
 
+                <h3 className="-mt-4 mb-5 px-1 text-lg font-black tracking-tight text-black">새 아이템 추가하기</h3>
+
                 <form onSubmit={handleAddItem} className="mt-1 space-y-3">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium uppercase tracking-widest text-gray-400">URL 또는 제품명</label>
                     <input
                       type="url"
-                      placeholder="URL"
+                      placeholder="URL 또는 제품명"
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full rounded-2xl border-none outline-none bg-gray-50 px-4 py-2.5 text-sm font-medium transition-all"
+                      className="w-full rounded-2xl border-none outline-none bg-gray-100 px-4 py-2.5 text-sm font-medium transition-all"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium uppercase tracking-widest text-gray-400">세션 ID</label>
                     <input
                       type="password"
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full rounded-2xl border-none outline-none bg-gray-50 px-4 py-2.5 text-sm font-medium transition-all"
+                      className="w-full rounded-2xl border-none outline-none bg-gray-100 px-4 py-2.5 text-sm font-medium transition-all"
                     />
                   </div>
                   <button
                     type="submit"
-                    disabled={addItemMutation.isPending || !newUrl}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-black px-6 text-sm font-black tracking-widest text-white transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
+                    className={[
+                      "mt-8 flex h-11 w-full items-center justify-center rounded-2xl px-6 text-sm font-black tracking-widest text-white",
+                      isAddButtonSuccess
+                        ? "bg-green-400 opacity-100 hover:bg-green-300 disabled:opacity-100"
+                        : "bg-black hover:bg-gray-800 disabled:opacity-50",
+                    ].join(' ')}
                   >
-                    {addItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    ADD
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={addItemMutation.isPending ? 'pending' : isAddButtonSuccess ? 'success' : 'idle'}
+                        initial={{ opacity: 0, y: 3 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -3 }}
+                        transition={{ duration: 0.12, ease: 'easeOut' }}
+                        className="flex min-w-28 items-center justify-center gap-2"
+                      >
+                        {addItemMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            ADD
+                          </>
+                        ) : isAddButtonSuccess ? (
+                          <>
+                            <Check className="h-4 w-4" />
+                            추가 완료!
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4" />
+                            ADD
+                          </>
+                        )}
+                      </motion.span>
+                    </AnimatePresence>
                   </button>
                 </form>
               </div>

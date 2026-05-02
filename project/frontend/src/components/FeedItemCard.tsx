@@ -68,9 +68,9 @@ export function FeedItemCard({
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
-        <p className="mt-2 text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
+        <p className="mt-2 translate-y-2 text-sm font-bold leading-tight line-clamp-2 text-black">{title}</p>
 
-        <div className="mt-3 min-h-[104px] border-t border-gray-100 pt-3">
+        <div className="mt-3 min-h-[104px] translate-y-2 border-t border-gray-100 pt-3">
           {visibleFacts.length > 0 ? (
             <div className="space-y-1.5">
               {visibleFacts.map(([key, value]) => (
