@@ -15,6 +15,7 @@ class TasteUpdate(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     page: Optional[int] = 1
+    user_id: int | str | None = None
 
 class FeedbackRequest(BaseModel):
     user_id: str | int

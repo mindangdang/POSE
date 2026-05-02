@@ -15,6 +15,7 @@ import uuid
 
 class ConnectionManager:
     def __init__(self):
+        # 유저 ID별로 '여러 개'의 활성 웹소켓 연결(배열)을 관리합니다. (Strict Mode 대응)
         self.active_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, user_id: str):
@@ -22,21 +23,26 @@ class ConnectionManager:
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
         self.active_connections[user_id].append(websocket)
-        print(f"WebSocket: user {user_id} connected.")
 
     def disconnect(self, websocket: WebSocket, user_id: str):
+        # 해당 유저의 특정 웹소켓만 찾아 배열에서 안전하게 제거
         if user_id in self.active_connections:
-            self.active_connections[user_id].remove(websocket)
+            if websocket in self.active_connections[user_id]:
+                self.active_connections[user_id].remove(websocket)
+            # 남은 커넥션이 하나도 없으면 딕셔너리에서 키 삭제
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
-        print(f"WebSocket: user {user_id} disconnected.")
 
     async def broadcast_to_user(self, user_id: str, message: str):
         if user_id in self.active_connections:
-            print(f"WebSocket: Sending message to user {user_id}")
-            await asyncio.gather(
-                *[connection.send_text(message) for connection in self.active_connections[user_id]]
-            )
+            dead_sockets = []
+            for ws in self.active_connections[user_id]:
+                try:
+                    await ws.send_text(message)
+                except Exception:
+                    dead_sockets.append(ws)
+            for dead_ws in dead_sockets:
+                self.disconnect(dead_ws, user_id)
 
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")

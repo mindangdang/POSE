@@ -41,6 +41,9 @@ LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
 router = APIRouter()
 
+# 메모리 주소가 보장된 단일 매니저 전역 객체 생성
+websocket_manager_instance = ConnectionManager()
+
 @router.post("/extract-url")
 async def extract_and_save_url(
     payload: UrlAnalyzeRequest,
@@ -56,8 +59,8 @@ async def extract_and_save_url(
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
 
-    if not hasattr(request.app.state, "websocket_manager"):
-        request.app.state.websocket_manager = ConnectionManager()
+    # 백그라운드 태스크(Crawling 등)가 동일한 전역 매니저를 참조하도록 강제 할당
+    request.app.state.websocket_manager = websocket_manager_instance
 
     try:
         new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
@@ -246,8 +249,8 @@ async def run_serpapi_search(
     request: Request,
     background_tasks: BackgroundTasks
 ):
-    if not hasattr(request.app.state, "websocket_manager"):
-        request.app.state.websocket_manager = ConnectionManager()
+    # 백그라운드 태스크(Search 등)가 동일한 전역 매니저를 참조하도록 강제 할당
+    request.app.state.websocket_manager = websocket_manager_instance
 
     user_id = DEFAULT_USER_ID
     background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page)
@@ -462,8 +465,8 @@ async def delete_item(item_id: int, repos: Repositories = Depends(get_repos)):
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    if not hasattr(websocket.app.state, "websocket_manager"):
-        websocket.app.state.websocket_manager = ConnectionManager()
+    # 동일한 전역 매니저 객체 주소를 앱 상태에 강제 할당
+    websocket.app.state.websocket_manager = websocket_manager_instance
 
     manager = websocket.app.state.websocket_manager
     await manager.connect(websocket, user_id)
