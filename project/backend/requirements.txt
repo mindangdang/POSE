@@ -17,4 +17,3 @@ transformers
 ftfy 
 open_clip_torch
 accelerate
-modal
