@@ -11,3 +11,5 @@ User preference based Digging Web with AI.
 -backend: typing 'just backend' to terminal
 
 -frontend: typing 'just frontend' to another terminal
+
+-gpu_server: typing 'just gpu_server' to another terminal
