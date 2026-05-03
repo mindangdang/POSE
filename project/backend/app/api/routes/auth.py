@@ -8,8 +8,11 @@ import jwt
 from fastapi.security import OAuth2PasswordBearer
 from psycopg.rows import dict_row
 from project.backend.app.core.database import get_db_connection
+from project.backend.app.core.settings import load_backend_env
 
 router = APIRouter()
+
+load_backend_env()
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 JWT_SECRET = os.environ.get("JWT_SECRET")
