@@ -125,8 +125,8 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_vector: torch.Tensor,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0.0, # 쿼리 벡터와의 유사도
-        aesthetic_thresh: float = 0.2 # 취향 벡터와의 유사도
+        semantic_thresh: float = 0.10,
+        aesthetic_thresh: float = 0.0
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)
@@ -154,14 +154,16 @@ class FashionSiglipReRankingPipeline:
             cat_vector = F.normalize(self.model.encode_text(cat_input), p=2, dim=1)
             
             # 2. Stage 1 & 2 스코어 일괄 계산
-            semantic_score = abs(F.cosine_similarity(query_vector, raw_img_vector).item())
+            semantic_score = F.cosine_similarity(query_vector, raw_img_vector).item()
             image_vector = raw_img_vector - (self.lambda_weight * cat_vector)
             pure_image_vector = F.normalize(image_vector, p=2, dim=1)
-            aesthetic_score = abs(F.cosine_similarity(user_taste_vector, pure_image_vector).item())
+            aesthetic_score = F.cosine_similarity(user_taste_vector, pure_image_vector).item()
             clean_img.close()
             
-            if semantic_score < semantic_thresh or aesthetic_score < aesthetic_thresh:
-                return None
+            print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f}")
+
+            #if semantic_score < semantic_thresh or aesthetic_score < aesthetic_thresh:
+                #return None
                 
             item["semantic_score"] = round(semantic_score, 4)
             item["aesthetic_score"] = round(aesthetic_score, 4)

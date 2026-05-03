@@ -34,7 +34,7 @@ from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
-
+# semantic: 0.0274 / Aesthetic: 0.5170
 load_backend_env()
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
@@ -54,7 +54,7 @@ async def extract_and_save_url(
     post_url = payload.url
     session_id = payload.session_id
     rapid_api_key = os.environ.get("RAPIDAPI_KEY")
-    user_id = current_user.get("sub")
+    user_id = str(current_user.get("sub"))
 
     if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
         raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
@@ -139,33 +139,36 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         model_semaphore = asyncio.Semaphore(4)
         
         async def process_single_item(item: dict):
-            target_url = item.get("image_url")
-            if not target_url:
-                return
-                
-            async with model_semaphore:
-                await asyncio.sleep(0.01)
-                evaluated_item = await evaluate_single_item(
-                    item,
-                    user_taste_vector,
-                    query_vector,
-                    0.10,
-                    0.0
-                )
-
-            if evaluated_item:
-                print("아이템이 임계값 통과, 프론트로 전송 준비 완료.")
-                
-                if manager:
-                    payload = {
-                        "type": "SEARCH_SUCCESS",
-                        "results": [evaluated_item],
-                        "is_append": True
-                    }
-                    await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                    # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
+            try:
+                target_url = item.get("image_url")
+                if not target_url:
+                    return
+                    
+                async with model_semaphore:
                     await asyncio.sleep(0.01)
-                    print("아이템이 프론트로 전송되었습니다.")
+                    evaluated_item = await evaluate_single_item(
+                        item,
+                        user_taste_vector,
+                        query_vector,
+                        0.05,  # 모델에게 너무 엄격한 기준일 수 있어 0.05로 하향 조정
+                        0.0
+                    )
+
+                if evaluated_item:
+                    if manager:
+                        payload = {
+                            "type": "SEARCH_SUCCESS",
+                            "results": [evaluated_item],
+                            "is_append": True
+                        }
+                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                        # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
+                        await asyncio.sleep(0.01)
+                        print(f"[{item.get('summary_text', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
+                else:
+                    print(f"[{item.get('summary_text', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+            except Exception as e:
+                print(f"개별 아이템 평가 에러: {e}")
 
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
@@ -175,6 +178,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                         await asyncio.gather(*eval_tasks, return_exceptions=True)
                     else:
+                        print(f"[{name}] 취향 벡터가 없어 평가 없이 즉시 프론트로 전송: {len(site_items)}개")
                         if manager:
                             payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
                             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
@@ -208,7 +212,7 @@ async def run_serpapi_search(
 ):
     request.app.state.websocket_manager = websocket_manager_instance
 
-    user_id = current_user.get("sub")
+    user_id = str(current_user.get("sub"))
     background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page)
 
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}

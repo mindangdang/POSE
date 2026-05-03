@@ -203,6 +203,8 @@ async def evaluate_single_item(item: dict, user_taste_vector: list, query_vector
             result = response.json().get("result")
             if result is not None:
                 return result
+            else:
+                print(f"GPU 서버 에러 (HTTP {response.status_code}): {response.text}")
     except Exception as e:
         print(f"단일 아이템 평가 에러: {e}")
     return None
