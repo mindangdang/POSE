@@ -4,7 +4,6 @@ import asyncio
 import io
 import traceback
 import json
-import torch
 from PIL import Image
 import httpx
 from pathlib import Path
