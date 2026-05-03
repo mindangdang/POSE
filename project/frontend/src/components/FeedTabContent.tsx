@@ -37,7 +37,7 @@ export function FeedTabContent({
 }: FeedTabContentProps) {
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
@@ -64,10 +64,11 @@ export function FeedTabContent({
   const factKeysToShow = ['title', 'price_info', 'time_info', 'key_details'];
   const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
-  const categories = useMemo(
-    () => ['All', ...Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[]],
-    [menuItems]
-  );
+  const categories = useMemo(() => {
+    const dynamicCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[];
+    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'PRODUCT' && c.toUpperCase() !== 'ALL');
+    return ['PRODUCT', 'All', ...others];
+  }, [menuItems]);
   const filteredItems = useMemo(
     () => (
       selectedCategory === 'All'
@@ -86,13 +87,14 @@ export function FeedTabContent({
   }, [filteredItems]);
 
   const itemsToDisplay = useMemo(() => {
+    if (selectedCategory === 'All') return filteredItems;
     if (currentFolder) return filteredItems.filter((item) => item.sub_category === currentFolder);
     return filteredItems.filter((item) => !item.sub_category);
-  }, [filteredItems, currentFolder]);
+  }, [filteredItems, currentFolder, selectedCategory]);
 
   useEffect(() => {
     if (!categories.includes(selectedCategory) && categories.length > 0) {
-      setSelectedCategory('All');
+      setSelectedCategory('PRODUCT');
       setCurrentFolder(null);
     }
   }, [categories, selectedCategory]);
@@ -310,7 +312,7 @@ export function FeedTabContent({
               </div>
             )}
 
-            {!currentFolder &&
+            {!currentFolder && selectedCategory !== 'All' &&
               folders.map((folder) => (
                 <motion.div
                   layout
