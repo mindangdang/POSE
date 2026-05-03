@@ -21,4 +21,4 @@ gpu_server:
   GPU_SERVER_PORT={{gpu_server_port}} uvicorn project.gpu_server.main:app --reload --host 0.0.0.0 --port {{gpu_server_port}}
 
 all:
-  trap 'kill 0' SIGINT; just backend & just frontend & & just gpu_server & wait
+  trap 'kill 0' SIGINT; just backend & just frontend & just gpu_server & wait

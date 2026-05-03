@@ -3,8 +3,8 @@ from PIL import Image
 import io
 import httpx
 from fastapi import FastAPI
-from project.embedding.embedding_reranking import FashionSiglipReRankingPipeline
-from project.embedding.schemas import EmbedRequest, TasteVectorRequest, EncodeTextRequest, EvaluateRequest
+from project.gpu_server.embedding_reranking import FashionSiglipReRankingPipeline
+from project.gpu_server.schemas import EmbedRequest, TasteVectorRequest, EncodeTextRequest, EvaluateRequest
 from project.backend.app.core.settings import IMAGE_DIR
 import torch
     
