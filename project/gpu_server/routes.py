@@ -7,7 +7,6 @@ from project.embedding.embedding_reranking import FashionSiglipReRankingPipeline
 from project.embedding.schemas import EmbedRequest, TasteVectorRequest, EncodeTextRequest, EvaluateRequest
 from project.backend.app.core.settings import IMAGE_DIR
 import torch
-from project.backend.app.core.settings import load_backend_env, IMAGE_DIR
     
 app = FastAPI(title="SigLIP Inference Server")
 pipeline = FashionSiglipReRankingPipeline()

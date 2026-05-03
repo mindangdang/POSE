@@ -62,6 +62,8 @@ client = genai.Client(
 )
 
 GPU_SERVER_URL = os.environ.get("GPU_SERVER_URL")
+if not GPU_SERVER_URL:
+    raise ValueError(".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다.")
 
 @with_llm_resilience(fallback_default=lambda description: {
     "recommend": "", 
@@ -169,7 +171,8 @@ async def build_taste_vector(user_id: str):
     
     if image_vectors:
         payload = {"image_vectors": image_vectors}
-        response = await httpx.AsyncClient().post(f"{GPU_SERVER_URL}/build_taste_vector", json=payload, timeout=15.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{GPU_SERVER_URL}/build_taste_vector", json=payload, timeout=15.0)
         if response.status_code == 200:
             return response.json().get("vector")
     return None
@@ -177,7 +180,8 @@ async def build_taste_vector(user_id: str):
 async def encode_text(query: str):
     try:
         payload = {"text": query}
-        response = await httpx.AsyncClient().post(f"{GPU_SERVER_URL}/encode_text", json=payload, timeout=15.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{GPU_SERVER_URL}/encode_text", json=payload, timeout=15.0)
         if response.status_code == 200:
             return response.json().get("vector")
     except Exception as e:
@@ -193,7 +197,8 @@ async def evaluate_single_item(item: dict, user_taste_vector: list, query_vector
             "semantic_thresh": semantic_thresh,
             "aesthetic_thresh": aesthetic_thresh
         }
-        response = await httpx.AsyncClient().post(f"{GPU_SERVER_URL}/evaluate_single_item", json=payload, timeout=20.0)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{GPU_SERVER_URL}/evaluate_single_item", json=payload, timeout=20.0)
         if response.status_code == 200:
             result = response.json().get("result")
             if result is not None:

@@ -1,17 +1,17 @@
 import os
 from psycopg.types.json import Json
-from PIL import Image
-from project.backend.app.core.settings import load_backend_env, IMAGE_DIR
+from project.backend.app.core.settings import load_backend_env
 import httpx
 
-# 환경변수 세팅 
+# 환경변수 세팅
 load_backend_env()
-neon_url = os.environ.get("NEON_DB_URL") 
 api_key = os.environ.get("GOOGLE_API_KEY")
 GPU_SERVER_URL = os.environ.get("GPU_SERVER_URL")
 
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+if not GPU_SERVER_URL:
+    raise ValueError(".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다.")
 
 async def _extract_vector_sync(image_url: str, category: str):
     payload = {"image_url": image_url,"category": category}
@@ -20,7 +20,7 @@ async def _extract_vector_sync(image_url: str, category: str):
         # GPU 연산 및 다운로드 시간을 고려하여 넉넉한 timeout 설정
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{GPU_SERVER_URL}/embedding", json=payload, timeout=15.0)
-        
+
         if response.status_code != 200:
             print(f"GPU 서버 연산 에러: {response.text}")
             return
