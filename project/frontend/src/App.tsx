@@ -181,6 +181,25 @@ export default function App() {
     checkAuth();
   }, []);
 
+  const handleGuestLogin = async () => {
+    try {
+      const res = await fetch('/api/auth/guest', {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        throw new Error('게스트 로그인에 실패했습니다.');
+      }
+
+      const data = await res.json();
+      localStorage.setItem('access_token', data.access_token);
+      setUser(data.user);
+    } catch (error: any) {
+      console.error('Guest Login Error:', error);
+      alert(error.message || '게스트 로그인 중 오류가 발생했습니다.');
+    }
+  };
+
   if (isInitializing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background font-sans">
@@ -199,11 +218,20 @@ export default function App() {
               당신의 취향에서 시작되는 새로운 발견
             </p>
           </div>
-          <div className="flex w-full justify-center min-h-[44px]">
-            <GoogleLoginButton
-              onSuccess={(userData) => setUser(userData)}
-              onError={(msg) => alert(msg)}
-            />
+          <div className="flex w-full flex-col items-center gap-4">
+            <div className="w-full flex justify-center min-h-[44px]">
+              <GoogleLoginButton
+                onSuccess={(userData) => setUser(userData)}
+                onError={(msg) => alert(msg)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="w-full max-w-[320px] rounded-2xl border border-border bg-muted px-6 py-3 text-sm font-semibold text-foreground transition hover:bg-muted/80"
+            >
+              게스트 로그인
+            </button>
           </div>
         </div>
       </div>

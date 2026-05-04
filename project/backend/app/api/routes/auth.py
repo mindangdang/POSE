@@ -68,6 +68,40 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid Google authentication token")
 
+@router.post("/auth/guest")
+async def guest_auth(conn=Depends(get_db_connection)):
+    guest_id = "1"
+    guest_email = "guest@pose.local"
+    guest_name = "Guest"
+    guest_profile_image = None
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute("SELECT * FROM users WHERE id = %s", (guest_id,))
+        user = await cur.fetchone()
+        if not user:
+            await cur.execute(
+                "INSERT INTO users (id, email, name, profile_image) VALUES (%s, %s, %s, %s) RETURNING *",
+                (guest_id, guest_email, guest_name, guest_profile_image)
+            )
+            user = await cur.fetchone()
+        await conn.commit()
+
+    expiration = datetime.now(timezone.utc) + timedelta(days=7)
+    internal_token = jwt.encode(
+        {"sub": guest_id, "name": guest_name, "exp": expiration},
+        JWT_SECRET,
+        algorithm="HS256"
+    )
+
+    user_data = {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "profile_image": user["profile_image"],
+        "username": user["name"],
+    }
+    return {"access_token": internal_token, "token_type": "bearer", "user": user_data}
+
 # 팀 내 백엔드 컨벤션: 인증이 필요한 API 호출 시 이 Dependency를 사용합니다.
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
