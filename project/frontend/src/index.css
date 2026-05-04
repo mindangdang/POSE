@@ -4,17 +4,17 @@
 @theme {
   --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Pretendard", ui-sans-serif, system-ui, sans-serif;
-  --color-background: #0a0a0b;
-  --color-foreground: #fafafa;
-  --color-muted: #18181b;
-  --color-muted-foreground: #a1a1aa;
-  --color-primary: #fafafa;
-  --color-primary-foreground: #0a0a0b;
+  --color-background: #ffffff;
+  --color-foreground: #111111;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #737373;
+  --color-primary: #111111;
+  --color-primary-foreground: #ffffff;
   --color-accent: #3b82f6;
   --color-accent-foreground: #ffffff;
-  --color-border: #27272a;
-  --color-card: #18181b;
-  --color-card-foreground: #fafafa;
+  --color-border: #e5e5e5;
+  --color-card: #ffffff;
+  --color-card-foreground: #111111;
 }
 
 html {
@@ -273,6 +273,36 @@ body {
 
 .markdown-body a {
   @apply text-accent hover:underline;
+}
+
+.feed-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.feed-scroll-area:hover {
+  scrollbar-color: rgb(209 213 219) transparent;
+}
+
+.feed-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.feed-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.feed-scroll-area::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.feed-scroll-area:hover::-webkit-scrollbar-thumb {
+  background: rgb(209 213 219);
+}
+
+.feed-scroll-area:hover::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175);
 }
 
 /* Hero carousel styles */
