@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from PIL import Image
 import open_clip
 
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 # 멀티스레딩 억제로 CPU/RAM 스파이크 방지
 os.environ["OMP_NUM_THREADS"] = "1"
 
