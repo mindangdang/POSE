@@ -106,7 +106,7 @@ domain_map = {
         "instagram.com": "인스타그램"
     }
 
-async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
     product_hierarchy_query = "(> products)"
     exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
     final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
@@ -131,7 +131,7 @@ async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, dom
         return [{
             "id": str(uuid.uuid4()),
             "category": "PRODUCT",
-            "sub_category": "PRODUCT",
+            "sub_category": query,
             "recommend": f"{site_name}에서 발견한 아이템",
             "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
             "url": item.get("link", ""),

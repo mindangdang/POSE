@@ -126,13 +126,6 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         except ValueError:
             current_page = 1
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://www.google.com/",
-        }
-
         model_semaphore = asyncio.Semaphore(4)
         
         async def process_single_item(item: dict):
@@ -169,7 +162,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
-                site_items = await fetch_from_single_site(client, extended_query, domain, name, current_page, serp_api_key)
+                site_items = await fetch_from_single_site(client, extended_query, query, domain, name, current_page, serp_api_key)
                 if user_taste_vector is not None:
                     eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                     await asyncio.gather(*eval_tasks, return_exceptions=True)

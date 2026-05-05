@@ -47,8 +47,19 @@ async def main():
     vec = torch.tensor([pipeline.get_image_vector(img_obj, category)]).to(pipeline.device)
     vec_no_cat = torch.tensor([get_image_no_cat_vector(pipeline, img_obj)]).to(pipeline.device)
     
-    print(F.cosine_similarity(query_vector, vec).item())
-    print(F.cosine_similarity(query_vector, vec_no_cat).item())
+    print("카테고리 뺐을 때, 유사도 낮아야함:",F.cosine_similarity(query_vector, vec).item())
+    print("카테고리 포함 시, 유사도 높아야함:",F.cosine_similarity(query_vector, vec_no_cat).item())
+
+    print("="*50)
+
+    sec_ig_url = images[1][0]
+    sec_category = images[1][1]
+    sec_img_obj = await load_image_from_url(sec_ig_url)
+    sec_vec = torch.tensor([pipeline.get_image_vector(sec_img_obj, sec_category)]).to(pipeline.device)
+    sec_vec_no_cat = torch.tensor([get_image_no_cat_vector(pipeline, sec_img_obj)]).to(pipeline.device) 
+
+    print("카테고리 포함 시, 다른 카테고리, 유사도 낮아야함:",F.cosine_similarity(query_vector, sec_vec_no_cat).item())
+    print("둘 다 카테고리 뺌, 유사도 높아야함:",F.cosine_similarity(vec, sec_vec).item())
 
 if __name__ == "__main__":
     asyncio.run(main())
