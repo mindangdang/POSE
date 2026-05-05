@@ -8,7 +8,6 @@ import open_clip
 # 멀티스레딩 억제로 CPU/RAM 스파이크 방지
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1" # 캐시 되어 있는 모델이 없는 경우에 0으로 설정. ls -la ~/.cache/huggingface/hub/로 확인
-os.environ["HF_HOME"] = os.path.abspath("project/gpu_server/models")
 
 class FashionSiglipReRankingPipeline:
     _instance = None

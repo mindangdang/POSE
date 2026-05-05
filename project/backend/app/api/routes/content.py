@@ -1,11 +1,8 @@
 import os
 import uuid
 import asyncio
-import io
 import traceback
 import json
-import random
-from PIL import Image
 import httpx
 from pathlib import Path
 

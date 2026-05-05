@@ -1,9 +1,9 @@
 import io
+import asyncio
 import httpx
 import torch
 from PIL import Image
 import torch.nn.functional as F
-
 
 # GPU 서버의 파이프라인 클래스 임포트
 from embedding_reranking import FashionSiglipReRankingPipeline
@@ -30,22 +30,26 @@ def get_image_no_cat_vector(self, img: Image.Image) -> list[float]:
         
         return image_vector[0].tolist()
 
-images = [
-    ["https://image.msscdn.net/thumbnails/images/goods_img/20240924/4458399/4458399_17273479266052_big.jpg?w=1200", "jeans"],
-    ["https://image.msscdn.net/thumbnails/images/goods_img/20251119/5753503/5753503_17635382548509_big.jpg?w=1200", "ring"]
-]
+async def main():
+    images = [
+        ["https://image.msscdn.net/thumbnails/images/goods_img/20240924/4458399/4458399_17273479266052_big.jpg?w=1200", "jeans"],
+        ["https://image.msscdn.net/thumbnails/images/goods_img/20251119/5753503/5753503_17635382548509_big.jpg?w=1200", "ring"]
+    ]
 
-pipeline = FashionSiglipReRankingPipeline()
+    pipeline = FashionSiglipReRankingPipeline()
 
-user_query = "denim pants" 
-query_vector = pipeline.encode_text(user_query)
+    user_query = "denim pants" 
+    query_vector = pipeline.encode_text(user_query)
 
-img_url = images[0][0]
-category = images[0][1]
+    img_url = images[0][0]
+    category = images[0][1]
+        
+    img_obj = await load_image_from_url(img_url)
+    vec = torch.tensor([pipeline.get_image_vector(img_obj, category)]).to(pipeline.device)
+    vec_no_cat = torch.tensor([get_image_no_cat_vector(pipeline, img_obj)]).to(pipeline.device)
+    
+    print(F.cosine_similarity(query_vector, vec).item())
+    print(F.cosine_similarity(query_vector, vec_no_cat).item())
 
-
-img_obj = load_image_from_url(img_url)
-vec = pipeline.get_image_vector(img_obj, category)
-vec_no_cat = get_image_no_cat_vector(img_obj)
-print(F.cosine_similarity(query_vector, vec).item())
-print(F.cosine_similarity(query_vector, vec_no_cat).item())
+if __name__ == "__main__":
+    asyncio.run(main())
