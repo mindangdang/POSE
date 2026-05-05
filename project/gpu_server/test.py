@@ -17,7 +17,6 @@ async def load_image_from_url(url: str) -> Image.Image:
 
 
 def get_image_no_cat_vector(self, img: Image.Image) -> list[float]:
-        """단일 이미지와 카테고리를 받아 Image Vector를 반환합니다. (DB 저장용)"""
         clean_img = self.preprocess_image(img)
         
         image_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)

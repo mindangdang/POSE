@@ -18,13 +18,11 @@ class FashionSiglipReRankingPipeline:
             cls._instance._is_initialized = False
         return cls._instance
 
-    def __init__(self, lambda_weight=0.6):
+    def __init__(self):
         if self._is_initialized:
-            self.lambda_weight = lambda_weight
             return
             
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.lambda_weight = lambda_weight
         
         print("Marqo-FashionSigLIP 모델 로드 중 (In-Memory 모드)...")
         self.model_id = "hf-hub:Marqo/marqo-fashionSigLIP"
@@ -80,8 +78,10 @@ class FashionSiglipReRankingPipeline:
         text_vec = F.normalize(text_features, p=2, dim=1)
         img_vec = F.normalize(image_features, p=2, dim=1)
         
-        image_vector = img_vec - (self.lambda_weight * text_vec)
-        image_vector = F.normalize(image_vector, p=2, dim=1)
+        dot_product = torch.sum(img_vec * text_vec, dim=1, keepdim=True)
+        projection = dot_product * text_vec
+        pure_vibe = img_vec - projection
+        image_vector = F.normalize(pure_vibe, p=2, dim=1)
         
         return image_vector[0].tolist()
 
@@ -157,8 +157,10 @@ class FashionSiglipReRankingPipeline:
             
             # 2. Stage 1 & 2 스코어 일괄 계산
             semantic_score = F.cosine_similarity(query_vector, raw_img_vector).item()
-            image_vector = raw_img_vector - (self.lambda_weight * cat_vector)
-            pure_image_vector = F.normalize(image_vector, p=2, dim=1)
+            dot_product = torch.sum(raw_img_vector * cat_vector, dim=1, keepdim=True)
+            projection = dot_product * cat_vector
+            pure_vibe = raw_img_vector - projection
+            pure_image_vector = F.normalize(pure_vibe, p=2, dim=1)
             aesthetic_score = F.cosine_similarity(user_taste_vector, pure_image_vector).item()
             clean_img.close()
             
