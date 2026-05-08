@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Loader2, Sparkles, BrainCircuit, Zap, Image as ImageIcon, X, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
@@ -36,6 +36,7 @@ export function SearchTabContent({
   const hasSearchActivity = loading || searchResults.length > 0 || quotaCountdown !== null;
   // 모달 제어 상태
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
     { value: "detail", label: "상세 검색", icon: Zap, activeClass: "text-yellow-500 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-yellow-500 hover:cursor-pointer" },
@@ -106,22 +107,28 @@ export function SearchTabContent({
             if (data.is_append) {
               setSearchResults(prev => {
                 // 검색 결과에 고유 id가 없는 경우 프론트에서 임시 id 생성
-                const newItems = (data.results || []).map((item: any) => ({
-                  ...item,
-                  id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                }));
+                const newItems = (data.results || []).map((rawItem: any) => {
+                  const item = rawItem.result ? rawItem.result : rawItem;
+                  return {
+                    ...item,
+                    id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                  };
+                });
 
                 const uniqueItems = newItems.filter(
-                  (newItem: SavedItem) => !prev.some(item => item.id === newItem.id)
+                  (newItem: SavedItem) => !prev.some(item => item.id === newItem.id || (item.url && item.url === newItem.url))
                 );
                 
                 return [...prev, ...uniqueItems];
               });
             } else {
-              setSearchResults((data.results || []).map((item: any) => ({
-                ...item,
-                id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-              })));
+              setSearchResults((data.results || []).map((rawItem: any) => {
+                const item = rawItem.result ? rawItem.result : rawItem;
+                return {
+                  ...item,
+                  id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+                };
+              }));
             }
           } else if (data.type === "SEARCH_FINISHED") {
             console.log("[웹소켓] 검색 완료(SEARCH_FINISHED). 로딩 상태 해제.");
@@ -149,6 +156,15 @@ export function SearchTabContent({
       }
     };
   }, [user]);
+
+  // 웹소켓 메시지를 통해 검색 결과가 지속적으로 추가될 때 화면을 최하단으로 부드럽게 스크롤
+  useEffect(() => {
+    if (searchResults.length > 0 && loading) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+    }
+  }, [searchResults, loading]);
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
@@ -647,6 +663,7 @@ export function SearchTabContent({
                   ))}
                 </AnimatePresence>
               </motion.div>
+              <div ref={bottomRef} className="h-4" />
               {searchResults.length > 0 && (
                 <div className="flex justify-center pt-8 w-full">
                   <button

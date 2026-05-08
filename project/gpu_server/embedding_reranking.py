@@ -146,8 +146,8 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_vector: torch.Tensor,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0.05, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
-        aesthetic_thresh: float = 0.5
+        semantic_thresh: float = 0, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
+        aesthetic_thresh: float = 0.45
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)
@@ -160,9 +160,9 @@ class FashionSiglipReRankingPipeline:
             cat = item.get("sub_category") or "PRODUCT"
             
             # 연산을 위해 1D 벡터가 들어왔을 경우 2D 벡터로 보정 (dim=1 연산 에러 방지)
-            if query_vector.dim() == 1:
+            if query_vector is not None and query_vector.dim() == 1:
                 query_vector = query_vector.unsqueeze(0)
-            if user_taste_vector.dim() == 1:
+            if user_taste_vector is not None and user_taste_vector.dim() == 1:
                 user_taste_vector = user_taste_vector.unsqueeze(0)
             
             # 1. 이미지 및 카테고리 벡터 추출
@@ -185,12 +185,14 @@ class FashionSiglipReRankingPipeline:
             
             print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f}")
 
-            #if semantic_score < semantic_thresh or aesthetic_score < aesthetic_thresh:
-                #return None
-                
-            item["semantic_score"] = round(semantic_score, 4)
-            item["aesthetic_score"] = round(aesthetic_score, 4)
-            return item
+            if aesthetic_score < aesthetic_thresh:
+                return None
+            
+            else:
+                item["semantic_score"] = round(semantic_score, 4)
+                item["aesthetic_score"] = round(aesthetic_score, 4)
+                return item
+        
         except Exception as e:
             print(f"'{item.get('summary_text', 'Unknown')}' 단일 평가 에러: {e}")
             return None
