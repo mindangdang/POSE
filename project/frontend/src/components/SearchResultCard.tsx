@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 
-import { getItemTitle } from '../lib/itemFacts';
+import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 
 type SearchResultCardProps = {
@@ -18,6 +18,7 @@ export function SearchResultCard({
   onSave,
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
+  const facts = parseItemFacts(item);
 
   return (
     <motion.div
@@ -39,7 +40,13 @@ export function SearchResultCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             referrerPolicy="no-referrer"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x400?text=No+Image';
+              const target = e.target as HTMLImageElement;
+              const localUrl = facts?.local_image_url as string | undefined;
+              if (localUrl && !target.src.includes(localUrl)) {
+                target.src = `/api/images/${localUrl}`;
+              } else {
+                target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+              }
             }}
           />
         ) : (

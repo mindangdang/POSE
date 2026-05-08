@@ -461,8 +461,19 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
               className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
               referrerPolicy="no-referrer"
               onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  'https://via.placeholder.com/400x500?text=No+Image';
+                const target = e.target as HTMLImageElement;
+                let localUrl: string | undefined;
+                try {
+                  const facts = typeof item.facts === 'string' ? JSON.parse(item.facts) : (item.facts || {});
+                  localUrl = facts?.local_image_url;
+                } catch (err) {
+                  // parsing error ignored
+                }
+                if (localUrl && !target.src.includes(localUrl)) {
+                  target.src = `/api/images/${localUrl}`;
+                } else {
+                  target.src = 'https://via.placeholder.com/400x500?text=No+Image';
+                }
               }}
             />
           </div>

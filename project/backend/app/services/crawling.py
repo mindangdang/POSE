@@ -50,7 +50,7 @@ async def background_crawl_and_save(
 
         async with app.state.db_pool.connection() as conn:
             repos = get_repositories(conn)
-            await repos.saved_posts.delete_by_id(item_id)
+            await repos.saved_posts.delete_by_id(item_id, user_id)
             await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
@@ -76,7 +76,7 @@ async def background_crawl_and_save(
         try:
             async with app.state.db_pool.connection() as conn:
                 repos = get_repositories(conn)
-                await repos.saved_posts.delete_by_id(item_id)
+                await repos.saved_posts.delete_by_id(item_id,user_id)
                 await conn.commit()
                 print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
         except Exception as db_exc:
@@ -215,12 +215,13 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "title": data.get("title", "Unknown"),
             "recommend": ai_parsed_data.get("recommend", ""),
             "sub_category": sub_category,
-            "image_url": local_image_url or normalized_image_url,
+            "image_url": normalized_image_url,
             "facts": {
                 "title": data.get("title", ""),
                 "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                 "location_text": data.get("source", ""),
                 "key_details": final_key_details,
+                "local_image_url": local_image_url,
             },
         }
     ]

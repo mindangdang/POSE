@@ -59,7 +59,13 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     className="w-full h-full object-contain rounded-xl"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x600?text=No+Image';
+                      const target = e.target as HTMLImageElement;
+                      const localUrl = (facts as Record<string, any>)?.local_image_url as string | undefined;
+                      if (localUrl && !target.src.includes(localUrl)) {
+                        target.src = `/api/images/${localUrl}`;
+                      } else {
+                        target.src = 'https://via.placeholder.com/600x600?text=No+Image';
+                      }
                     }}
                   />
                 </div>

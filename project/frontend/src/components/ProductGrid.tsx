@@ -105,8 +105,13 @@ function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: Produ
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           referrerPolicy="no-referrer"
           onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'https://via.placeholder.com/400x400?text=POSE';
+            const target = e.target as HTMLImageElement;
+            const localUrl = facts?.local_image_url as string | undefined;
+            if (localUrl && !target.src.includes(localUrl)) {
+              target.src = `/api/images/${localUrl}`;
+            } else {
+              target.src = 'https://via.placeholder.com/400x400?text=POSE';
+            }
           }}
         />
 
