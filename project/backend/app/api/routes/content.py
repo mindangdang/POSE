@@ -82,9 +82,9 @@ async def extract_and_save_url(
             {
                 "id": new_item_id,
                 "url": post_url,
-                "category": "PROCESSING ",
-                "sub_category": "PROCESSING ",
-                "recommend": "AI가 열심히 바이브를 추출하고 있어요 ",
+                "category": "PROCESSING",
+                "sub_category": "PROCESSING",
+                "recommend": "AI가 열심히 바이브를 추출하고 있어요",
                 "facts": {"title": "분석 중..."},
                 "image_url": "",
             }

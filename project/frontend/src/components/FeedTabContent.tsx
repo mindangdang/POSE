@@ -117,7 +117,7 @@ export function FeedTabContent({
               const filtered = prev.filter(item => item.id !== data.placeholder_id);
               return [...(data.items || []), ...filtered];
             });
-            setCurrentFolder((prev) => prev === 'PROCESSING ' ? null : prev);
+            setCurrentFolder((prev) => prev === 'PROCESSING' ? null : prev);
             void refreshTaste();
           } else if (data.type === "CRAWL_ERROR") {
             alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");

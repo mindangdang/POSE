@@ -19,6 +19,7 @@ import curl_cffi.requests as requests
 from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright, Browser
+from playwright_stealth import Stealth
 from project.backend.app.core.resilience import with_llm_resilience
 
 # ------------------------------------------------------------------------
@@ -96,8 +97,8 @@ FINGERPRINT_PROFILES = [
 
 def get_random_fingerprint() -> dict:
     profile = random.choice(FINGERPRINT_PROFILES).copy()
-    profile["locale"] = random.choice(["ko-KR", "en-US"])
-    profile["timezone_id"] = random.choice(["Asia/Seoul", "America/New_York"])
+    profile["locale"] = "ko-KR"
+    profile["timezone_id"] = "Asia/Seoul"
     return profile
 
 # ------------------------------------------------------------------------
@@ -299,11 +300,9 @@ class PlaywrightPoolManager:
 
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
+                channel="chrome",
                 args=[
-                    "--no-sandbox", "--disable-dev-shm-usage",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-web-security",
-                    "--js-flags=--max-old-space-size=512"
+                    "--no-sandbox", "--disable-dev-shm-usage"
                 ]
             )
             self._browser_id = uuid.uuid4()
@@ -374,16 +373,20 @@ class PlaywrightPoolManager:
 
         ctx = await browser.new_context(
             **{k: v for k, v in fp.items() if k in ["user_agent", "viewport", "locale", "timezone_id"]},
-            proxy={"server": proxy} if proxy else None,
             java_script_enabled=True,
         )
+        platform_val = fp.get('platform', '"Windows"').strip('"')
+        nav_platform = 'Win32' if platform_val == 'Windows' else 'MacIntel'
         # Advanced fingerprinting
         await ctx.add_init_script(f"""
             Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
             Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {fp['hardwareConcurrency']}}});
             Object.defineProperty(navigator, 'deviceMemory', {{get: () => {fp['deviceMemory']}}});
+            Object.defineProperty(navigator, 'platform', {{get: () => '{nav_platform}'}});
+            Object.defineProperty(navigator, 'languages', {{get: () => ['ko-KR', 'ko']}});
+            window.chrome = {{runtime: {{}}}};
         """)
-        return WarmContext(context=ctx, fingerprint=fp, proxy=proxy)
+        return WarmContext(context=ctx, fingerprint=fp, proxy=None)
 
     @asynccontextmanager
     async def get_context(self, proxy: Optional[str] = None):
@@ -392,10 +395,6 @@ class PlaywrightPoolManager:
             
         warm_ctx = await asyncio.wait_for(self.context_queue.get(),timeout=10)
         # 요청한 Proxy와 Pre-warm된 Proxy 환경이 다르면 새로 교체
-        if warm_ctx.proxy != proxy:
-            if not warm_ctx.context.is_closed():
-                await warm_ctx.context.close()
-            warm_ctx = await self._create_context(proxy)
         try:
             warm_ctx.uses += 1
             yield warm_ctx.context
@@ -527,7 +526,7 @@ async def fallback_with_gemini(url: str, html_content: str):
     logger.info(f"[{url}] Gemini HTML 기반 폴백 분석 시작 (최적화된 HTML 크기: {len(minimized_html)} chars)")
     
     response = await client.aio.models.generate_content(
-        model='gemini-2.5-pro', 
+        model='gemini-2.5-flash', 
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -616,20 +615,22 @@ async def _fetch_browser(url: str, proxy: str) -> Tuple[str, str]:
     async with pool_manager.get_context(proxy=proxy) as context:
         page = await context.new_page()
         try:
-            async def handle_route(route):
-                if route.request.resource_type in ["image", "media", "font", "websocket"]:
-                    await route.abort()
-                else:
-                    await route.continue_()
+            stealth = Stealth()
+            await stealth.apply_stealth_async(page)
                     
-            # Aggressive resource blocking
-            await page.route("**/*", handle_route)
+            # Efficient aggressive resource blocking
+            async def abort_route(route):
+                await route.abort()
+                
+            await page.route("**/*.{png,jpg,jpeg,webp,gif,woff,woff2,mp4}", abort_route)
             
-            # Smart navigation: Don't wait for networkidle which hangs. Wait for domcontentloaded
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
             
-            # Wait briefly for client-side frameworks to mount
-            await page.wait_for_timeout(random.randint(800, 1500))
+            try:
+                await page.locator("body").wait_for(timeout=10000)
+                await page.wait_for_timeout(2000)
+            except Exception:
+                pass
             
             html = await page.content()
             return html, page.url
@@ -640,21 +641,22 @@ async def _execute_fetch_pipeline(url: str) -> dict:
     """Executes a tiered fallback strategy for maximum success rate."""
     fp = get_random_fingerprint()
     
-    for attempt in range(1, 4):
+    for attempt in range(1, 3):
         proxy = await proxy_manager.get_proxy()
         try:
-            if attempt < 3:
-                # Tier 1 & 2: Fast Session Pooling HTTP
+            if attempt == 1:
+                # Tier 1: Fast Session Pooling HTTP
                 html, final_url, status = await _fetch_fast(url, proxy, fp)
                 if AntiBotAnalyzer.is_blocked(html, status):
                     metrics.waf_blocks_total += 1
                     await proxy_manager.report(proxy, False)
+                    await asyncio.sleep(random.uniform(1.0, 2.0))
                     continue # Trigger next tier
                 await proxy_manager.report(proxy, True)
                 metrics.success_total += 1
                 return {"html": html, "finalUrl": final_url}
             else:
-                # Tier 3: Browser Fallback
+                # Tier 2: Browser Fallback
                 html, final_url = await _fetch_browser(url, proxy)
                 metrics.success_total += 1
                 return {"html": html, "finalUrl": final_url}

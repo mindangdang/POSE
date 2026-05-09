@@ -151,9 +151,9 @@ async def _extract_instagram_items(crawl_result: dict) -> list[dict]:
             downloaded_files.append(new_path)
 
     ai_result = await extract_fact_and_vibe(
-    downloaded_files,
-    crawl_result.get("caption", ""),
-    crawl_result.get("hashtags", []),
+        downloaded_files,
+        crawl_result.get("caption", ""),
+        crawl_result.get("hashtags", []),
     )
     extracted_items = ai_result.get("extracted_items", [])
 
