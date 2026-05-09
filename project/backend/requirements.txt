@@ -19,3 +19,5 @@ open_clip_torch
 accelerate
 google-auth 
 PyJWT
+curl_cffi
+lxml
