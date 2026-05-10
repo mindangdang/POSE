@@ -45,7 +45,8 @@ async def run_test():
         "밤티4" : ["https://image.msscdn.net/thumbnails/images/prd_img/20260224/6048622/detail_6048622_17732790227548_big.jpg?w=1200", "jeans"],
         "내 취향1" : ["https://image.msscdn.net/thumbnails/images/prd_img/20250818/5331560/detail_5331560_17579013091105_big.jpg?w=1200", "jeans"],
         "내 취향2" : ["https://image.msscdn.net/thumbnails/images/goods_img/20250304/4852252/4852252_17527701383488_big.jpg?w=1200", "jeans"],
-        "내 취향3" : ["https://image.msscdn.net/thumbnails/images/goods_img/20260330/6219956/6219956_17748518187354_big.jpg?w=1200", "jeans"]
+        "내 취향3" : ["https://image.msscdn.net/thumbnails/images/goods_img/20260330/6219956/6219956_17748518187354_big.jpg?w=1200", "jeans"],
+        "강아지 사진" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7g0bXrNGNd0WWuLmJIzfjA4Le5KHs_LKwpw&s", "dog"]
     }
 
     # =====================================================================
@@ -97,14 +98,7 @@ async def run_test():
                 evaluated_items.append(result)
         except Exception as e:
             print(f"테스트 이미지 평가 실패 ({img_url}): {e}")
-
-    if evaluated_items:
-        avg_semantic = sum(item["semantic_score"] for item in evaluated_items) / len(evaluated_items)
-        avg_aesthetic = sum(item["aesthetic_score"] for item in evaluated_items) / len(evaluated_items)
         
-        for item in evaluated_items:
-            item["semantic_score"] = math.exp(item["semantic_score"] - avg_semantic)
-            item["aesthetic_score"] = math.exp(item["aesthetic_score"] - avg_aesthetic)
 
     # =====================================================================
     # 4. 결과 정렬 및 출력
