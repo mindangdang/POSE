@@ -405,7 +405,7 @@ export function FeedTabContent({
         )}
 
         {/* Empty State for Search */}
-        {items.length > 0 && itemsToDisplay.length === 0 && (
+        {items.length > 0 && itemsToDisplay.length === 0 && searchQuery.trim() !== '' && (
           <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
             <h3 className="text-xl font-bold text-foreground mb-2">검색 결과 없음</h3>
             <p className="text-muted-foreground font-medium mb-4">
