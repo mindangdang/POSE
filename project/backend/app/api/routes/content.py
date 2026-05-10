@@ -16,6 +16,7 @@ from fastapi import (
     Request,
     UploadFile,
     Form,
+    File,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -278,17 +279,26 @@ async def run_serpapi_lens_search(payload: SearchRequest):
 ######################################################################################
 
 @router.post("/multimodal")
-async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: Optional[str] = Form(None)):  
+async def fetch_lens_multisearch_with_file(
+    image: Optional[UploadFile] = File(None),
+    image_url: Optional[str] = Form(None),
+    user_text: Optional[str] = Form(None)
+):  
 
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
     
     url = "https://serpapi.com/search"
-    print(f"[Multisearch] 파일 업로드 방식 검색 시작...")
+    print(f"[Multisearch] 멀티모달 검색 시작...")
     
-    image_bytes = await image.read()
-    search_image_url = await upload_generated_image(image_bytes)
+    if image and image.filename:
+        image_bytes = await image.read()
+        search_image_url = await upload_generated_image(image_bytes)
+    elif image_url:
+        search_image_url = image_url
+    else:
+        raise HTTPException(status_code=400, detail="이미지 파일 또는 URL이 필요합니다.")
 
     params = {
         "engine": "google_lens",

@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ExternalLink, X, Sparkles } from 'lucide-react';
+import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -11,6 +12,76 @@ type ItemDetailDialogProps = {
 };
 
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
+  const [similarItems, setSimilarItems] = useState<any[]>([]);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      let isMounted = true;
+      setIsLoadingSimilar(true);
+      setSimilarItems([]);
+      
+      const token = localStorage.getItem('access_token');
+      const facts = parseItemFacts(item) as any;
+
+      const fetchSimilarItems = async () => {
+        try {
+          let targetUrl = item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') 
+            ? item.image_url 
+            : facts?.local_image_url 
+              ? `/api/images/${facts.local_image_url}`
+              : item.image_url 
+                ? `/api/images/${item.image_url}` 
+                : '';
+          
+          if (targetUrl.startsWith('//')) {
+            targetUrl = `https:${targetUrl}`;
+          }
+
+          const formData = new FormData();
+          
+          if (targetUrl.startsWith('/api/') || targetUrl.startsWith('data:')) {
+            const response = await fetch(targetUrl);
+            const blob = await response.blob();
+            formData.append('image', blob, 'image.jpg');
+          } else if (targetUrl) {
+            formData.append('image_url', targetUrl);
+          } else {
+            const blob = new Blob([''], { type: 'image/jpeg' });
+            formData.append('image', blob, 'image.jpg');
+          }
+
+          const res = await fetch('/api/multimodal', {
+            method: 'POST',
+            headers: { 
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: formData,
+          });
+          const data = await res.json();
+          if (isMounted && data.success && data.results) {
+            setSimilarItems(data.results);
+          }
+        } catch (err) {
+          console.error('Failed to fetch similar items', err);
+        } finally {
+          if (isMounted) {
+            setIsLoadingSimilar(false);
+          }
+        }
+      };
+
+      fetchSimilarItems();
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setSimilarItems([]);
+      setIsLoadingSimilar(false);
+    }
+  }, [item]);
+
   if (!item) {
     return null;
   }
@@ -77,9 +148,14 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       <span className="inline-block text-xs font-medium uppercase tracking-wide text-accent">
                         {item.category}
                       </span>
-                      <h2 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
-                        {modalTitle}
-                      </h2>
+                      <Dialog.Title asChild>
+                        <h2 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
+                          {modalTitle}
+                        </h2>
+                      </Dialog.Title>
+                      <Dialog.Description className="sr-only">
+                        상세 정보
+                      </Dialog.Description>
                     </div>
                     <Dialog.Close asChild>
                       <button className="p-2 hover:bg-muted rounded-full transition-colors shrink-0 text-muted-foreground hover:text-foreground">
@@ -146,6 +222,45 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                         </a>
                       </section>
                     )}
+
+                    {/* Similar Items */}
+                    <section className="pt-4 border-t border-border mt-6">
+                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-accent" /> Similar Items
+                      </h3>
+                      {isLoadingSimilar ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : similarItems.length > 0 ? (
+                        <div className="columns-2 gap-2 space-y-2">
+                          {similarItems.map((similarItem, idx) => (
+                            <div key={idx} className="break-inside-avoid relative group/similar rounded-lg overflow-hidden bg-muted">
+                              <img 
+                                src={similarItem.image_url} 
+                                alt={similarItem.summary_text}
+                                className="w-full h-auto object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=No+Image';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/similar:opacity-100 transition-opacity p-2 flex flex-col justify-end">
+                                <p className="text-[10px] text-white font-medium line-clamp-2 leading-tight">
+                                  {similarItem.summary_text}
+                                </p>
+                                <p className="text-[10px] text-white/80 mt-0.5">
+                                  {typeof similarItem.facts?.Price === 'object'
+                                    ? similarItem.facts.Price?.value || ''
+                                    : similarItem.facts?.Price}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">비슷한 아이템이 없습니다.</p>
+                      )}
+                    </section>
                   </div>
                 </div>
               </div>

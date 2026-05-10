@@ -191,7 +191,9 @@ export function SearchTabContent({
         }
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('user_text', currentQuery || 'find similiar product');
+        if (currentQuery) {
+          formData.append('user_text', currentQuery);
+        }
 
         res = await fetch('/api/multimodal', {
           method: 'POST',
