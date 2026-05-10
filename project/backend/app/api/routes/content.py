@@ -3,6 +3,7 @@ import uuid
 import asyncio
 import traceback
 import json
+from typing import Optional
 import httpx
 from pathlib import Path
 
@@ -246,6 +247,8 @@ async def run_serpapi_lens_search(payload: SearchRequest):
             title = item.get("title", "상품명 없음")
             image_url = item.get("thumbnail", "")
             extracted_price = item.get("price", "가격 미상")
+            if isinstance(extracted_price, dict):
+                extracted_price = extracted_price.get("value", "")
             source = item.get("source", "알 수 없는 샵")
 
             results.append(
@@ -275,7 +278,7 @@ async def run_serpapi_lens_search(payload: SearchRequest):
 ######################################################################################
 
 @router.post("/multimodal")
-async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = Form(...)):  
+async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: Optional[str] = Form(None)):  
 
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
@@ -289,13 +292,14 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
 
     params = {
         "engine": "google_lens",
-        "q": user_text,
         "url": search_image_url,
-        "tbm": "isch", 
         "type": "visual_matches",
         "api_key": serp_api_key,
         "hl": "ko", "gl": "kr"
     }
+
+    if user_text:
+        params["q"] = user_text
 
     try:
         # 무한 대기 방지를 위한 안전한 타임아웃 설정
@@ -315,6 +319,8 @@ async def fetch_lens_multisearch_with_file(image: UploadFile, user_text: str = F
             title = item.get("title", "상품명 없음")
             image_url = item.get("thumbnail", "")
             extracted_price = item.get("price", "가격 미상")
+            if isinstance(extracted_price, dict):
+                extracted_price = extracted_price.get("value", "")
             source = item.get("source", "알 수 없는 샵")
 
             results.append(

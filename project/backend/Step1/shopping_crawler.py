@@ -300,7 +300,6 @@ class PlaywrightPoolManager:
 
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
-                channel="chrome",
                 args=[
                     "--no-sandbox", "--disable-dev-shm-usage"
                 ]
