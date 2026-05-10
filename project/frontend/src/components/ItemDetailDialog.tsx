@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
@@ -12,26 +12,38 @@ type ItemDetailDialogProps = {
 };
 
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
+  const [viewedItem, setViewedItem] = useState<SavedItem | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
   useEffect(() => {
-    if (item) {
+    setViewedItem(item);
+  }, [item]);
+
+  const displayItem = viewedItem || item;
+
+  useEffect(() => {
+    if (displayItem) {
       let isMounted = true;
       setIsLoadingSimilar(true);
       setSimilarItems([]);
       
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
+      
       const token = localStorage.getItem('access_token');
-      const facts = parseItemFacts(item) as any;
+      const facts = parseItemFacts(displayItem) as any;
 
       const fetchSimilarItems = async () => {
         try {
-          let targetUrl = item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') 
-            ? item.image_url 
+          let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//') 
+            ? displayItem.image_url 
             : facts?.local_image_url 
               ? `/api/images/${facts.local_image_url}`
-              : item.image_url 
-                ? `/api/images/${item.image_url}` 
+              : displayItem.image_url 
+                ? `/api/images/${displayItem.image_url}` 
                 : '';
           
           if (targetUrl.startsWith('//')) {
@@ -80,14 +92,14 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
       setSimilarItems([]);
       setIsLoadingSimilar(false);
     }
-  }, [item]);
+  }, [displayItem]);
 
-  if (!item) {
+  if (!displayItem) {
     return null;
   }
 
-  const facts = parseItemFacts(item);
-  const modalTitle = getItemTitle(item);
+  const facts = parseItemFacts(displayItem);
+  const modalTitle = getItemTitle(displayItem);
   const factEntries =
     facts && typeof facts === 'object'
       ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
@@ -118,15 +130,15 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                 <div className="md:w-1/2 bg-muted flex items-center justify-center overflow-hidden p-6">
                   <img
                     src={
-                      item.image_url?.startsWith('http') || 
-                      item.image_url?.startsWith('data:') || 
-                      item.image_url?.startsWith('//')
-                        ? item.image_url
-                        : item.image_url
-                          ? `/api/images/${item.image_url}`
+                      displayItem.image_url?.startsWith('http') || 
+                      displayItem.image_url?.startsWith('data:') || 
+                      displayItem.image_url?.startsWith('//')
+                        ? displayItem.image_url
+                        : displayItem.image_url
+                          ? `/api/images/${displayItem.image_url}`
                           : 'https://via.placeholder.com/600x600?text=No+Image'
                     }
-                    alt={item.category}
+                    alt={displayItem.category}
                     className="w-full h-full object-contain rounded-xl"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
@@ -146,7 +158,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                   <div className="flex items-start justify-between mb-6 gap-4 border-b border-border pb-4 shrink-0">
                     <div className="space-y-2">
                       <span className="inline-block text-xs font-medium uppercase tracking-wide text-accent">
-                        {item.category}
+                        {displayItem.category}
                       </span>
                       <Dialog.Title asChild>
                         <h2 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
@@ -164,14 +176,14 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     </Dialog.Close>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                  <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-2">
                     {/* Vibe Analysis */}
                     <section>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-accent" /> Vibe Analysis
                       </h3>
                       <p className="text-sm font-medium leading-relaxed text-foreground">
-                        {item.recommend}
+                        {displayItem.recommend}
                       </p>
                     </section>
 
@@ -209,10 +221,10 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     </section>
 
                     {/* Source Link */}
-                    {item.url && (
+                    {displayItem.url && (
                       <section className="pt-2">
                         <a
-                          href={item.url}
+                          href={displayItem.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 w-full h-11 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
@@ -235,7 +247,11 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       ) : similarItems.length > 0 ? (
                         <div className="columns-2 gap-2 space-y-2">
                           {similarItems.map((similarItem, idx) => (
-                            <div key={idx} className="break-inside-avoid relative group/similar rounded-lg overflow-hidden bg-muted">
+                            <div 
+                              key={idx} 
+                              className="break-inside-avoid relative group/similar rounded-lg overflow-hidden bg-muted cursor-pointer"
+                              onClick={() => setViewedItem(similarItem as unknown as SavedItem)}
+                            >
                               <img 
                                 src={similarItem.image_url} 
                                 alt={similarItem.summary_text}
