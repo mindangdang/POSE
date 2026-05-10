@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check } from 'lucide-react';
+import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -42,6 +42,7 @@ export function FeedTabContent({
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   const addSuccessTimeout = useRef<number | null>(null);
 
   useEffect(() => {
@@ -86,10 +87,32 @@ export function FeedTabContent({
   }, [filteredItems]);
 
   const itemsToDisplay = useMemo(() => {
-    if (selectedCategory === 'All') return filteredItems;
-    if (currentFolder) return filteredItems.filter((item) => item.sub_category === currentFolder);
-    return filteredItems.filter((item) => !item.sub_category);
-  }, [filteredItems, currentFolder, selectedCategory]);
+    let baseItems = [];
+    if (selectedCategory === 'All') {
+      baseItems = filteredItems;
+    } else if (currentFolder) {
+      baseItems = filteredItems.filter((item) => item.sub_category === currentFolder);
+    } else {
+      baseItems = filteredItems.filter((item) => !item.sub_category);
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      return baseItems.filter((item) => {
+        const facts = parseItemFacts(item) || {};
+        const title = typeof facts.title === 'string' ? facts.title.toLowerCase() : '';
+        const category = (item.category || '').toLowerCase();
+        const subCategory = (item.sub_category || '').toLowerCase();
+        const summary = (item.summary_text || '').toLowerCase();
+        const recommend = (item.recommend || '').toLowerCase();
+        const factValues = Object.values(facts).map(v => String(v).toLowerCase()).join(' ');
+
+        return title.includes(query) || category.includes(query) || subCategory.includes(query) || summary.includes(query) || recommend.includes(query) || factValues.includes(query);
+      });
+    }
+
+    return baseItems;
+  }, [filteredItems, currentFolder, selectedCategory, searchQuery]);
 
   useEffect(() => {
     if (!categories.includes(selectedCategory) && categories.length > 0) {
@@ -267,32 +290,45 @@ export function FeedTabContent({
         </AnimatePresence>
       </header>
 
-      {/* Category Tabs */}
-      <nav className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 category-nav">
-        {categories.map((category) => {
-          const Icon = getCategoryIcon(category);
-          const label = getCategoryLabel(category);
-          const isSelected = selectedCategory === category;
+      {/* Category Tabs and Search */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <nav className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
+          {categories.map((category) => {
+            const Icon = getCategoryIcon(category);
+            const label = getCategoryLabel(category);
+            const isSelected = selectedCategory === category;
 
-          return (
-            <button
-              key={category}
-              onClick={() => {
-                setSelectedCategory(category);
-                setCurrentFolder(null);
-              }}
-              className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                isSelected
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          );
-        })}
-      </nav>
+            return (
+              <button
+                key={category}
+                onClick={() => {
+                  setSelectedCategory(category);
+                  setCurrentFolder(null);
+                }}
+                className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                  isSelected
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="relative w-full md:w-64 shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="피드 내 아이템 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-9 pl-9 pr-4 rounded-full bg-muted text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+          />
+        </div>
+      </div>
 
       {/* Items Grid */}
       <div className="flex-1">
@@ -365,6 +401,16 @@ export function FeedTabContent({
               <Plus className="w-4 h-4" />
               첫 아이템 추가하기
             </button>
+          </div>
+        )}
+
+        {/* Empty State for Search */}
+        {items.length > 0 && itemsToDisplay.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
+            <h3 className="text-xl font-bold text-foreground mb-2">검색 결과 없음</h3>
+            <p className="text-muted-foreground font-medium mb-4">
+              조건에 맞는 아이템을 찾을 수 없습니다.
+            </p>
           </div>
         )}
       </div>
