@@ -71,7 +71,7 @@ async def run_test():
         print("유효한 위시리스트 벡터가 없어 테스트를 종료합니다.")
         return
 
-    user_taste_vector = pipeline.build_user_taste_vector(wishlist_vectors)
+    user_taste_profile = pipeline.build_user_taste_vector(wishlist_vectors)
     
     # =====================================================================
     # 3. 테스트 이미지 평가 (단일 아이템)
@@ -90,8 +90,9 @@ async def run_test():
             
             result = pipeline.evaluate_single_item(
                 item=item,
-                user_taste_vector=user_taste_vector,
-                query_vector=query_vector
+                user_taste_profile=user_taste_profile,
+                query_vector=query_vector,
+                alpha=0.3
             )
             
             if result:
@@ -107,13 +108,13 @@ async def run_test():
     semantic_sorted = sorted(evaluated_items, key=lambda x: x.get("semantic_score", 0.0), reverse=True)
     print("\n=== [Semantic Score (쿼리 일치도) 기준 정렬] ===")
     for item in semantic_sorted:
-        print(f"Semantic: {item['semantic_score']:.4f} | Aesthetic: {item['aesthetic_score']:.4f} | Item: {item['item_name']} | URL: {item['image_url']}")
+        print(f"Semantic: {item['semantic_score']:.4f} | Aesthetic: {item['aesthetic_score']:.4f} (C: {item['consensus_score']:.4f}, P: {item['prototype_score']:.4f}) | Item: {item['item_name']} | URL: {item['image_url']}")
         
     # (2) Aesthetic Score 기준 내림차순 (취향 일치도)
     aesthetic_sorted = sorted(evaluated_items, key=lambda x: x.get("aesthetic_score", 0.0), reverse=True)
     print("\n=== [Aesthetic Score (취향 일치도) 기준 정렬] ===")
     for item in aesthetic_sorted:
-        print(f"Aesthetic: {item['aesthetic_score']:.4f} | Semantic: {item['semantic_score']:.4f} | Item: {item['item_name']} | URL: {item['image_url']}")
+        print(f"Aesthetic: {item['aesthetic_score']:.4f} (C: {item['consensus_score']:.4f}, P: {item['prototype_score']:.4f}) | Semantic: {item['semantic_score']:.4f} | Item: {item['item_name']} | URL: {item['image_url']}")
 
 
 if __name__ == "__main__":

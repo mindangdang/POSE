@@ -52,13 +52,6 @@ class FashionSiglipReRankingPipeline:
         except Exception as e:
             print(f"모델 웜업 중 에러 발생 (무시됨): {e}")
         
-        print("User Vector 합성을 위한 Attention 레이어 로드 중...")
-        # 768차원 벡터를 8개의 Head로 나누어 다각도로 공통점을 찾습니다.
-        self.attention = torch.nn.MultiheadAttention(embed_dim=768, num_heads=8, batch_first=True).to(self.device)
-        if self.device == "cuda":
-            self.attention = self.attention.to(torch.bfloat16)
-        print("Attention 레이어 로드 완료.")
-
         self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
 
@@ -93,42 +86,58 @@ class FashionSiglipReRankingPipeline:
         return image_vector[0].tolist()
 
     @torch.no_grad()
-    def build_user_taste_vector(self, pure_vibe_vectors: list[list[float]]) -> torch.Tensor:
+    def build_user_taste_vector(
+        self, 
+        pure_vibe_vectors: list[list[float]], 
+        num_iterations: int = 5, 
+        temperature: float = 12.0, 
+        momentum: float = 0.15
+    ) -> dict:
+        """
+        사용자의 취향 벡터(Pure Vibe) 기반으로 Hybrid Preference Score 계산을 위해
+        Consensus(전체 무드)와 Memory(원본 위시리스트 벡터)를 함께 반환합니다.
+        """
         if not pure_vibe_vectors:
             return None
             
-        # 1. N개의 무드 벡터를 PyTorch 텐서로 변환: Shape (N, 768)
+        # 1. 텐서 변환 및 디바이스/데이터타입 할당
         vibe_tensor = torch.tensor(pure_vibe_vectors, device=self.device)
         if self.device == "cuda":
             vibe_tensor = vibe_tensor.to(torch.bfloat16)
             
-        # 아이템이 1개뿐이라면 어텐션이 무의미하므로 바로 반환
+        # 2. 모든 입력 벡터 정규화 (보안 및 연산 안정성 확보)
+        x = F.normalize(vibe_tensor, p=2, dim=1)
+            
+        # 아이템이 1개뿐이라면 합의 알고리즘이 무의미하므로 정규화 후 바로 반환 (Shape: 1, 768)
         if vibe_tensor.size(0) == 1:
-            return F.normalize(vibe_tensor, p=2, dim=1)
+            return {"consensus": x, "memory": x}
 
-        # 2. Attention 연산을 위해 Batch 차원 추가: Shape (1, N, 768)
-        vibe_batch = vibe_tensor.unsqueeze(0)
-        
-        # 3. Self-Attention 실행 (Query, Key, Value 모두 자신의 위시리스트)
-        # 각 옷이 다른 옷들을 바라보며 "나와 비슷한 무드"에만 높은 가중치를 부여합니다.
-        attn_output, attn_weights = self.attention(
-            query=vibe_batch, 
-            key=vibe_batch, 
-            value=vibe_batch
-        )
-        # attn_output Shape: (1, N, 768)
-        
-        # 4. 잔차 연결 (Residual Connection) - 트랜스포머의 정석
-        # 원본 무드와 어텐션으로 증폭된 무드를 더해줍니다.
-        contextualized_vibes = vibe_batch + attn_output
-        
-        # 5. 최종 결합: 이제 단순 평균(Mean)을 내도 안전합니다.
-        # 왜냐하면 어텐션을 통해 '서로 공통점이 없는 특이값(Outlier)'은 이미 억제되었고,
-        # '공통된 무드'만 수치적으로 증폭되었기 때문입니다.
-        consensus_vector = torch.mean(contextualized_vibes.squeeze(0), dim=0, keepdim=True)
-        
-        # 6. 크기를 1로 맞춰 코사인 유사도 연산이 가능하게 정규화
-        return F.normalize(consensus_vector, p=2, dim=1)
+        # 3. 초기 합의점(Consensus) 설정: 단순 평균
+        # keepdim=True를 유지하여 Shape을 (1, 768)로 맞춤
+        consensus = F.normalize(x.mean(dim=0, keepdim=True), p=2, dim=1)
+
+        # 4. Iterative Consensus Refinement (반복적 합의 도출)
+        for _ in range(num_iterations):
+            # 4.1 현재 합의점과 각 아이템 벡터 간의 유사도 측정
+            similarities = F.cosine_similarity(x, consensus, dim=1)
+
+            # 4.2 Anti-aligned 억제: 음의 상관관계를 가지는 벡터 방향성 무시 (0으로 클램핑)
+            similarities = torch.clamp(similarities, min=0.0)
+
+            # 4.3 가중치 부여 (Temperature Scaling & Softmax)
+            # 합의점과 가까울수록 가중치를 기하급수적으로 높이고, 멀수록 낮춤
+            weights = F.softmax(similarities * temperature, dim=0)
+
+            # 4.4 가중치가 반영된 새로운 방향성(Refined) 산출
+            refined = torch.sum(weights.unsqueeze(-1) * x, dim=0, keepdim=True)
+            refined = F.normalize(refined, p=2, dim=1)
+
+            # 4.5 Momentum 업데이트: 
+            # 한 번의 이터레이션에서 합의점이 너무 급격히 튀는 것을 방지하고 부드럽게 수렴시킴
+            consensus = F.normalize((1.0 - momentum) * consensus + momentum * refined, p=2, dim=1)
+            
+        # 최종 도출된 공통 취향 벡터와 위시리스트 메모리를 함께 반환
+        return {"consensus": consensus, "memory": x}
     
     def encode_text(self, text: str) -> torch.Tensor:
         """쿼리 텍스트를 SigLIP 텍스트 임베딩으로 인코딩"""
@@ -144,10 +153,11 @@ class FashionSiglipReRankingPipeline:
     def evaluate_single_item(
         self,
         item: dict,
-        user_taste_vector: torch.Tensor,
+        user_taste_profile: dict,
         query_vector: torch.Tensor,
         semantic_thresh: float = 0, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
-        aesthetic_thresh: float = 0.45
+        aesthetic_thresh: float = 0.45,
+        alpha: float = 0.3 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)
@@ -162,8 +172,14 @@ class FashionSiglipReRankingPipeline:
             # 연산을 위해 1D 벡터가 들어왔을 경우 2D 벡터로 보정 (dim=1 연산 에러 방지)
             if query_vector is not None and query_vector.dim() == 1:
                 query_vector = query_vector.unsqueeze(0)
-            if user_taste_vector is not None and user_taste_vector.dim() == 1:
-                user_taste_vector = user_taste_vector.unsqueeze(0)
+                
+            consensus_vector = user_taste_profile.get("consensus")
+            memory_vectors = user_taste_profile.get("memory")
+            
+            if consensus_vector is not None and consensus_vector.dim() == 1:
+                consensus_vector = consensus_vector.unsqueeze(0)
+            if memory_vectors is not None and memory_vectors.dim() == 1:
+                memory_vectors = memory_vectors.unsqueeze(0)
             
             # 1. 이미지 및 카테고리 벡터 추출
             img_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
@@ -180,10 +196,19 @@ class FashionSiglipReRankingPipeline:
             projection = dot_product * cat_vector
             pure_vibe = raw_img_vector - projection
             pure_image_vector = F.normalize(pure_vibe, p=2, dim=1)
-            aesthetic_score = F.cosine_similarity(user_taste_vector, pure_image_vector).item()
+            
+            # Hybrid Preference Score 계산 (Consensus + Prototype)
+            consensus_score = F.cosine_similarity(consensus_vector, pure_image_vector).item()
+            
+            # Prototype Score: Memory 벡터들과의 유사도 중 최대값 (Max Similarity)
+            similarities = F.cosine_similarity(pure_image_vector, memory_vectors)
+            prototype_score = similarities.max().item()
+            
+            aesthetic_score = (alpha * consensus_score) + ((1.0 - alpha) * prototype_score)
+            
             clean_img.close()
             
-            print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f}")
+            print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f} (Consensus: {consensus_score:.4f}, Prototype: {prototype_score:.4f})")
 
             if aesthetic_score < aesthetic_thresh:
                 return None
@@ -191,6 +216,8 @@ class FashionSiglipReRankingPipeline:
             else:
                 item["semantic_score"] = round(semantic_score, 4)
                 item["aesthetic_score"] = round(aesthetic_score, 4)
+                item["consensus_score"] = round(consensus_score, 4)
+                item["prototype_score"] = round(prototype_score, 4)
                 return item
         
         except Exception as e:
