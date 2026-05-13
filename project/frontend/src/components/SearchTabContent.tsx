@@ -31,6 +31,7 @@ export function SearchTabContent({
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
   const hasSearchActivity = loading || searchResults.length > 0 || quotaCountdown !== null;
@@ -157,14 +158,26 @@ export function SearchTabContent({
     };
   }, [user]);
 
-  // 웹소켓 메시지를 통해 검색 결과가 지속적으로 추가될 때 화면을 최하단으로 부드럽게 스크롤
+  // 검색 결과 무한 스크롤 (Lazy Loading) 구현 및 자동 스크롤 제거
   useEffect(() => {
-    if (searchResults.length > 0 && loading) {
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 100);
-    }
-  }, [searchResults, loading]);
+    const currentBottomRef = bottomRef.current;
+    if (!currentBottomRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && hasMore && searchResults.length > 0) {
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '200px' }
+    );
+
+    observer.observe(currentBottomRef);
+
+    return () => {
+      observer.unobserve(currentBottomRef);
+    };
+  }, [loading, hasMore, searchResults.length, currentPage]);
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
@@ -230,9 +243,11 @@ export function SearchTabContent({
       if (isAppend) {
         // 더 보기: 기존 결과 뒤에 새 결과를 배열로 이어 붙임
         setSearchResults(prev => [...prev, ...(data.results || [])]);
+        if (!data.results || data.results.length === 0) setHasMore(false);
       } else {
         // 새 검색: 기존 결과를 싹 지우고 새 결과만 보여줌
         setSearchResults(data.results || []);
+        if (!data.results || data.results.length === 0) setHasMore(false);
         if (searchMode === "ai" && data.generated_vibe_image_url) {
           setGeneratedImage(data.generated_vibe_image_url);
         } else {
@@ -292,6 +307,7 @@ export function SearchTabContent({
     setCurrentPage(1);       // 1페이지로 리셋
     setSearchResults([]);    // 기존 화면 싹 지우기
     setGeneratedImage(null);
+    setHasMore(true);        // 무한 스크롤 상태 리셋
     await fetchResults(1, false, finalQuery); // 1페이지 데이터 가져와서 덮어쓰기
   };
 
@@ -666,7 +682,7 @@ export function SearchTabContent({
                 </AnimatePresence>
               </motion.div>
               <div ref={bottomRef} className="h-4" />
-              {searchResults.length > 0 && (
+            {searchResults.length > 0 && hasMore && (
                 <div className="flex justify-center pt-8 w-full">
                   <button
                     onClick={handleLoadMore}

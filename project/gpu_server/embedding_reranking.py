@@ -155,7 +155,7 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_profile: dict,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0, # semantic: 0.0274 쿼리 / Aesthetic: 0.5170 취향벡터
+        semantic_thresh: float = 0, 
         aesthetic_thresh: float = 0.45,
         alpha: float = 0.3 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
     ) -> dict | None:

@@ -46,7 +46,7 @@ class ConnectionManager:
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-    sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리 중 1택", default=None)
+    sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리,스니커즈 중 1택", default=None)
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
