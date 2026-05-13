@@ -38,9 +38,14 @@ async def embed_image(request: EmbedRequest):
 @router.post("/build_taste_vector")
 async def build_taste_vector(request: TasteVectorRequest):
     try:
-        taste_vector = pipeline.build_user_taste_vector(request.image_vectors)
-        if taste_vector is not None:
-            return {"vector": taste_vector.cpu().tolist()}
+        taste_profile = pipeline.build_user_taste_vector(request.image_vectors)
+        if taste_profile is not None:
+            return {
+                "vector": {
+                    "consensus": taste_profile["consensus"].cpu().tolist(),
+                    "memory": taste_profile["memory"].cpu().tolist()
+                }
+            }
     except Exception as e:
         print(f"취향 벡터 합성 에러: {e}")
     return {"vector": None}
@@ -56,8 +61,18 @@ async def encode_text(request: EncodeTextRequest):
 @router.post("/evaluate_single_item")
 async def evaluate_single_item_endpoint(request: EvaluateRequest):
     try:
-        user_taste_tensor = torch.tensor(request.user_taste_vector, device=pipeline.device)
+        user_taste_profile = None
+        if request.user_taste_profile:
+            consensus_tensor = torch.tensor(request.user_taste_profile["consensus"], device=pipeline.device)
+            memory_tensor = torch.tensor(request.user_taste_profile["memory"], device=pipeline.device)
+            if pipeline.device == "cuda":
+                consensus_tensor = consensus_tensor.to(torch.bfloat16)
+                memory_tensor = memory_tensor.to(torch.bfloat16)
+            user_taste_profile = {"consensus": consensus_tensor, "memory": memory_tensor}
+            
         query_tensor = torch.tensor(request.query_vector, device=pipeline.device)
+        if pipeline.device == "cuda":
+            query_tensor = query_tensor.to(torch.bfloat16)
         
         item = request.item
         image_url = item.get("image_url")
@@ -82,7 +97,7 @@ async def evaluate_single_item_endpoint(request: EvaluateRequest):
         
         result = pipeline.evaluate_single_item(
             item, 
-            user_taste_tensor, 
+            user_taste_profile, 
             query_tensor, 
             request.semantic_thresh, 
             request.aesthetic_thresh

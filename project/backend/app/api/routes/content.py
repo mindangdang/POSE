@@ -106,9 +106,9 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         return
 
     try:
-        # 1. 유저 취향 벡터 합성과 LLM 쿼리 확장, 쿼리 임베딩을 비동기 병렬 처리
-        user_taste_vector, extended_query_result, query_vector = await asyncio.gather(
-            build_taste_vector(user_id),
+        # 1. 유저 취향 프로필(Consensus + Memory) 합성과 LLM 쿼리 확장, 쿼리 임베딩을 비동기 병렬 처리
+        user_taste_profile, extended_query_result, query_vector = await asyncio.gather(
+            build_taste_profile(user_id),
             optimize_query_with_llm(query),
             encode_text(query)
         )
@@ -140,7 +140,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                     await asyncio.sleep(0.01)
                     evaluated_item = await evaluate_single_item(
                         item,
-                        user_taste_vector,
+                        user_taste_profile,
                         query_vector,
                         0.05,  # 모델에게 너무 엄격한 기준일 수 있어 0.05로 하향 조정
                         0.0
@@ -165,7 +165,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
                 site_items = await fetch_from_single_site(client, extended_query, query, domain, name, current_page, serp_api_key)
-                if user_taste_vector is not None:
+                if user_taste_profile is not None:
                     eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                     await asyncio.gather(*eval_tasks, return_exceptions=True)
                 else:

@@ -160,7 +160,7 @@ def _parse_vectors_batch(items):
                 print(f"벡터 파싱 에러: {e}")
     return vectors
 
-async def build_taste_vector(user_id: str):
+async def build_taste_profile(user_id: str):
     # Google ID(sub)는 21자리의 문자열이므로 int 대신 str로 안전하게 넘깁니다.
     wishlist_db_items = await fetch_user_data_from_neon(user_id)
     if not wishlist_db_items:
@@ -188,11 +188,11 @@ async def encode_text(query: str):
         print(f"텍스트 벡터화 에러: {e}")
     return None
 
-async def evaluate_single_item(item: dict, user_taste_vector: list, query_vector: list, semantic_thresh=0.10, aesthetic_thresh=0.0):
+async def evaluate_single_item(item: dict, user_taste_profile: dict, query_vector: list, semantic_thresh=0.10, aesthetic_thresh=0.0):
     try:
         payload = {
             "item": item,
-            "user_taste_vector": user_taste_vector,
+            "user_taste_profile": user_taste_profile,
             "query_vector": query_vector,
             "semantic_thresh": semantic_thresh,
             "aesthetic_thresh": aesthetic_thresh
