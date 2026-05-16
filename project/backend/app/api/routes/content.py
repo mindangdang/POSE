@@ -27,7 +27,7 @@ from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
-from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
+from project.backend.Step3.image_generate_search import generate_image_from_query,upload_generated_image
 from project.backend.Step1.utils import *
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
