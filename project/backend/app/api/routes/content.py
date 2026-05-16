@@ -52,11 +52,10 @@ async def extract_and_save_url(
 ):
     post_url = payload.url
     session_id = payload.session_id
-    rapid_api_key = os.environ.get("RAPIDAPI_KEY")
     user_id = str(current_user.get("sub"))
 
-    if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
-        raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
+    if "instagram.com" in post_url.lower() and not session_id:
+        raise HTTPException(status_code=400, detail="SESSION_ID가 필요합니다.")
 
     request.app.state.websocket_manager = websocket_manager_instance
 
@@ -73,7 +72,6 @@ async def extract_and_save_url(
         user_id,
         post_url,
         session_id,
-        rapid_api_key,
     )
 
     return {

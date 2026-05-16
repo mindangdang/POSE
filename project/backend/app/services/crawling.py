@@ -8,7 +8,6 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.utils import analyze_description_with_gemini
@@ -24,7 +23,6 @@ async def background_crawl_and_save(
     user_id: str,
     post_url: str,
     session_id: Optional[str],
-    rapid_api_key: Optional[str],
 ):
     print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {item_id})")
     manager = getattr(app.state, "websocket_manager", None)
@@ -34,7 +32,7 @@ async def background_crawl_and_save(
         is_instagram = "instagram.com" in post_url.lower()
 
         if is_instagram:
-            crawl_result = await _crawl_instagram_post(post_url, session_id, rapid_api_key)
+            crawl_result = await _crawl_instagram_post(post_url, session_id)
             if not crawl_result or crawl_result.get("error"):
                 error_message = crawl_result.get("error") if crawl_result else "크롤링 결과 없음"
                 raise RuntimeError(f"인스타그램 크롤링 실패: {error_message}")
@@ -103,11 +101,7 @@ def _mark_feed_add_items(items: list[dict]) -> None:
 async def _crawl_instagram_post(
     post_url: str,
     session_id: Optional[str],
-    rapid_api_key: Optional[str],
 ):
-    if rapid_api_key:
-        return await Rapid_crawler(post_url)
-
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
             headless=True,
