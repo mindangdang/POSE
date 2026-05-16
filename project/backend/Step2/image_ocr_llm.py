@@ -1,5 +1,4 @@
 import os
-import json
 from typing import List, Optional
 from PIL import Image
 import asyncio

@@ -54,9 +54,6 @@ async def extract_and_save_url(
     session_id = payload.session_id
     user_id = str(current_user.get("sub"))
 
-    if "instagram.com" in post_url.lower() and not session_id:
-        raise HTTPException(status_code=400, detail="SESSION_ID가 필요합니다.")
-
     request.app.state.websocket_manager = websocket_manager_instance
 
     try:
