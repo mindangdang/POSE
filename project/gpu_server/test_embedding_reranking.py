@@ -1,7 +1,6 @@
 import asyncio
 import io
 import httpx
-import math
 from PIL import Image
 
 # GPU 서버의 파이프라인 클래스 임포트
@@ -46,7 +45,8 @@ async def run_test():
         "내 취향1" : ["https://image.msscdn.net/thumbnails/images/prd_img/20250818/5331560/detail_5331560_17579013091105_big.jpg?w=1200", "jeans"],
         "내 취향2" : ["https://image.msscdn.net/thumbnails/images/goods_img/20250304/4852252/4852252_17527701383488_big.jpg?w=1200", "jeans"],
         "내 취향3" : ["https://image.msscdn.net/thumbnails/images/goods_img/20260330/6219956/6219956_17748518187354_big.jpg?w=1200", "jeans"],
-        "강아지 사진" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7g0bXrNGNd0WWuLmJIzfjA4Le5KHs_LKwpw&s", "dog"]
+        "강아지 사진" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7g0bXrNGNd0WWuLmJIzfjA4Le5KHs_LKwpw&s", "dog"],
+        "인스타 자켓 썸네일" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ98paK0v9rproAjw2Vxw0pBZ4pkdOsKSyWTg&s", 'jacket']
     }
 
     # =====================================================================

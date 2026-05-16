@@ -137,7 +137,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         item,
                         user_taste_profile,
                         query_vector,
-                        0.05,  # 모델에게 너무 엄격한 기준일 수 있어 0.05로 하향 조정
+                        0.05,  
                         0.0
                     )
 
