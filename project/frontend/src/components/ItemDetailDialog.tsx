@@ -254,16 +254,12 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                             >
                               <img 
                                 src={similarItem.image_url} 
-                                alt={similarItem.summary_text}
                                 className="w-full h-auto object-cover"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=No+Image';
                                 }}
                               />
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/similar:opacity-100 transition-opacity p-2 flex flex-col justify-end">
-                                <p className="text-[10px] text-white font-medium line-clamp-2 leading-tight">
-                                  {similarItem.summary_text}
-                                </p>
                                 <p className="text-[10px] text-white/80 mt-0.5">
                                   {typeof similarItem.facts?.Price === 'object'
                                     ? similarItem.facts.Price?.value || ''

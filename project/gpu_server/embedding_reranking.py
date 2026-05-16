@@ -207,7 +207,7 @@ class FashionSiglipReRankingPipeline:
             
             clean_img.close()
             
-            print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f} (Consensus: {consensus_score:.4f}, Prototype: {prototype_score:.4f})")
+            print(f"[{item.get('title', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f} (Consensus: {consensus_score:.4f}, Prototype: {prototype_score:.4f})")
 
             if aesthetic_score < aesthetic_thresh:
                 return None
@@ -220,5 +220,5 @@ class FashionSiglipReRankingPipeline:
                 return item
         
         except Exception as e:
-            print(f"'{item.get('summary_text', 'Unknown')}' 단일 평가 에러: {e}")
+            print(f"'단일 평가 에러: {e}")
             return None

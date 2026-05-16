@@ -135,7 +135,6 @@ async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, tra
             "recommend": f"{site_name}에서 발견한 아이템",
             "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
             "url": item.get("link", ""),
-            "summary_text": item.get("title", "상품명 없음"),
             "facts": {
                 "title": item.get("title", "상품명 없음"),
                 "Price": item.get("price") or item.get("snippet") or "가격 미상",

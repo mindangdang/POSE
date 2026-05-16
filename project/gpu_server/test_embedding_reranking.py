@@ -46,7 +46,8 @@ async def run_test():
         "내 취향2" : ["https://image.msscdn.net/thumbnails/images/goods_img/20250304/4852252/4852252_17527701383488_big.jpg?w=1200", "jeans"],
         "내 취향3" : ["https://image.msscdn.net/thumbnails/images/goods_img/20260330/6219956/6219956_17748518187354_big.jpg?w=1200", "jeans"],
         "강아지 사진" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS7g0bXrNGNd0WWuLmJIzfjA4Le5KHs_LKwpw&s", "dog"],
-        "인스타 자켓 썸네일" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ98paK0v9rproAjw2Vxw0pBZ4pkdOsKSyWTg&s", 'jacket']
+        "인스타 자켓 썸네일" : ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ98paK0v9rproAjw2Vxw0pBZ4pkdOsKSyWTg&s", 'jacket'],
+        "나폴레옹" : ["https://nanostudio-official.com/cdn/shop/files/result-_2026-04-2218.54.46.jpg?v=1776965446&width=1080", "jacket"]
     }
 
     # =====================================================================
@@ -92,7 +93,7 @@ async def run_test():
                 item=item,
                 user_taste_profile=user_taste_profile,
                 query_vector=query_vector,
-                alpha=0.3
+                alpha=0.4
             )
             
             if result:

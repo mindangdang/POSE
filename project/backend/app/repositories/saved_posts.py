@@ -77,7 +77,6 @@ class SavedPostsRepository:
                     facts,
                     recommend,
                     image_url,
-                    summary_text,
                     created_at
                 FROM saved_posts
                 WHERE user_id = %s

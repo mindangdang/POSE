@@ -34,7 +34,6 @@ def initialize_database():
             
             category VARCHAR(20),
             sub_category VARCHAR(50),
-            summary_text TEXT,
             image_url TEXT,
             
             recommend TEXT,

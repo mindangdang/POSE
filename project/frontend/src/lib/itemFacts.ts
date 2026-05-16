@@ -23,5 +23,5 @@ export function getItemTitle(item: SavedItem): string {
   const upperTitle = typeof facts?.Title === 'string' ? facts.Title : undefined;
   const title = lowerTitle || upperTitle;
 
-  return title || item.summary_text || item.recommend || '제목 없음';
+  return title || item.recommend || '제목 없음';
 }

@@ -43,7 +43,6 @@ class ExtractedItem(BaseModel):
     image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
     category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
     sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Sneakers", default=None)
-    summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약")
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     facts: Facts
 
@@ -87,7 +86,6 @@ async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: 
     [데이터 추출 및 작성 규칙]
     - Facts: 명시된 객관적 사실만 추출. 추측 절대 금지 (모르면 null).
     - recommend: 어떤 아이템을 원하는 유저에게 추천하는지 설명하고, 해당 아이템에 대한 큐레이팅을 간단히 작성.(예:이 옷은 90년대 오클리 아카이브인데, 이 지퍼 디테일이... 90년대 빈티지 스타일을 찾는 사람에게 추천)
-    - summary: 핵심만 요약.
     - Category (택1): PLACE(물리적 장소), PRODUCT(실물상품), MEDIA(감상용 작품), TIP(정보/팁), INSPIRATION(스타일/무드 레퍼런스)
     - Sub-category: 카테고리 내 세부 유형 
     """

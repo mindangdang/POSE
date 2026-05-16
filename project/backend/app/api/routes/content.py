@@ -147,9 +147,9 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
                         # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
                         await asyncio.sleep(0.01)
-                        print(f"[{item.get('summary_text', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
+                        print(f"[{item.get('title', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
                 else:
-                    print(f"[{item.get('summary_text', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+                    print(f"[{item.get('title', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
             except Exception as e:
                 print(f"개별 아이템 평가 에러: {e}")
 
@@ -251,7 +251,6 @@ async def run_serpapi_lens_search(payload: SearchRequest):
                     "recommend": f"{source}에서 발견한 힙한 아이템",
                     "image_url": image_url,
                     "url": link,
-                    "summary_text": title,
                     "facts": {
                         "title": title,
                         "Price": extracted_price,
@@ -332,7 +331,6 @@ async def fetch_lens_multisearch_with_file(
                     "recommend": f"{source}에서 발견한 아이템",
                     "image_url": image_url,
                     "url": link,
-                    "summary_text": title,
                     "facts": {
                         "title": title,
                         "Price": extracted_price,

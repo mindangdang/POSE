@@ -78,11 +78,6 @@ export function SearchResultCard({
         <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
-        {item.summary_text && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {item.summary_text}
-          </p>
-        )}
       </div>
     </motion.div>
   );
