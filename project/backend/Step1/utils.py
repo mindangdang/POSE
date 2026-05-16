@@ -46,7 +46,7 @@ class ConnectionManager:
 class ProductAnalysisResult(BaseModel):
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-    sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리,스니커즈 중 1택", default=None)
+    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Sneakers", default=None)
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -106,7 +106,7 @@ domain_map = {
         "instagram.com": "인스타그램"
     }
 
-async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
+async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, translated_query: str, domain: str, site_name: str, current_page: int, serp_api_key: str) -> list[dict]:
     product_hierarchy_query = "(> products)"
     exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
     final_query = f"{base_query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
@@ -131,7 +131,7 @@ async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, que
         return [{
             "id": str(uuid.uuid4()),
             "category": "PRODUCT",
-            "sub_category": query,
+            "sub_category": translated_query,
             "recommend": f"{site_name}에서 발견한 아이템",
             "image_url": item.get("thumbnail", "") if "instagram" in domain else (item.get("original", "") or item.get("thumbnail", "")),
             "url": item.get("link", ""),
@@ -188,7 +188,7 @@ async def encode_text(query: str):
         print(f"텍스트 벡터화 에러: {e}")
     return None
 
-async def evaluate_single_item(item: dict, user_taste_profile: dict, query_vector: list, semantic_thresh=0.10, aesthetic_thresh=0.0):
+async def evaluate_single_item(item: dict, user_taste_profile: dict, query_vector: list, semantic_thresh: float, aesthetic_thresh: float):
     try:
         payload = {
             "item": item,

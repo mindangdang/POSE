@@ -155,9 +155,8 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_profile: dict,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0, 
-        aesthetic_thresh: float = 0.45,
-        alpha: float = 0.3 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
+        aesthetic_thresh: float = 0.65,
+        alpha: float = 0.15 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)

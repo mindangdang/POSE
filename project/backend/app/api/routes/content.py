@@ -102,20 +102,16 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
     try:
         # 1. 유저 취향 프로필(Consensus + Memory) 합성과 LLM 쿼리 확장, 쿼리 임베딩을 비동기 병렬 처리
-        user_taste_profile, extended_query_result, query_vector = await asyncio.gather(
+        user_taste_profile, extended_query_result = await asyncio.gather(
             build_taste_profile(user_id),
             optimize_query_with_llm(query),
-            encode_text(query)
         )
 
         extended_query = extended_query_result.get('final_query', query)
-        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+        translated_query = extended_query_result.get('translated_query', query)
+        query_vector = encode_text(translated_query)
 
-        if query_vector is None:
-            print("쿼리 벡터 추출 실패. 검색을 중단합니다.")
-            if manager:
-                await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_ERROR", "message": "쿼리 벡터 추출 실패"}))
-            return
+        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
 
         # 3. SerpApi로 여러 쇼핑몰에서 검색 (병렬)
         try:
@@ -159,7 +155,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
-                site_items = await fetch_from_single_site(client, extended_query, query, domain, name, current_page, serp_api_key)
+                site_items = await fetch_from_single_site(client, extended_query, translated_query, domain, name, current_page, serp_api_key)
                 if user_taste_profile is not None:
                     eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                     await asyncio.gather(*eval_tasks, return_exceptions=True)

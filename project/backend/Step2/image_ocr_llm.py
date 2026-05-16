@@ -42,7 +42,7 @@ class Facts(BaseModel):
 class ExtractedItem(BaseModel):
     image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
     category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
-    sub_category: Optional[str] = Field(description="아우터,자켓,상의,하의,주얼리,액세서리,스니커즈 중 1택", default=None)
+    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Sneakers", default=None)
     summary_text: str = Field(description="해당 사진이 무엇을 말하는지 객관적이고 간략한 내용 요약")
     recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
     facts: Facts
