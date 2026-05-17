@@ -54,6 +54,7 @@ def initialize_database():
             id SERIAL PRIMARY KEY,
             brand_name TEXT NOT NULL,
             brand_name_eng TEXT,
+            description TEXT,
             link TEXT,
             category_list JSONB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
