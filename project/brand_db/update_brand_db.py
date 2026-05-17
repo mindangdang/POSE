@@ -68,7 +68,6 @@ async def get_similar_brands_async(client, brand_id):
 
 async def process_brand(client, conn, brand, existing_names):
     """Process a single brand: search ID -> find similar -> filter -> insert."""
-    # Prefer English name for search as it's often more accurate in Fruits Family
     search_name = brand['brand_name_eng'] or brand['brand_name']
     
     try:
