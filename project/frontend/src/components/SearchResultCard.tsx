@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -66,6 +66,24 @@ export function SearchResultCard({
         >
           <Plus className="w-4 h-4" />
         </button>
+
+        {/* Like Button */}
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-2 left-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
+          aria-label="Like item"
+        >
+          <ThumbsUp className="w-4 h-4" />
+        </button>
+
+        {/* Dislike Button */}
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-2 left-11 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-red-50 hover:text-red-600 shadow-sm"
+          aria-label="Dislike item"
+        >
+          <ThumbsDown className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Content */}
@@ -78,11 +96,6 @@ export function SearchResultCard({
         <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
-        {item.summary_text && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {item.summary_text}
-          </p>
-        )}
       </div>
     </motion.div>
   );

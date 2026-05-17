@@ -18,7 +18,6 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                         source_url TEXT,
                         title TEXT,
                         category TEXT,
-                        summary_text TEXT,
                         image_url TEXT,
                         recommend TEXT,
                         image_vector vector(768),

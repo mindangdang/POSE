@@ -103,11 +103,10 @@ export function FeedTabContent({
         const title = typeof facts.title === 'string' ? facts.title.toLowerCase() : '';
         const category = (item.category || '').toLowerCase();
         const subCategory = (item.sub_category || '').toLowerCase();
-        const summary = (item.summary_text || '').toLowerCase();
         const recommend = (item.recommend || '').toLowerCase();
         const factValues = Object.values(facts).map(v => String(v).toLowerCase()).join(' ');
 
-        return title.includes(query) || category.includes(query) || subCategory.includes(query) || summary.includes(query) || recommend.includes(query) || factValues.includes(query);
+        return title.includes(query) || category.includes(query) || subCategory.includes(query) || recommend.includes(query) || factValues.includes(query);
       });
     }
 

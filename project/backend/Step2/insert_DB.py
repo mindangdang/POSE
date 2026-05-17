@@ -50,8 +50,8 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, category, sub_category, summary_text, image_url, recommend, image_vector, facts)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (user_id, source_url, title, category, sub_category, image_url, recommend, image_vector, facts)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
 
@@ -75,7 +75,6 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                     title,         
                     category, 
                     sub_category,
-                    item.get("summary_text"),
                     image_url,
                     recommend, 
                     vector_str, 

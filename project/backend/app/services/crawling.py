@@ -8,7 +8,6 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.Step1.Rapid_api_crawler import Rapid_crawler
 from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
 from project.backend.Step1.shopping_crawler import scrape_product_metadata
 from project.backend.Step1.utils import analyze_description_with_gemini
@@ -16,6 +15,8 @@ from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
 from project.backend.Step2.insert_DB import insert_items_to_db
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
+from project.backend.Step1.apify_functions import apify_insta_crawler
+
 
 
 async def background_crawl_and_save(
@@ -24,7 +25,6 @@ async def background_crawl_and_save(
     user_id: str,
     post_url: str,
     session_id: Optional[str],
-    rapid_api_key: Optional[str],
 ):
     print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {item_id})")
     manager = getattr(app.state, "websocket_manager", None)
@@ -34,7 +34,7 @@ async def background_crawl_and_save(
         is_instagram = "instagram.com" in post_url.lower()
 
         if is_instagram:
-            crawl_result = await _crawl_instagram_post(post_url, session_id, rapid_api_key)
+            crawl_result = await _crawl_instagram_post(post_url, session_id)
             if not crawl_result or crawl_result.get("error"):
                 error_message = crawl_result.get("error") if crawl_result else "크롤링 결과 없음"
                 raise RuntimeError(f"인스타그램 크롤링 실패: {error_message}")
@@ -103,40 +103,47 @@ def _mark_feed_add_items(items: list[dict]) -> None:
 async def _crawl_instagram_post(
     post_url: str,
     session_id: Optional[str],
-    rapid_api_key: Optional[str],
 ):
-    if rapid_api_key:
-        return await Rapid_crawler(post_url)
-
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-        try:
-            context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-            if session_id:
-                await context.add_cookies(
-                    [
-                        {
-                            "name": "sessionid",
-                            "value": session_id,
-                            "domain": ".instagram.com",
-                            "path": "/",
-                            "httpOnly": True,
-                            "secure": True,
-                        }
-                    ]
+    if session_id:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(
+                    headless=True,
+                    args=["--no-sandbox", "--disable-dev-shm-usage"],
                 )
-            page = await context.new_page()
-            stealth = Stealth()
-            await stealth.apply_stealth_async(page)
-            crawl_result = await crawl_instagram_post(page, post_url)
-            return crawl_result
-        finally:
-            await browser.close()
+            try:
+                context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                if session_id:
+                    await context.add_cookies(
+                        [
+                            {
+                                "name": "sessionid",
+                                "value": session_id,
+                                "domain": ".instagram.com",
+                                "path": "/",
+                                "httpOnly": True,
+                                "secure": True,
+                            }
+                        ]
+                    )
+                page = await context.new_page()
+                stealth = Stealth()
+                await stealth.apply_stealth_async(page)
+                crawl_result = await crawl_instagram_post(page, post_url)
+                return crawl_result
+            finally:
+                await browser.close()
 
-
+    else:
+        try:
+            crawl_result = await asyncio.to_thread(apify_insta_crawler, post_url, 1)
+            if crawl_result and not crawl_result.get("error"):
+                print("[Instagram] Apify 크롤링 성공")
+                return crawl_result
+            
+            error_msg = crawl_result.get("error") if crawl_result else "응답 없음"
+            print(f"[Instagram] Apify 실패 또는 에러 반환: {error_msg}")
+        except Exception:
+            print("[Instagram] Apify 크롤링 중 예외 발생")
 
 async def _extract_instagram_items(crawl_result: dict) -> list[dict]:
     raw_downloaded_files = await download_images(crawl_result.get("image_urls", []), str(IMAGE_DIR))

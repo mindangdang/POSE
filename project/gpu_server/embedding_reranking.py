@@ -155,9 +155,8 @@ class FashionSiglipReRankingPipeline:
         item: dict,
         user_taste_profile: dict,
         query_vector: torch.Tensor,
-        semantic_thresh: float = 0, 
-        aesthetic_thresh: float = 0.45,
-        alpha: float = 0.3 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
+        aesthetic_thresh: float = 0.65,
+        alpha: float = 0.15 # Consensus score의 비중. (1 - alpha)는 Prototype score의 비중.
     ) -> dict | None:
         """단일 아이템 처리: 전처리 -> 임베딩 -> 스코어 계산 -> 임계값 통과 시 반환"""
         raw_img = item.pop("image_obj", None)
@@ -208,7 +207,7 @@ class FashionSiglipReRankingPipeline:
             
             clean_img.close()
             
-            print(f"[{item.get('summary_text', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f} (Consensus: {consensus_score:.4f}, Prototype: {prototype_score:.4f})")
+            print(f"[{item.get('title', 'Unknown')}] Semantic: {semantic_score:.4f} / Aesthetic: {aesthetic_score:.4f} (Consensus: {consensus_score:.4f}, Prototype: {prototype_score:.4f})")
 
             if aesthetic_score < aesthetic_thresh:
                 return None
@@ -221,5 +220,5 @@ class FashionSiglipReRankingPipeline:
                 return item
         
         except Exception as e:
-            print(f"'{item.get('summary_text', 'Unknown')}' 단일 평가 에러: {e}")
+            print(f"'단일 평가 에러: {e}")
             return None

@@ -7,5 +7,4 @@ export interface SavedItem {
   recommend: string;
   image_url: string;
   created_at: string;
-  summary_text?: string;
 }

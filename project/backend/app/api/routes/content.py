@@ -27,7 +27,7 @@ from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
-from project.backend.Step3.image_search import generate_image_from_query,upload_generated_image
+from project.backend.Step3.image_generate_search import generate_image_from_query,upload_generated_image
 from project.backend.Step1.utils import *
 from project.backend.Step1.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
@@ -52,11 +52,7 @@ async def extract_and_save_url(
 ):
     post_url = payload.url
     session_id = payload.session_id
-    rapid_api_key = os.environ.get("RAPIDAPI_KEY")
     user_id = str(current_user.get("sub"))
-
-    if "instagram.com" in post_url.lower() and not rapid_api_key and not session_id:
-        raise HTTPException(status_code=400, detail="RapidAPI 키가 없으므로 SESSION_ID가 필요합니다.")
 
     request.app.state.websocket_manager = websocket_manager_instance
 
@@ -73,7 +69,6 @@ async def extract_and_save_url(
         user_id,
         post_url,
         session_id,
-        rapid_api_key,
     )
 
     return {
@@ -107,20 +102,16 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
     try:
         # 1. 유저 취향 프로필(Consensus + Memory) 합성과 LLM 쿼리 확장, 쿼리 임베딩을 비동기 병렬 처리
-        user_taste_profile, extended_query_result, query_vector = await asyncio.gather(
+        user_taste_profile, extended_query_result = await asyncio.gather(
             build_taste_profile(user_id),
             optimize_query_with_llm(query),
-            encode_text(query)
         )
 
         extended_query = extended_query_result.get('final_query', query)
-        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+        translated_query = extended_query_result.get('translated_query', query)
+        query_vector = encode_text(translated_query)
 
-        if query_vector is None:
-            print("쿼리 벡터 추출 실패. 검색을 중단합니다.")
-            if manager:
-                await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_ERROR", "message": "쿼리 벡터 추출 실패"}))
-            return
+        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
 
         # 3. SerpApi로 여러 쇼핑몰에서 검색 (병렬)
         try:
@@ -142,7 +133,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         item,
                         user_taste_profile,
                         query_vector,
-                        0.05,  # 모델에게 너무 엄격한 기준일 수 있어 0.05로 하향 조정
+                        0.05,  
                         0.0
                     )
 
@@ -156,15 +147,15 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
                         # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
                         await asyncio.sleep(0.01)
-                        print(f"[{item.get('summary_text', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
+                        print(f"[{item.get('title', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
                 else:
-                    print(f"[{item.get('summary_text', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+                    print(f"[{item.get('title', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
             except Exception as e:
                 print(f"개별 아이템 평가 에러: {e}")
 
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
-                site_items = await fetch_from_single_site(client, extended_query, query, domain, name, current_page, serp_api_key)
+                site_items = await fetch_from_single_site(client, extended_query, translated_query, domain, name, current_page, serp_api_key)
                 if user_taste_profile is not None:
                     eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
                     await asyncio.gather(*eval_tasks, return_exceptions=True)
@@ -260,7 +251,6 @@ async def run_serpapi_lens_search(payload: SearchRequest):
                     "recommend": f"{source}에서 발견한 힙한 아이템",
                     "image_url": image_url,
                     "url": link,
-                    "summary_text": title,
                     "facts": {
                         "title": title,
                         "Price": extracted_price,
@@ -341,7 +331,6 @@ async def fetch_lens_multisearch_with_file(
                     "recommend": f"{source}에서 발견한 아이템",
                     "image_url": image_url,
                     "url": link,
-                    "summary_text": title,
                     "facts": {
                         "title": title,
                         "Price": extracted_price,
