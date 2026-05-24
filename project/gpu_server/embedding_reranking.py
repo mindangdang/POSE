@@ -9,6 +9,7 @@ import open_clip
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1" # 캐시 되어 있는 모델이 없는 경우에 0으로 설정. ls -la ~/.cache/huggingface/hub/로 확인
 
+
 class FashionSiglipReRankingPipeline:
     _instance = None
 
@@ -17,7 +18,7 @@ class FashionSiglipReRankingPipeline:
             cls._instance = super(FashionSiglipReRankingPipeline, cls).__new__(cls)
             cls._instance._is_initialized = False
         return cls._instance
-
+    
     def __init__(self):
         if self._is_initialized:
             return
@@ -28,8 +29,8 @@ class FashionSiglipReRankingPipeline:
         self.model_id = "hf-hub:Marqo/marqo-fashionSigLIP"
         
         # open_clip을 통한 모델, 전처리 모듈 및 토크나이저 로드
-        self.model, _, self.preprocess = open_clip.create_model_and_transforms(self.model_id)
-        self.tokenizer = open_clip.get_tokenizer(self.model_id)
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms(self.model_id, cache_dir="/home/vscode/.cache/huggingface/hub")
+        self.tokenizer = open_clip.get_tokenizer(self.model_id, cache_dir="/home/vscode/.cache/huggingface/hub")
         
         if self.device == "cuda":
             self.model = self.model.to(torch.bfloat16)
