@@ -109,9 +109,10 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
 
         extended_query = extended_query_result.get('final_query', query)
         translated_query = extended_query_result.get('translated_query', query)
-        query_vector = encode_text(translated_query)
+        query_vector = await encode_text(translated_query)
 
         print(f"SerpApi로 쏘는 쿼리: {extended_query}")
+        print(f"번역된 쿼리: {translated_query}")
 
         # 3. SerpApi로 여러 쇼핑몰에서 검색 (병렬)
         try:
@@ -133,8 +134,8 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                         item,
                         user_taste_profile,
                         query_vector,
-                        0.05,  
-                        0.0
+                        0.65,  
+                        0.1
                     )
 
                 if evaluated_item:
@@ -145,11 +146,13 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                             "is_append": True
                         }
                         await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                        item_title = item.get('facts', {}).get('title', 'Unknown')
                         # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
                         await asyncio.sleep(0.01)
-                        print(f"[{item.get('title', 'Unknown')}] 임계값 통과! 프론트로 전송 완료.")
+                        print(f"[{item_title}] 임계값 통과! 프론트로 전송 완료.")
                 else:
-                    print(f"[{item.get('title', 'Unknown')}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+                    item_title = item.get('facts', {}).get('title', 'Unknown')
+                    print(f"[{item_title}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
             except Exception as e:
                 print(f"개별 아이템 평가 에러: {e}")
 
