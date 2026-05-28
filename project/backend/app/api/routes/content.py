@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
+from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest, ExtensionProductImport
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
@@ -211,8 +211,13 @@ async def run_serpapi_lens_search(payload: SearchRequest):
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 
     url = "https://serpapi.com/search"
-    image = await generate_image_from_query(payload.query)
-    search_image_url = await upload_generated_image(image)
+
+    # 쿼리가 URL 형태인 경우 즉시 해당 URL로 렌즈 검색 수행, 아니면 이미지 생성 후 검색
+    if payload.query.startswith(("http://", "https://", "//")):
+        search_image_url = payload.query if not payload.query.startswith("//") else f"https:{payload.query}"
+    else:
+        image = await generate_image_from_query(payload.query)
+        search_image_url = await upload_generated_image(image)
 
     params = {
         "engine": "google_lens",  
@@ -271,41 +276,27 @@ async def run_serpapi_lens_search(payload: SearchRequest):
 
 ######################################################################################
 
-@router.post("/multimodal")
-async def fetch_lens_multisearch_with_file(
-    image: Optional[UploadFile] = File(None),
-    image_url: Optional[str] = Form(None),
-    user_text: Optional[str] = Form(None)
-):  
-
+@router.post("/search/secondhand")
+async def search_secondhand(payload: SearchRequest):
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
-    
+
     url = "https://serpapi.com/search"
-    print(f"[Multisearch] 멀티모달 검색 시작...")
-    
-    if image and image.filename:
-        image_bytes = await image.read()
-        search_image_url = await upload_generated_image(image_bytes)
-    elif image_url:
-        search_image_url = image_url
-    else:
-        raise HTTPException(status_code=400, detail="이미지 파일 또는 URL이 필요합니다.")
+    query = f"{payload.query} site:fruitsfamily.co.kr"
 
     params = {
-        "engine": "google_lens",
-        "url": search_image_url,
-        "type": "visual_matches",
+        "engine": "google",
+        "q": query,
         "api_key": serp_api_key,
-        "hl": "ko", "gl": "kr"
+        "tbm": "isch",
+        "gl": "kr",
+        "hl": "ko"
     }
 
-    if user_text:
-        params["q"] = user_text
+    print(f"후루츠패밀리 매물 디깅 시작: {query}")
 
     try:
-        # 무한 대기 방지를 위한 안전한 타임아웃 설정
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(url, params=params)
             if response.status_code != 200:
@@ -313,30 +304,26 @@ async def fetch_lens_multisearch_with_file(
             response.raise_for_status()
             search_data = response.json()
 
-        items = search_data.get("visual_matches", [])
-        print(f"구글 렌즈가 가져온 전체 원본 데이터 개수: {len(items)}")
+        items = search_data.get("images_results", [])
+        print(f"검색된 전체 원본 데이터 개수: {len(items)}")
 
         results = []
         for item in items:
             link = item.get("link", "")
             title = item.get("title", "상품명 없음")
-            image_url = item.get("thumbnail", "")
-            extracted_price = item.get("price", "가격 미상")
-            if isinstance(extracted_price, dict):
-                extracted_price = extracted_price.get("value", "")
-            source = item.get("source", "알 수 없는 샵")
+            image_url = item.get("original") or item.get("thumbnail", "")
+            source = "후루츠패밀리"
 
             results.append(
                 {
                     "id": str(uuid.uuid4()),
                     "category": "PRODUCT",
-                    "sub_category": "PRODUCT",
-                    "recommend": f"{source}에서 발견한 아이템",
+                    "sub_category": "SECONDHAND",
+                    "recommend": f"{source}에서 발견한 매물",
                     "image_url": image_url,
                     "url": link,
                     "facts": {
                         "title": title,
-                        "Price": extracted_price,
                         "Shop": source,
                     },
                 }
@@ -344,10 +331,9 @@ async def fetch_lens_multisearch_with_file(
 
         print(f" 통과한 최종결과 개수: {len(results)}")
         return {"success": True, "results": results}
-        
     except Exception as exc:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"매물 검색 중 오류: {exc}") from exc
 
 ######################################################################################
 
@@ -459,3 +445,73 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             await websocket.receive_text()  # Keep connection alive
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
+
+
+######################################################################################
+
+@router.post("/import-product")
+async def import_product_from_extension(
+    payload: ExtensionProductImport,
+    request: Request,
+    repos: Repositories = Depends(get_repos),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Chrome Extension에서 상품 정보를 받아 저장합니다.
+    인증이 필요합니다.
+    """
+    try:
+        user_id = str(current_user.get("sub"))
+        
+        # 필수 필드 검증
+        if not payload.title or not payload.image_url:
+            raise HTTPException(
+                status_code=400, 
+                detail="제목(title)과 이미지(image_url)는 필수입니다."
+            )
+        
+        # 상품 정보를 facts에 정리
+        facts = {
+            "title": payload.title,
+            "description": payload.description or "",
+            "brand": payload.brand or "정보 없음",
+            "price": payload.price or "가격 미상",
+            "currency": payload.currency or "KRW",
+        }
+        
+        # Extension 상품 임포트용 category 설정
+        recommend = f"[{payload.source}] {payload.brand or '상품'} - {payload.title}"
+        
+        # 데이터베이스에 저장
+        try:
+            item_id = await repos.saved_posts.create_item(
+                user_id=user_id,
+                url=payload.url,
+                category="PRODUCT",
+                sub_category="IMPORTED",
+                title=payload.title,
+                image_url=payload.image_url,
+                recommend=recommend,
+                facts=facts
+            )
+            await repos.saved_posts.conn.commit()
+            
+            return {
+                "success": True,
+                "message": f"상품이 성공적으로 저장되었습니다.",
+                "item_id": item_id
+            }
+        except Exception as e:
+            await repos.saved_posts.conn.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"데이터베이스 저장 실패: {str(e)}"
+            ) from e
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"상품 임포트 중 오류 발생: {str(e)}"
+        ) from e

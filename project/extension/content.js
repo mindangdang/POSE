@@ -170,10 +170,10 @@ function extractProduct() {
   return {
     url: getCanonicalUrl(),
     title: cleanText(title),
-    image_url: image,
+    image_url: String(image).trim(),
     description: cleanText(jsonld?.description || getMeta("og:description")),
     brand: cleanText(brand),
-    price: normalizePrice(price),
+    price: normalizePrice(price) || null,
     currency: jsonld?.offers?.priceCurrency || getMeta("product:price:currency") || "KRW",
     source: "extension_content_script"
   };
@@ -188,9 +188,17 @@ async function extractWithRetry(sendResponse) {
   
   const check = () => {
     const data = extractProduct();
-    const hasRequiredData = data.title && data.image_url && (data.price || data.brand);
+    const hasRequiredData = 
+      data.title && 
+      String(data.title).trim().length > 0 && 
+      data.image_url && 
+      String(data.image_url).trim().length > 0 && 
+      (data.price || data.brand);
     
     if (hasRequiredData || attempts >= maxAttempts) {
+      if (!hasRequiredData) {
+        console.warn("필수 데이터 미충족:", data);
+      }
       sendResponse(data);
     } else {
       attempts++;

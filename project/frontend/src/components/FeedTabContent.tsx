@@ -12,6 +12,7 @@ type FeedTabContentProps = {
   items: SavedItem[];
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
   onSelectItem: (item: SavedItem) => void;
+  onSearchSecondhand?: (title: string) => void;
   refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
   user: AppUser | null;
@@ -31,6 +32,7 @@ export function FeedTabContent({
   items,
   onItemsChange,
   onSelectItem,
+  onSearchSecondhand,
   refreshItems,
   refreshTaste,
   user,
@@ -381,6 +383,7 @@ export function FeedTabContent({
                 item={item}
                 onDelete={handleDelete}
                 onSelect={() => onSelectItem(item)}
+                onSearchSecondhand={onSearchSecondhand}
               />
             ))}
           </motion.div>

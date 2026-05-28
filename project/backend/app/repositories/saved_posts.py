@@ -65,6 +65,44 @@ class SavedPostsRepository:
             )
             await self.conn.commit()
 
+    async def create_item(
+        self,
+        user_id: str,
+        url: str,
+        category: str,
+        sub_category: str,
+        recommend: str,
+        facts: dict,
+        title: str = "",
+        image_url: str = "",
+        image_vector: str | None = None,
+    ) -> int:
+        """
+        상품 아이템을 생성하고 ID를 반환합니다.
+        Extension import 등에 사용됩니다.
+        """
+        async with self.conn.cursor() as cursor:
+            await cursor.execute(
+                """
+                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts, image_vector)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    user_id,
+                    url,
+                    category,
+                    sub_category,
+                    title or facts.get("title", "Item"),
+                    recommend,
+                    image_url,
+                    json.dumps(facts),
+                    image_vector,
+                ),
+            )
+            item_id = (await cursor.fetchone())[0]
+            return item_id
+
     async def list_feed_items(self, user_id: str):
         async with self.conn.cursor(row_factory=dict_row) as cursor:
             await cursor.execute(

@@ -4,11 +4,16 @@ const TIMEOUT_MS = 8000; // 8초 타임아웃
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === "SAVE_TO_SERVER") {
-    saveProduct(request.data).catch(e => {
-      console.error("저장 실패:", e);
-    });
+    saveProduct(request.data)
+      .then(() => {
+        sendResponse({ success: true, message: "상품이 성공적으로 저장되었습니다." });
+      })
+      .catch(e => {
+        console.error("저장 실패:", e);
+        sendResponse({ success: false, error: e.message || "알 수 없는 오류 발생" });
+      });
+    return true; // 비동기 응답 활성화
   }
-  return true;
 });
 
 /**

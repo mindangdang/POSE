@@ -14,6 +14,8 @@ import type { AppUser } from './types/user';
 function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
+  const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
+  const [searchSecondhandTrigger, setSearchSecondhandTrigger] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   const { items, setItems, refreshItems } = useItems(user);
@@ -27,6 +29,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
 
   const handleLogoutClick = () => {
     setIsLogoutModalOpen(true);
+  };
+
+  const handleSearchSecondhandFromFeed = (query: string) => {
+    setSearchSecondhandQuery(query);
+    setSearchSecondhandTrigger((prev) => prev + 1);
+    setCurrentTab('search');
   };
 
   return (
@@ -54,6 +62,8 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
                 user={user}
+                searchSecondhandQuery={searchSecondhandQuery}
+                searchSecondhandTrigger={searchSecondhandTrigger}
               />
             </motion.div>
           )}
@@ -71,6 +81,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 items={items}
                 onItemsChange={setItems}
                 onSelectItem={setSelectedItem}
+                onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
                 user={user}

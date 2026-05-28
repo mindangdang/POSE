@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Plus, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Plus, ThumbsUp, ThumbsDown, Search } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -9,6 +9,7 @@ type SearchResultCardProps = {
   delay: number;
   onClick: () => void;
   onSave: (e: React.MouseEvent<HTMLButtonElement>, item: SavedItem) => void | Promise<void>;
+  onSearchSecondhand?: (title: string) => void;
 };
 
 export function SearchResultCard({
@@ -16,6 +17,7 @@ export function SearchResultCard({
   delay,
   onClick,
   onSave,
+  onSearchSecondhand,
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemFacts(item);
@@ -83,6 +85,18 @@ export function SearchResultCard({
           aria-label="Dislike item"
         >
           <ThumbsDown className="w-4 h-4" />
+        </button>
+
+        {/* Secondhand Search Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onSearchSecondhand?.(title);
+          }}
+          className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-green-50 hover:text-green-600 shadow-sm"
+          aria-label="Search secondhand"
+        >
+          <Search className="w-4 h-4" />
         </button>
       </div>
 
