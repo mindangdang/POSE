@@ -46,7 +46,6 @@ def fetch_empty_brands():
             "brand_name": name,
             "brand_name_eng": "",
             "link": full_link,
-            "category_list": [cate_no] if cate_no else []
         })
 
     return brands
@@ -62,14 +61,14 @@ def insert_brands_to_db(brands):
         with psycopg.connect(neon_url) as conn:
             with conn.cursor() as cursor:
                 insert_query = """
-                INSERT INTO brands (brand_name, brand_name_eng, link, category_list)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO brands (brand_name, brand_name_eng, link)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (brand_name, link) DO NOTHING;
                 """
                 
                 # 데이터를 튜플 리스트로 변환 (JSON 데이터는 json.dumps로 직렬화)
                 brand_tuples = [
-                    (b['brand_name'], b['brand_name_eng'], b['link'], json.dumps(b['category_list']))
+                    (b['brand_name'], b['brand_name_eng'], b['link'])
                     for b in brands
                 ]
                 

@@ -50,6 +50,7 @@ async function saveProduct(productData) {
     if (response.ok) {
       chrome.notifications.create({
         type: "basic",
+        iconUrl: "project/extension/icon.png",
         title: "VibeSearch",
         message: "상품이 성공적으로 저장되었습니다!",
         priority: 1
@@ -65,6 +66,7 @@ async function saveProduct(productData) {
       if (response.status === 400) {
         chrome.notifications.create({
           type: "basic",
+          iconUrl: "project/extension/icon.png",
           title: "VibeSearch",
           message: "유효하지 않은 상품 정보입니다.",
           priority: 1
@@ -72,6 +74,7 @@ async function saveProduct(productData) {
       } else if (response.status >= 500) {
         chrome.notifications.create({
           type: "basic",
+          iconUrl: "project/extension/icon.png",
           title: "VibeSearch",
           message: "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
           priority: 1
@@ -84,6 +87,7 @@ async function saveProduct(productData) {
       console.error("요청 타임아웃");
       chrome.notifications.create({
         type: "basic",
+        iconUrl: "project/extension/icon.png",
         title: "VibeSearch",
         message: "요청 타임아웃. 서버 연결을 확인해주세요.",
         priority: 1
@@ -92,6 +96,7 @@ async function saveProduct(productData) {
       console.error("요청 실패:", e);
       chrome.notifications.create({
         type: "basic",
+        iconUrl: "project/extension/icon.png",
         title: "VibeSearch",
         message: "서버 연결에 실패했습니다.",
         priority: 1

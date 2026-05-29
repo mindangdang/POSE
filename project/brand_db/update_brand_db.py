@@ -28,7 +28,7 @@ async def fetch_brand_details_async(client, brand_name):
         query getBrandByNameResponse($name: String!) {
             getBrandByNameResponse(name: $name) {
                 code
-                brand { id description }
+                brand { id }
             }
         }
         """
@@ -41,8 +41,8 @@ async def fetch_brand_details_async(client, brand_name):
     brand_resp = data.get("data", {}).get("getBrandByNameResponse", {})
     if brand_resp.get("code") == 200 and brand_resp.get("brand"):
         brand_obj = brand_resp["brand"]
-        return brand_obj.get("id"), brand_obj.get("description")
-    return None, None
+        return brand_obj.get("id")
+    return None
 
 async def get_similar_brands_async(client, brand_id):
     """Fetches similar brands based on a brand ID."""
@@ -72,28 +72,16 @@ async def process_brand(client, conn, brand, existing_names):
     
     try:
         async with semaphore:
-            brand_id, description = await fetch_brand_details_async(client, search_name)
+            brand_id = await fetch_brand_details_async(client, search_name)
             if not brand_id:
                 return None
-
-            # 1. 현재 브랜드의 description이 비어있는 경우에만 업데이트
-            if not brand.get('description') and description:
-                print("insert a description")
-                async with conn.cursor() as cur:
-                    update_query = """
-                    UPDATE brands 
-                    SET description = %s 
-                    WHERE (brand_name = %s OR brand_name_eng = %s) AND (description IS NULL OR description = '');
-                    """
-                    await cur.execute(update_query, (description, brand['brand_name'], brand['brand_name_eng']))
-                
 
             # 2. 유사 브랜드 목록 가져오기
             similar_list = await get_similar_brands_async(client, brand_id)
             if not similar_list:
                 return None
 
-            # 3. 새로운 브랜드 필터링 및 상세 정보(description) 개별 조회
+            # 3. 새로운 브랜드 필터링
             candidates = []
             for s in similar_list:
                 name_kr = s.get('name_kr') or s.get('name')
@@ -102,30 +90,25 @@ async def process_brand(client, conn, brand, existing_names):
                     existing_names.add(name_kr)
 
             if candidates:
-                # 각 후보 브랜드의 상세 설명을 가져오기 위해 fetch_brand_details_async 호출
-                desc_tasks = [fetch_brand_details_async(client, c.get('name')) for c in candidates]
-                desc_results = await asyncio.gather(*desc_tasks)
 
                 new_brands = []
-                for c, (_, detail_desc) in zip(candidates, desc_results):
+                for c in candidates:
                     new_brands.append((
                         c.get('name_kr') or c.get('name'),
                         c.get('name'),
                         f"https://fruitsfamily.com/brand/{c.get('id')}",
-                        json.dumps([]),
-                        detail_desc
                     ))
 
                 async with conn.cursor() as cur:
                     insert_query = """
-                    INSERT INTO brands (brand_name, brand_name_eng, link, category_list, description)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO brands (brand_name, brand_name_eng, link)
+                    VALUES (%s, %s, %s)
                     ON CONFLICT (brand_name, link) DO NOTHING;
                     """
                     await cur.executemany(insert_query, new_brands)
                 
                     await conn.commit()
-                msg = f"✅ Processed '{search_name}'" + (f" & Added {len(new_brands)} new brands with descriptions" if new_brands else "")
+                msg = f"✅ Processed '{search_name}'" + (f" & Added {len(new_brands)} new brands" if new_brands else "")
                 tqdm.write(msg)
         return None
     except Exception as e:
@@ -138,13 +121,10 @@ async def main():
 
     async with await psycopg.AsyncConnection.connect(NEON_DB_URL, autocommit=False) as conn:
         async with conn.cursor() as cur:
-            # 1. Ensure description column exists
-            await cur.execute("ALTER TABLE brands ADD COLUMN IF NOT EXISTS description TEXT;")
-            await conn.commit()
 
-            await cur.execute("SELECT brand_name, brand_name_eng, description FROM brands")
+            await cur.execute("SELECT brand_name, brand_name_eng FROM brands")
             rows = await cur.fetchall()
-            existing_brands = [{"brand_name": r[0], "brand_name_eng": r[1], "description": r[2]} for r in rows]
+            existing_brands = [{"brand_name": r[0], "brand_name_eng": r[1]} for r in rows]
             existing_names_set = {r[0] for r in rows}
 
         tqdm.write(f"Found {len(existing_brands)} brands in database. Starting sync...")
