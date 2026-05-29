@@ -461,6 +461,7 @@ async def import_product_from_extension(
     인증이 필요합니다.
     """
     try:
+        print(f"Extension Import Request: {payload.title} from {payload.source}")
         user_id = str(current_user.get("sub"))
         
         # 필수 필드 검증
@@ -484,8 +485,8 @@ async def import_product_from_extension(
         
         # 데이터베이스에 저장
         try:
-            item_id = await repos.saved_posts.create_item(
-                user_id=user_id,
+            item_id = await repos.saved_posts.create_manual_item(
+                user_id=str(user_id),
                 url=payload.url,
                 category="PRODUCT",
                 sub_category="IMPORTED",

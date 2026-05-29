@@ -217,3 +217,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // 비동기 응답 활성화
   }
 });
+
+/**
+ * POSE 웹사이트인 경우 로그인 토큰을 확장 프로그램으로 공유
+ */
+if (window.location.href.includes("localhost:3000") || window.location.href.includes("pose-app") || window.location.href.includes("app.github.dev")) {
+  const token = localStorage.getItem("access_token");
+  if (token) {
+    chrome.runtime.sendMessage({ type: "SYNC_TOKEN", token: token });
+  }
+}

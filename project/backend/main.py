@@ -1,6 +1,7 @@
 import os
 
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from project.backend.app import create_app
 
 
@@ -13,6 +14,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
         response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
         return response
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 확장 프로그램 환경에서는 "*" 또는 특정 extension ID 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(SecurityHeadersMiddleware)
 
