@@ -10,9 +10,9 @@ type HeaderProps = {
 };
 
 const categories = [
-  { id: 'search', label: 'SEARCH', hasDropdown: false },
-  { id: 'feed', label: 'FEED', hasDropdown: false },
-  { id: 'profile', label: 'TASTING', hasDropdown: false },
+  { id: 'search', label: 'search', hasDropdown: false },
+  { id: 'feed', label: 'feed', hasDropdown: false },
+  { id: 'profile', label: 'tasting', hasDropdown: false },
 ];
 
 export function Header({
@@ -26,34 +26,34 @@ export function Header({
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
       {/* Main Header */}
-      <div className="flex items-center justify-between h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-xl font-black tracking-tight text-foreground">POSE</span>
+          <span className="text-lg sm:text-xl font-display font-bold tracking-tight text-foreground">PoSe</span>
         </a>
 
         {/* Center Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-6 lg:gap-8">
           {categories.map((category) => (
             <button
               key={category.id}
               onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
-              className={`relative text-xs font-semibold tracking-[0.1em] transition-colors ${
+              className={`relative text-xs sm:text-sm font-display font-medium tracking-wide transition-colors ${
                 currentTab === category.id
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-primary'
               }`}
             >
               {category.label}
               {currentTab === category.id && (
-                <span className="absolute -bottom-[21px] left-0 right-0 h-px bg-foreground" />
+                <span className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-primary rounded-full" />
               )}
             </button>
           ))}
         </nav>
 
         {/* Right Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-4 lg:gap-6">
           {user ? (
             <>
               <span className="text-xs font-medium text-muted-foreground">
@@ -61,17 +61,17 @@ export function Header({
               </span>
               <button
                 onClick={onLogout}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <button className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">
                 Sign Up
               </button>
-              <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <button className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">
                 Login
               </button>
             </>
