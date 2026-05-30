@@ -261,22 +261,23 @@ export function FeedTabContent({
       className="flex flex-col min-h-[calc(100vh-200px)]"
     >
       {/* Header Section */}
-      <header className="mb-10">
-        <div className="flex items-start justify-between mb-6">
+      <header className="mb-6 sm:mb-10">
+        <div className="flex items-start justify-between mb-4 sm:mb-6">
           <div>
-            <span className="text-[10px] font-semibold text-muted-foreground tracking-[0.2em] uppercase">MY COLLECTION</span>
-            <h1 className="editorial-heading text-4xl md:text-5xl lg:text-6xl text-foreground mt-2">
-              YOUR
+            <span className="text-[9px] sm:text-[10px] font-semibold text-primary tracking-[0.15em] sm:tracking-[0.2em] uppercase">my collection</span>
+            <h1 className="editorial-heading text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground mt-1 sm:mt-2">
+              your
               <br />
-              <span className="text-muted-foreground">FEED</span>
+              <span className="text-primary">feed</span>
             </h1>
           </div>
           <button
             onClick={() => setIsAddPanelOpen(true)}
-            className="flex items-center gap-2 h-11 px-5 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 sm:gap-2 h-9 sm:h-11 px-4 sm:px-5 bg-primary text-primary-foreground rounded-full text-xs sm:text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            <Plus className="w-4 h-4" />
-            Add Item
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Add Item</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
 
@@ -288,7 +289,7 @@ export function FeedTabContent({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="text-sm text-muted-foreground font-medium italic max-w-lg"
+            className="text-xs sm:text-sm text-muted-foreground font-medium italic max-w-lg"
           >
             {feedQuotes[quoteIndex]}
           </motion.p>
@@ -296,8 +297,8 @@ export function FeedTabContent({
       </header>
 
       {/* Category Tabs and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-border">
-        <nav className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-border">
+        <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
           {categories.map((category) => {
             const Icon = getCategoryIcon(category);
             const label = getCategoryLabel(category);
@@ -310,27 +311,27 @@ export function FeedTabContent({
                   setSelectedCategory(category);
                   setCurrentFolder(null);
                 }}
-                className={`flex items-center gap-2 h-10 px-5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 sm:gap-2 h-8 sm:h-10 px-3 sm:px-5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                   isSelected
-                    ? 'bg-foreground text-background'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground border border-border hover:border-foreground/20'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground border border-border hover:border-primary/30'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {label}
               </button>
             );
           })}
         </nav>
 
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative w-full md:w-64 lg:w-72 shrink-0">
+          <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search in feed..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 pl-11 pr-4 rounded-full bg-muted text-sm font-medium focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-shadow placeholder:text-muted-foreground"
+            className="w-full h-9 sm:h-10 pl-9 sm:pl-11 pr-4 rounded-full bg-muted text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -395,21 +396,21 @@ export function FeedTabContent({
 
         {/* Empty State */}
         {items.length === 0 && !addItemMutation.isPending && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-6">
-              <Plus className="w-8 h-8 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
+              <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
             </div>
-            <h3 className="editorial-heading text-3xl text-foreground mb-3">START YOUR COLLECTION</h3>
-            <p className="text-muted-foreground font-medium mb-8 max-w-sm">
+            <h3 className="editorial-heading text-xl sm:text-2xl md:text-3xl text-foreground mb-2 sm:mb-3">start your collection</h3>
+            <p className="text-muted-foreground font-medium mb-6 sm:mb-8 max-w-sm text-xs sm:text-sm">
               Add items to build your personal mood board.
               <br />
               Curate your unique aesthetic.
             </p>
             <button
               onClick={() => setIsAddPanelOpen(true)}
-              className="flex items-center gap-2 h-12 px-6 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 h-10 sm:h-12 px-5 sm:px-6 bg-primary text-primary-foreground rounded-full text-xs sm:text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Add First Item
             </button>
           </div>
@@ -417,9 +418,9 @@ export function FeedTabContent({
 
         {/* Empty State for Search */}
         {items.length > 0 && itemsToDisplay.length === 0 && searchQuery.trim() !== '' && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <h3 className="editorial-heading text-2xl text-foreground mb-3">NO RESULTS</h3>
-            <p className="text-muted-foreground font-medium">
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+            <h3 className="editorial-heading text-xl sm:text-2xl text-foreground mb-2 sm:mb-3">no results</h3>
+            <p className="text-muted-foreground font-medium text-xs sm:text-sm">
               No items match your search criteria.
             </p>
           </div>
@@ -446,20 +447,20 @@ export function FeedTabContent({
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-full max-w-md rounded-3xl bg-background p-8 shadow-2xl border border-border">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="editorial-heading text-2xl text-foreground">ADD ITEM</h3>
+              <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-background p-6 sm:p-8 shadow-2xl border border-border">
+                <div className="flex items-center justify-between mb-6 sm:mb-8">
+                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">add item</h3>
                   <button
                     onClick={() => setIsAddPanelOpen(false)}
-                    className="w-9 h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
 
-                <form onSubmit={handleAddItem} className="space-y-5">
+                <form onSubmit={handleAddItem} className="space-y-4 sm:space-y-5">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
                       URL or Product Name
                     </label>
                     <input
@@ -467,11 +468,11 @@ export function FeedTabContent({
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-12 px-4 bg-muted rounded-xl text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
                       Session ID (Optional)
                     </label>
                     <input
@@ -479,16 +480,16 @@ export function FeedTabContent({
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full h-12 px-4 bg-muted rounded-xl text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={`w-full h-12 flex items-center justify-center rounded-full text-sm font-semibold transition-all ${
+                    className={`w-full h-10 sm:h-12 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
                       isAddButtonSuccess
                         ? 'bg-green-600 text-white'
-                        : 'bg-foreground text-background hover:opacity-90 disabled:opacity-50'
+                        : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50'
                     }`}
                   >
                     <AnimatePresence mode="wait" initial={false}>

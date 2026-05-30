@@ -402,16 +402,16 @@ export function SearchTabContent({
                 initial={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20, height: 0, marginBottom: -32 }}
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-center gap-6 overflow-hidden"
+                className="flex flex-col items-center gap-4 sm:gap-6 overflow-hidden"
               >
-                <h1 className="editorial-heading text-5xl sm:text-6xl lg:text-7xl text-foreground text-center">
-                  DISCOVER
+                <h1 className="editorial-heading text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-foreground text-center">
+                  discover
                   <br />
-                  <span className="text-muted-foreground">YOUR STYLE</span>
+                  <span className="text-primary">your style</span>
                 </h1>
-                <p className="text-center text-sm sm:text-base font-medium text-muted-foreground max-w-md">
+                <p className="text-center text-xs sm:text-sm font-medium text-muted-foreground max-w-sm sm:max-w-md px-4">
                   Search for items that match your aesthetic.
-                  <br />
+                  <br className="hidden sm:block" />
                   AI-powered discovery for your unique taste.
                 </p>
               </motion.div>
