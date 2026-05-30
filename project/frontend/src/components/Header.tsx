@@ -7,12 +7,13 @@ type HeaderProps = {
   onLogout: () => void;
   currentTab: string;
   onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
+  onAboutClick?: () => void;
 };
 
 const categories = [
-  { id: 'search', label: 'search', hasDropdown: false },
-  { id: 'feed', label: 'feed', hasDropdown: false },
-  { id: 'profile', label: 'tasting', hasDropdown: false },
+  { id: 'search', label: 'digging', hasDropdown: false },
+  { id: 'feed', label: 'my pose', hasDropdown: false },
+  { id: 'profile', label: 'tasting me', hasDropdown: false },
 ];
 
 export function Header({
@@ -20,16 +21,18 @@ export function Header({
   onLogout,
   currentTab,
   onTabChange,
+  onAboutClick,
 }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
+    <header className="sticky top-0 z-50 bg-black border-b border-white/10">
+    <header className="sticky top-0 z-50 leather-header border-b border-white/10">
       {/* Main Header */}
       <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-lg sm:text-xl font-display font-bold tracking-tight text-foreground">PoSe</span>
+          <span className="text-2xl font-logo tracking-tight text-white">PoSe</span>
         </a>
 
         {/* Center Navigation - Desktop */}
@@ -38,15 +41,15 @@ export function Header({
             <button
               key={category.id}
               onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
-              className={`relative text-xs sm:text-sm font-display font-medium tracking-wide transition-colors ${
+              className={`relative text-lg font-logo tracking-widest uppercase transition-colors ${
                 currentTab === category.id
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-primary'
+                  ? 'text-white'
+                  : 'text-white/60 hover:text-white'
               }`}
             >
               {category.label}
               {currentTab === category.id && (
-                <span className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-primary rounded-full" />
+                <span className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full" />
               )}
             </button>
           ))}
@@ -56,24 +59,25 @@ export function Header({
         <nav className="hidden md:flex items-center gap-4 lg:gap-6">
           {user ? (
             <>
-              <span className="text-xs font-medium text-muted-foreground">
+              <button
+                onClick={onAboutClick}
+                className="text-xl font-logo text-white/60 hover:text-white transition-colors tracking-widest uppercase mr-4"
+              >
+                ABOUT
+              </button>
+              <span className="text-xl font-logo text-white/40 mr-4">
                 @{user.name || user.username || 'user'}
               </span>
               <button
                 onClick={onLogout}
-                className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                className="text-xl font-logo text-white/60 hover:text-white transition-colors uppercase tracking-widest"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <button className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">
-                Sign Up
-              </button>
-              <button className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">
-                Login
-              </button>
+              <button onClick={onAboutClick} className="text-xl font-logo text-white/60 hover:text-white transition-colors tracking-widest uppercase">ABOUT</button>
             </>
           )}
         </nav>
@@ -81,7 +85,7 @@ export function Header({
         {/* Mobile Menu Button */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-foreground"
+          className="md:hidden p-2 text-white"
           aria-label="Toggle menu"
         >
           {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -90,7 +94,8 @@ export function Header({
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg">
+        <div className="md:hidden absolute top-16 left-0 right-0 bg-black border-b border-white/10 shadow-lg">
+        <div className="md:hidden absolute top-16 left-0 right-0 leather-header border-b border-white/10 shadow-lg">
           {/* Mobile Categories */}
           <nav className="py-2">
             {categories.map((category) => (
@@ -100,10 +105,10 @@ export function Header({
                   onTabChange(category.id as 'feed' | 'search' | 'profile');
                   setIsMobileMenuOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium ${
+                className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${
                   currentTab === category.id
-                    ? 'text-foreground bg-muted'
-                    : 'text-muted-foreground'
+                    ? 'text-white bg-white/10'
+                    : 'text-white/60'
                 }`}
               >
                 {category.label}

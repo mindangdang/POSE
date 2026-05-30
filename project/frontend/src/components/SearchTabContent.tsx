@@ -404,12 +404,12 @@ export function SearchTabContent({
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                 className="flex flex-col items-center gap-4 sm:gap-6 overflow-hidden"
               >
-                <h1 className="editorial-heading text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-foreground text-center">
+                <h1 className="editorial-heading font-bold text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-foreground text-center">
                   discover
                   <br />
                   <span className="text-primary">your style</span>
                 </h1>
-                <p className="text-center text-xs sm:text-sm font-medium text-muted-foreground max-w-sm sm:max-w-md px-4">
+                <p className="text-center text-xs sm:text-sm font-bold text-muted-foreground max-w-sm sm:max-w-md px-4">
                   Search for items that match your aesthetic.
                   <br className="hidden sm:block" />
                   AI-powered discovery for your unique taste.
@@ -487,7 +487,7 @@ export function SearchTabContent({
                       placeholder={placeholder}
                       value={detailedSearchQuery[key]}
                       onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium placeholder:text-muted-foreground focus:outline-none"
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold placeholder:text-muted-foreground focus:outline-none"
                     />
 
                     <div className="flex w-36 shrink-0 justify-end overflow-hidden py-1 sm:w-44 md:w-52">
@@ -513,7 +513,7 @@ export function SearchTabContent({
                                     [key]: prev[key] === suggestion ? "" : suggestion,
                                   }))}
                                   className={[
-                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
                                     selected
                                       ? "border-primary bg-primary text-primary-foreground"
                                       : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground",
@@ -547,7 +547,7 @@ export function SearchTabContent({
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-full w-full rounded-full bg-transparent pl-16 pr-16 text-base font-medium placeholder:text-muted-foreground outline-0"
+                  className="h-full w-full rounded-full bg-transparent pl-16 pr-16 text-base font-bold placeholder:text-muted-foreground outline-0"
                 />
               </motion.div>
             )}
@@ -566,7 +566,7 @@ export function SearchTabContent({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 text-sm font-medium max-w-3xl mx-auto"
+            className="text-center p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 text-sm font-bold max-w-3xl mx-auto"
           >
             토큰이 부족합니다. {quotaCountdown}초 뒤에 다시 시도하세요.
           </motion.div>
@@ -591,7 +591,7 @@ export function SearchTabContent({
                     className="flex flex-col items-center justify-center gap-4 py-8 overflow-hidden"
                   >
                     <div className="w-12 h-12 rounded-full border-2 border-muted border-t-foreground animate-spin" />
-                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-muted-foreground text-center">
+                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-bold text-muted-foreground text-center">
                       {searchResults.length > 0
                         ? `Discovering... (${searchResults.length} items found)`
                         : searchMode === "digging"
@@ -618,7 +618,7 @@ export function SearchTabContent({
                     alt="AI Generated Vibe"
                     className="w-48 md:w-56 aspect-[3/4] object-cover rounded-xl shadow-lg"
                   />
-                  <p className="text-xs text-muted-foreground mt-4 font-medium">Based on your style input</p>
+                  <p className="text-xs text-muted-foreground mt-4 font-bold">Based on your style input</p>
                 </motion.div>
               )}
 
