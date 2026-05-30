@@ -115,7 +115,7 @@ export function FeedItemCard({
               onClick={handleLike}
               className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
                 liked 
-                  ? 'bg-primary text-white scale-110' 
+                  ? 'bg-black text-white scale-110' 
                   : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
               }`}
               aria-label="Like item"
@@ -151,7 +151,7 @@ export function FeedItemCard({
       <div className="mt-2 sm:mt-3 space-y-1 sm:space-y-1.5 px-1">
         {/* Category */}
         {!isProcessingItem && (
-          <span className="text-[9px] sm:text-[10px] font-semibold text-primary uppercase tracking-wider">
+          <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-wider">
             {categoryLabel}
           </span>
         )}
@@ -180,7 +180,7 @@ export function FeedItemCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-primary transition-colors"
+              className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors"
             >
               <Instagram className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source
             </a>

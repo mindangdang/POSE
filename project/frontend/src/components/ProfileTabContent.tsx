@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram } from 'lucide-react';
+import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -23,6 +23,10 @@ type ProfileTabContentProps = {
   onTasteChange: React.Dispatch<React.SetStateAction<string>>;
   taste: string;
   user: AppUser | null;
+  ambientColor: string;
+  onAmbientColorChange: (color: string) => void;
+  isAmbientActive: boolean;
+  onAmbientToggle: () => void;
 };
 
 type ProfileHeaderProps = {
@@ -226,26 +230,15 @@ function buildTasteProfileSections(taste: string): TasteProfileSection[] {
 
 function ProfileHeader({ user }: ProfileHeaderProps) {
   return (
-    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 pb-10 border-b border-border">
-      <div className="space-y-6">
-        <div className="w-24 h-24 rounded-full bg-muted overflow-hidden">
-          <div className="w-full h-full bg-gradient-to-br from-muted to-muted-foreground/10 flex items-center justify-center">
-            <User className="w-12 h-12 text-muted-foreground" />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <h2 className="editorial-heading text-4xl md:text-5xl lg:text-6xl text-foreground">
-            {user?.username || 'Anonymous'}
-          </h2>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">
-            POSE Creator #{user?.id || '000'}
-          </p>
-        </div>
+    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 pb-10">
+      <div className="space-y-2">
+        <h2 className="font-sans font-bold text-4xl md:text-5xl lg:text-6xl text-foreground">
+          {user?.username || 'Anonymous'}
+        </h2>
       </div>
     </div>
   );
 }
-
 
 function TasteSectionCard({ section }: TasteSectionCardProps) {
   const paragraphs = parseTasteBodyParagraphs(section.body);
@@ -380,10 +373,6 @@ function EmptyTasteState({
 }: EmptyTasteStateProps) {
   return (
     <div className="py-24 flex flex-col items-center justify-center text-center">
-      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
-        <Sparkles className="w-8 h-8 text-muted-foreground" />
-      </div>
-
       {hasItems ? (
         <div className="space-y-6 flex flex-col items-center">
           <div>
@@ -410,17 +399,14 @@ function EmptyTasteState({
       ) : (
         <div className="space-y-6 flex flex-col items-center">
           <div>
-            <h3 className="editorial-heading text-3xl text-foreground mb-3">NO DATA YET</h3>
-            <p className="text-muted-foreground font-medium text-sm">
-              Start collecting inspirations to discover your taste.
-            </p>
+            <h3 className="editorial-heading text-3xl text-foreground mb-3">네가 적어가는 나는 어떻게 변할까</h3>
           </div>
           <button
             type="button"
             onClick={onGoToFeed}
-            className="h-11 px-6 bg-background border border-border text-foreground rounded-full text-sm font-medium hover:bg-muted transition-colors"
+            className="pb-1 px-1 border-b-2 border-black text-black text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
           >
-            Explore Feed
+            창문열기
           </button>
         </div>
       )}
@@ -443,10 +429,10 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
     <div className="space-y-6 pt-10">
       <div className="flex items-center justify-between pb-4 border-b border-border">
         <h4 className="text-lg font-bold text-foreground">
-          Recent Inspirations
+          내 책장
         </h4>
         <span className="text-xs font-medium text-muted-foreground">
-          {items.length} Items
+          {items.length} 권
         </span>
       </div>
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -491,6 +477,10 @@ export function ProfileTabContent({
   onTasteChange,
   taste,
   user,
+  ambientColor,
+  onAmbientColorChange,
+  isAmbientActive,
+  onAmbientToggle,
 }: ProfileTabContentProps) {
   const tasteSections = buildTasteProfileSections(taste);
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false);
@@ -587,6 +577,39 @@ export function ProfileTabContent({
       className="max-w-4xl mx-auto space-y-10"
     >
       <ProfileHeader user={user} />
+
+      {/* Ambient Color Switcher Section */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 py-6 border-b border-border">
+        <div className="flex-1 w-full max-w-xs">
+          <div className="relative">
+            <input
+              type="text"
+              value={ambientColor}
+              onChange={(e) => onAmbientColorChange(e.target.value)}
+              placeholder="좋아하는 색상의 hex 코드를 넣고 조명을 켜보세요!"
+              className="w-full bg-transparent border-b-2 border-black py-2 text-sm font-bold focus:outline-none placeholder:text-muted-foreground/50"
+            />
+            <div 
+              className="absolute right-0 bottom-3 w-4 h-4 rounded-full border border-black/10"
+              style={{ backgroundColor: ambientColor }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onAmbientToggle}
+            className={`relative w-14 h-7 rounded-full transition-all duration-300 flex items-center px-1 ${isAmbientActive ? 'bg-black' : 'bg-muted border border-border'}`}
+          >
+            <motion.div
+              animate={{ x: isAmbientActive ? 28 : 0 }}
+              className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${isAmbientActive ? 'bg-white' : 'bg-white'}`}
+            >
+              <Lightbulb className={`w-3 h-3 ${isAmbientActive ? 'text-black' : 'text-muted-foreground'}`} />
+            </motion.div>
+          </button>
+        </div>
+      </div>
 
       <div className="flex gap-10 flex-col">
         <div className="lg:col-span-8">

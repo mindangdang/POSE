@@ -14,8 +14,19 @@ import type { AppUser } from './types/user';
 // Add Logo Font
 const fontStyles = `
   @import url('https://api.fontshare.com/v2/css?f[]=comico@400&display=swap');
+  @font-face {
+    font-family: 'Pretendard-Regular';
+    src: url('https://fastly.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+  }
   .font-logo { font-family: 'comico', sans-serif; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-weight: 500; background-color: #ffffff; }
+  body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
+  .leather-header {
+    background-color: #080808;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
+  }
 `;
 
 function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
@@ -25,6 +36,15 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const [searchSecondhandTrigger, setSearchSecondhandTrigger] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  
+  // Ambient Light State
+  const [ambientColor, setAmbientColor] = useState('#000000');
+  const [isAmbientActive, setIsAmbientActive] = useState(false);
+
+  // 입력값이 없거나 기본값일 때 조명을 켜면 베이지색을 적용하는 로직
+  const effectiveAmbientColor = isAmbientActive && (ambientColor.trim() === '' || ambientColor === '#000000') 
+    ? '#F5F5DC' 
+    : ambientColor;
 
   const { items, setItems, refreshItems } = useItems(user);
   const { taste, setTaste, refreshTaste } = useTaste(user);
@@ -53,11 +73,42 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         onAboutClick={() => setIsAboutModalOpen(true)}
+        ambientColor={effectiveAmbientColor}
+        isAmbientActive={isAmbientActive}
       />
+
+      {/* Ambient Light Background Layer */}
+      <div className={`fixed inset-0 z-0 pointer-events-none transition-all duration-1000 ease-in-out ${isAmbientActive ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Main Light Source - Radial Bloom */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(circle at 50% -10%, ${effectiveAmbientColor} 0%, transparent 70%)`,
+            opacity: 0.2,
+          }}
+        />
+        {/* Soft Ambient Wash - Linear */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to bottom, ${effectiveAmbientColor} 0%, transparent 100%)`,
+            opacity: 0.1,
+          }}
+        />
+        {/* Premium Noise Texture Layer */}
+        <div 
+          className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+        {/* Soft Glow Shadow */}
+        <div className="absolute inset-x-0 top-0 h-40" style={{ boxShadow: `0 -20px 100px 40px ${effectiveAmbientColor}22 inset` }} />
+      </div>
 
       <style>{fontStyles}</style>
 
-      <main>
+      <main className="relative z-10">
         <AnimatePresence mode="wait">
           {currentTab === 'search' && (
             <motion.div
@@ -116,6 +167,10 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onTasteChange={setTaste}
                 taste={taste}
                 user={user}
+                ambientColor={ambientColor}
+                onAmbientColorChange={setAmbientColor}
+                isAmbientActive={isAmbientActive}
+                onAmbientToggle={() => setIsAmbientActive(!isAmbientActive)}
               />
             </motion.div>
           )}
@@ -167,7 +222,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
       {/* About Modal */}
       <AnimatePresence>
         {isAboutModalOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md">
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -175,23 +230,24 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
               className="w-full max-w-lg rounded-3xl bg-background p-8 shadow-2xl border border-border"
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold font-logo text-foreground">PoSe 사용 방법</h3>
+                  <h3 className="text-2xl font-bold font-logo text-foreground">Welcome to Demian's room</h3>
                 <button onClick={() => setIsAboutModalOpen(false)} className="p-2 hover:bg-muted rounded-full">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
               <div className="space-y-6 text-foreground">
+                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
                 <div className="flex gap-3 items-start">
-                  <span className="text-lg leading-none mt-1.5">•</span>
-                  <p className="text-sm leading-relaxed"><span className="font-bold">피드 수집:</span> 웹사이트 URL을 입력하여 나만의 스타일 아이템을 분석하고 보관하세요.</p>
+                    <span className="text-lg leading-none mt-1.5"></span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
                 </div>
                 <div className="flex gap-3 items-start">
-                  <span className="text-lg leading-none mt-1.5">•</span>
-                  <p className="text-sm leading-relaxed"><span className="font-bold">AI 스타일 검색:</span> "디스트로이드 데님", "미니멀한 무드" 등 텍스트로 원하는 아이템을 찾아보세요.</p>
+                    <span className="text-lg leading-none mt-1.5"></span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Bookcase (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
                 </div>
                 <div className="flex gap-3 items-start">
-                  <span className="text-lg leading-none mt-1.5">•</span>
-                  <p className="text-sm leading-relaxed"><span className="font-bold">취향 DNA:</span> 수집된 아이템을 바탕으로 AI가 당신의 패션 철학을 분석해 드립니다.</p>
+                    <span className="text-lg leading-none mt-1.5"></span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Notebook (공책):</span> 수집된 취향을 분석하여 당신의 스타일 철학을 기록합니다. AI가 분석한 당신만의 스타일 DNA를 확인하세요.</p>
                 </div>
               </div>
               
@@ -269,21 +325,21 @@ export default function App() {
   if (isInitializing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background font-sans">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-accent" />
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-foreground" />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-background font-sans relative">
+      <div className="min-h-screen bg-white font-sans relative">
         <style>{fontStyles}</style>
 
         {/* Header */}
-        <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-background/80 backdrop-blur-sm">
-          <span className="text-2xl font-logo tracking-tight text-foreground">PoSe</span>
-          <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-muted-foreground">
-            <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-primary transition-colors uppercase tracking-widest">ABOUT</span>
+        <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-black border-b border-white/10">
+          <span className="text-2xl font-logo tracking-tight text-white">Demian's room</span>
+          <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-white/60">
+            <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-white transition-colors uppercase tracking-widest">ABOUT</span>
           </nav>
         </header>
 
@@ -294,18 +350,13 @@ export default function App() {
             {/* Left - Typography */}
             <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-12 pt-20 sm:pt-24 lg:pt-0 pb-8 lg:pb-0">
               <div className="max-w-2xl">
-                <h1 className="font-logo text-6xl sm:text-7xl md:text-8xl lg:text-9xl text-foreground tracking-tighter leading-[0.85]">
-                  Digg yourself
-                  <br />
-                  with PoSe
+                <h1 className="font-logo text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] text-foreground tracking-[-0.07em] leading-[0.8] transition-all">
+                <br />
+                Digg yourself 
+                <br />
+                in Demian's room
                 </h1>
                 
-                <div className="mt-8 sm:mt-10 max-w-xl border-t-4 border-foreground pt-6">
-                  <p className="font-logo text-lg sm:text-xl md:text-2xl text-foreground leading-tight">
-                    Life is beautiful! If music be the food of love, play on. Be not afraid of greatness: some are born great, some achieve greatness and some have greatness thrust upon them.
-                  </p>
-                </div>
-
                 {/* Login Buttons */}
                 <div className="mt-8 sm:mt-10 lg:mt-14 flex flex-col gap-2 items-start">
                   <GoogleLoginButton
@@ -349,27 +400,27 @@ export default function App() {
                 className="w-full max-w-lg rounded-3xl bg-background p-8 shadow-2xl border border-border"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold font-logo text-foreground">PoSe 사용 방법</h3>
+                  <h3 className="text-2xl font-bold font-logo text-foreground">About Demian's room</h3>
                   <button onClick={() => setIsAboutModalOpen(false)} className="p-2 hover:bg-muted rounded-full">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
                 <div className="space-y-6 text-foreground font-semibold">
+                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
                   <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">•</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">피드 수집:</span> 웹사이트 URL을 입력하여 나만의 스타일 아이템을 분석하고 보관하세요.</p>
+                    <span className="text-lg leading-none mt-1.5">🪟</span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
                   </div>
                   <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">•</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">AI 스타일 검색:</span> "디스트로이드 데님", "미니멀한 무드" 등 텍스트로 원하는 아이템을 찾아보세요.</p>
+                    <span className="text-lg leading-none mt-1.5">📚</span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Bookcase (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
                   </div>
                   <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">•</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">취향 DNA:</span> 수집된 아이템을 바탕으로 AI가 당신의 패션 철학을 분석해 드립니다.</p>
+                    <span className="text-lg leading-none mt-1.5">📓</span>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Notebook (공책):</span> 수집된 취향을 분석하여 당신의 스타일 철학을 기록합니다. AI가 분석한 당신만의 스타일 DNA를 확인하세요.</p>
                   </div>
                 </div>
                 
-                <div className="mt-8 border-t border-foreground" />
                 <button 
                   onClick={() => setIsAboutModalOpen(false)} 
                   className="w-full py-4 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-foreground hover:opacity-70 transition-opacity bg-transparent border-none outline-none"
