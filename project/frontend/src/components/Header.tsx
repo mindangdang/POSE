@@ -10,9 +10,9 @@ type HeaderProps = {
 };
 
 const categories = [
-  { id: 'search', label: '검색', hasDropdown: false },
-  { id: 'feed', label: '피드', hasDropdown: false },
-  { id: 'profile', label: '테이스팅', hasDropdown: false },
+  { id: 'search', label: 'SEARCH', hasDropdown: false },
+  { id: 'feed', label: 'FEED', hasDropdown: false },
+  { id: 'profile', label: 'TASTING', hasDropdown: false },
 ];
 
 export function Header({
@@ -24,35 +24,55 @@ export function Header({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-background border-b border-border">
+    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
       {/* Main Header */}
       <div className="flex items-center justify-between h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-black tracking-tight text-foreground">POSE</span>
+          <span className="text-xl font-black tracking-tight text-foreground">POSE</span>
         </a>
+
+        {/* Center Navigation - Desktop */}
+        <nav className="hidden md:flex items-center gap-8">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
+              className={`relative text-xs font-semibold tracking-[0.1em] transition-colors ${
+                currentTab === category.id
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {category.label}
+              {currentTab === category.id && (
+                <span className="absolute -bottom-[21px] left-0 right-0 h-px bg-foreground" />
+              )}
+            </button>
+          ))}
+        </nav>
 
         {/* Right Navigation - Desktop */}
         <nav className="hidden md:flex items-center gap-6">
           {user ? (
             <>
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-xs font-medium text-muted-foreground">
                 @{user.name || user.username || 'user'}
               </span>
               <button
                 onClick={onLogout}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                로그아웃
+                Logout
               </button>
             </>
           ) : (
             <>
-              <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                회원 가입
+              <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Sign Up
               </button>
-              <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                로그인
+              <button className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Login
               </button>
             </>
           )}
@@ -64,35 +84,15 @@ export function Header({
           className="md:hidden p-2 text-foreground"
           aria-label="Toggle menu"
         >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-      </div>
-
-      {/* Category Navigation - Desktop */}
-      <div className="hidden md:block border-t border-border">
-        <nav className="category-nav flex items-center gap-6 h-12 px-4 lg:px-8 max-w-[1400px] mx-auto overflow-x-auto">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
-              className={`flex items-center gap-1 text-sm font-medium whitespace-nowrap transition-colors ${
-                currentTab === category.id
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {category.label}
-              {category.hasDropdown && <ChevronDown className="w-4 h-4" />}
-            </button>
-          ))}
-        </nav>
       </div>
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg">
           {/* Mobile Categories */}
-          <nav className="border-t border-border">
+          <nav className="py-2">
             {categories.map((category) => (
               <button
                 key={category.id}
@@ -126,16 +126,16 @@ export function Header({
                   }}
                   className="w-full text-left text-sm font-medium text-muted-foreground py-2"
                 >
-                  로그아웃
+                  Logout
                 </button>
               </>
             ) : (
               <>
                 <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  회원 가입
+                  Sign Up
                 </button>
                 <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  로그인
+                  Login
                 </button>
               </>
             )}
