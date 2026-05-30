@@ -148,7 +148,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                 <div className="md:w-1/2 p-6 md:p-8 flex flex-col bg-background">
                   <div className="flex items-start justify-between mb-6 gap-4 border-b border-border pb-4 shrink-0">
                     <div className="space-y-2">
-                      <span className="inline-block text-xs font-medium uppercase tracking-wide text-accent">
+                      <span className="inline-block text-xs font-medium uppercase tracking-wide text-black">
                         {displayItem.category}
                       </span>
                       <Dialog.Title asChild>
@@ -171,7 +171,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     {/* Vibe Analysis */}
                     <section>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-accent" /> Vibe Analysis
+                        <Sparkles className="w-4 h-4 text-black" /> Vibe Analysis
                       </h3>
                       <p className="text-sm font-medium leading-relaxed text-foreground">
                         {displayItem.recommend}
@@ -218,7 +218,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                           href={displayItem.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 w-full h-11 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                          className="flex items-center justify-center gap-2 w-full h-11 bg-black text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
                         >
                           <ExternalLink className="w-4 h-4" />
                           원본 보기
@@ -229,7 +229,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     {/* Similar Items */}
                     <section className="pt-4 border-t border-border mt-6">
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-accent" /> Similar Items
+                        <Sparkles className="w-4 h-4 text-black" /> Similar Items
                       </h3>
                       {isLoadingSimilar ? (
                         <div className="flex justify-center py-8">

@@ -16,6 +16,29 @@ type SearchTabContentProps = {
   searchSecondhandTrigger?: number;
 };
 
+const SUGGESTION_POOL = [
+  "빈티지 리바이스",
+  "미니멀 셋업",
+  "아카이브 헬무트랭",
+  "오버핏 가디건",
+  "시티보이 룩",
+  "고프코어 자켓",
+  "와이드 실루엣 팬츠",
+  "디스트로이드 데님",
+  "크롭 레이어링",
+  "테크니컬 웨어",
+  "90년대 스트릿",
+  "그런지 무드",
+  "올드머니 룩",
+  "가죽 자켓",
+  "발레코어",
+  "Y2K 스타일",
+  "클래식 트렌치 코트",
+  "헤비 스웨트셔츠",
+  "워크웨어 부츠",
+  "보헤미안 시크"
+];
+
 export function SearchTabContent({
   onItemsChange,
   refreshItems,
@@ -29,6 +52,7 @@ export function SearchTabContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
   const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" });
+  const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
@@ -59,6 +83,12 @@ export function SearchTabContent({
     { key: "fit", placeholder: "핏", suggestions: ["오버핏", "크롭", "와이드"] },
     { key: "category", placeholder: "카테고리", suggestions: ["티셔츠", "자켓", "팬츠"] },
   ] as const;
+
+  useEffect(() => {
+    // 20개 중 6개 랜덤 선택
+    const shuffled = [...SUGGESTION_POOL].sort(() => 0.5 - Math.random());
+    setRandomSuggestions(shuffled.slice(0, 6));
+  }, []);
 
   type ModeOptionValue = (typeof modeOptions)[number]["value"];
 
@@ -384,11 +414,31 @@ export function SearchTabContent({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         className={[
+          "relative",
           "mx-auto flex w-full flex-col transition-[max-width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
           hasSearchActivity ? "max-w-6xl" : "max-w-4xl",
           hasSearchActivity ? "space-y-8 py-8" : "min-h-[calc(100vh-8rem)] justify-center",
         ].join(" ")}
       >
+        {/* Subtle Background Image Layer for Window Tab */}
+        {!hasSearchActivity && (
+          <div className="fixed inset-x-0 top-0 h-screen pointer-events-none -z-10 overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              transition={{ duration: 1.2 }}
+              className="w-full h-full"
+              style={{ 
+                backgroundImage: 'url("/image.png")',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                maskImage: 'linear-gradient(to bottom, black 0%, black 30%, transparent 55%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 30%, transparent 55%)'
+              }}
+            />
+          </div>
+        )}
+
         <motion.div
           layout
           className="flex w-full flex-col items-center gap-8"
@@ -402,23 +452,20 @@ export function SearchTabContent({
                 initial={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20, height: 0, marginBottom: -32 }}
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-center gap-4 sm:gap-6 overflow-hidden"
+                className="flex w-full max-w-3xl flex-col items-start gap-4 sm:gap-6 overflow-hidden"
               >
-                <h1 className="editorial-heading font-bold text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-foreground text-center">
-                  discover
+                <h1 className="font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground text-left leading-tight tracking-tight">
+                  네 자신을 찾는 일을 목표로
                   <br />
-                  <span className="text-primary">your style</span>
+                  하는 인생은 재밌어.
+                  <br />
+                  그렇지 않아?
                 </h1>
-                <p className="text-center text-xs sm:text-sm font-bold text-muted-foreground max-w-sm sm:max-w-md px-4">
-                  Search for items that match your aesthetic.
-                  <br className="hidden sm:block" />
-                  AI-powered discovery for your unique taste.
-                </p>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSearch} className="relative group max-w-3xl mx-auto w-full flex flex-col gap-4">
+          <form onSubmit={handleSearch} className="relative group max-w-3xl w-full flex flex-col gap-4">
 
           <motion.div
             layout
@@ -432,7 +479,7 @@ export function SearchTabContent({
                 title={activeMode ? `${activeMode.label} 모드` : "검색 모드 선택"}
                 onClick={() => setIsModeMenuOpen((open) => !open)}
                 className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-                  activeMode ? activeMode.activeClass : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  activeMode ? activeMode.activeClass : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <ActiveModeIcon className="h-5 w-5" />
@@ -445,7 +492,7 @@ export function SearchTabContent({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -8, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-0 top-12 flex w-40 flex-col gap-1 rounded-xl bg-background p-1 shadow-lg border border-border"
+                    className="absolute left-0 top-12 flex w-44 flex-col gap-1 rounded-2xl bg-background p-1.5 shadow-2xl border border-border z-[100]"
                   >
                     {modeOptions.map(({ value, label, icon: Icon, activeClass, hoverClass }) => (
                       <button
@@ -453,7 +500,7 @@ export function SearchTabContent({
                         type="button"
                         aria-label={`${label} 모드`}
                         onClick={() => handleSelectMode(value)}
-                        className={`flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-muted ${
+                        className={`flex h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold transition-all hover:bg-muted ${
                           activeMode?.value === value ? activeClass : `text-muted-foreground ${hoverClass}`
                         }`}
                       >
@@ -472,7 +519,7 @@ export function SearchTabContent({
                 initial={false}
                 animate={{ height: 240 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="flex w-full flex-col justify-center rounded-2xl border border-border bg-background py-0 pl-16 pr-16 shadow-sm"
+                className="flex w-full flex-col justify-center border-b-2 border-foreground bg-background py-0 pl-16 pr-16"
               >
                 {detailFields.map(({ key, placeholder, suggestions }, index) => (
                   <div
@@ -515,8 +562,8 @@ export function SearchTabContent({
                                   className={[
                                     "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
                                     selected
-                                      ? "border-primary bg-primary text-primary-foreground"
-                                      : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground",
+                                      ? "border-black bg-black text-white"
+                                      : "border-border bg-background text-muted-foreground hover:border-black hover:text-black",
                                   ].join(" ")}
                                 >
                                   {suggestion}
@@ -536,7 +583,7 @@ export function SearchTabContent({
                 initial={false}
                 animate={{ height: 56 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full rounded-full border border-border bg-background shadow-sm"
+                className="w-full border-b-2 border-foreground bg-background transition-all duration-300"
               >
                 <input
                   type="text"
@@ -560,6 +607,29 @@ export function SearchTabContent({
             </button>
           </motion.div>
           </form>
+
+          {/* 추천 검색어 영역 */}
+          {!hasSearchActivity && randomSuggestions.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="w-full max-w-3xl flex flex-wrap gap-x-4 gap-y-2 px-1"
+            >
+              {randomSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery(suggestion);
+                    // 클릭 시 바로 검색 실행을 원하시면 여기에 handleSearch 호출 로직 추가 가능
+                  }}
+                  className="text-xs sm:text-sm text-muted-foreground hover:text-black border-b border-transparent hover:border-black transition-all pb-0.5"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </motion.div>
+          )}
         </motion.div>
 
         {quotaCountdown !== null && (

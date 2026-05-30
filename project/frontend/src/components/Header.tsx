@@ -8,12 +8,14 @@ type HeaderProps = {
   currentTab: string;
   onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
   onAboutClick?: () => void;
+  ambientColor?: string;
+  isAmbientActive?: boolean;
 };
 
 const categories = [
-  { id: 'search', label: 'digging', hasDropdown: false },
-  { id: 'feed', label: 'my pose', hasDropdown: false },
-  { id: 'profile', label: 'tasting me', hasDropdown: false },
+  { id: 'search', label: 'Window', hasDropdown: false },
+  { id: 'feed', label: 'Bookcase', hasDropdown: false },
+  { id: 'profile', label: 'Notebook', hasDropdown: false },
 ];
 
 export function Header({
@@ -22,17 +24,21 @@ export function Header({
   currentTab,
   onTabChange,
   onAboutClick,
+  ambientColor,
+  isAmbientActive,
 }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // 조명 모드 시 텍스트에 적용할 미세한 색상 변조 스타일
+  const ambientTextStyle = isAmbientActive ? { color: ambientColor, filter: 'brightness(1.5) saturate(1.2)' } : {};
+
   return (
     <header className="sticky top-0 z-50 bg-black border-b border-white/10">
-    <header className="sticky top-0 z-50 leather-header border-b border-white/10">
       {/* Main Header */}
       <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-logo tracking-tight text-white">PoSe</span>
+          <span className="text-2xl font-logo tracking-tight text-white transition-colors duration-1000" style={ambientTextStyle}>Demian's room</span>
         </a>
 
         {/* Center Navigation - Desktop */}
@@ -41,15 +47,19 @@ export function Header({
             <button
               key={category.id}
               onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
-              className={`relative text-lg font-logo tracking-widest uppercase transition-colors ${
+              className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
                 currentTab === category.id
                   ? 'text-white'
                   : 'text-white/60 hover:text-white'
               }`}
+              style={currentTab === category.id ? ambientTextStyle : {}}
             >
               {category.label}
               {currentTab === category.id && (
-                <span className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full" />
+                <span 
+                  className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full transition-all duration-1000" 
+                  style={isAmbientActive ? { backgroundColor: ambientColor } : {}}
+                />
               )}
             </button>
           ))}
@@ -61,16 +71,16 @@ export function Header({
             <>
               <button
                 onClick={onAboutClick}
-                className="text-xl font-logo text-white/60 hover:text-white transition-colors tracking-widest uppercase mr-4"
+                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 tracking-widest uppercase mr-4"
               >
                 ABOUT
               </button>
-              <span className="text-xl font-logo text-white/40 mr-4">
+              <span className="text-xl font-logo text-white/40 mr-4 transition-all duration-1000" style={isAmbientActive ? { color: ambientColor, opacity: 0.6 } : {}}>
                 @{user.name || user.username || 'user'}
               </span>
               <button
                 onClick={onLogout}
-                className="text-xl font-logo text-white/60 hover:text-white transition-colors uppercase tracking-widest"
+                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 uppercase tracking-widest"
               >
                 Logout
               </button>
@@ -95,7 +105,6 @@ export function Header({
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 right-0 bg-black border-b border-white/10 shadow-lg">
-        <div className="md:hidden absolute top-16 left-0 right-0 leather-header border-b border-white/10 shadow-lg">
           {/* Mobile Categories */}
           <nav className="py-2">
             {categories.map((category) => (

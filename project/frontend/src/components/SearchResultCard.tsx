@@ -112,7 +112,7 @@ export function SearchResultCard({
               onClick={handleLike}
               className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
                 liked 
-                  ? 'bg-primary text-white scale-110' 
+                  ? 'bg-black text-white scale-110' 
                   : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
               }`}
               aria-label="Like item"
@@ -148,7 +148,7 @@ export function SearchResultCard({
       {/* Content */}
       <div className="mt-2 sm:mt-3 space-y-0.5 sm:space-y-1 px-1">
         {item.category && (
-          <span className="text-[9px] sm:text-[10px] font-semibold text-primary uppercase tracking-wider">
+          <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-wider">
             {item.category}
           </span>
         )}

@@ -18,16 +18,6 @@ type FeedTabContentProps = {
   user: AppUser | null;
 };
 
-const feedQuotes = [
-  '"Buy less, choose well, make it last."',
-  '"You can find inspiration in everything If you can\'t, then you\'re not looking properly"',
-  '"Fashion should be a from of escapism, and not a from of imprisonment."',
-  '"I always find beauty in things that are odd and imperfect, they are much more interesting."',
-  '"To be noticed without striving to be noticed, this is what elegance is about."',
-  '"Simplicity is the ultimate sophistication."',
-  '"Don\'t be afraid to fail. Be afraid not to try."',
-];
-
 export function FeedTabContent({
   items,
   onItemsChange,
@@ -43,17 +33,8 @@ export function FeedTabContent({
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
-  const [quoteIndex, setQuoteIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const addSuccessTimeout = useRef<number | null>(null);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setQuoteIndex((currentIndex) => (currentIndex + 1) % feedQuotes.length);
-    }, 10000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -260,47 +241,29 @@ export function FeedTabContent({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-[calc(100vh-200px)]"
     >
-      {/* Header Section */}
-      <header className="mb-6 sm:mb-10">
-        <div className="flex items-start justify-between mb-4 sm:mb-6">
-          <div>
-            <span className="text-[9px] sm:text-[10px] font-semibold text-primary tracking-[0.15em] sm:tracking-[0.2em] uppercase">my collection</span>
-            <h1 className="editorial-heading text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground mt-1 sm:mt-2">
-              your
-              <br />
-              <span className="text-primary">feed</span>
-            </h1>
-          </div>
-          <button
-            onClick={() => setIsAddPanelOpen(true)}
-            className="flex items-center gap-1.5 sm:gap-2 h-9 sm:h-11 px-4 sm:px-5 bg-primary text-primary-foreground rounded-full text-xs sm:text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Add Item</span>
-            <span className="sm:hidden">Add</span>
-          </button>
-        </div>
+      {/* Page Title */}
+      <div className="mb-2 sm:mb-3">
+        <h1 className="editorial-heading text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground">
+          나를 형용하는 것들.
+        </h1>
+      </div>
 
-        {/* Quote */}
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={quoteIndex}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="text-xs sm:text-sm text-muted-foreground font-medium italic max-w-lg"
-          >
-            {feedQuotes[quoteIndex]}
-          </motion.p>
-        </AnimatePresence>
-      </header>
+      {/* Add Item Button Position - Directly above search toolbar */}
+      <div className="flex justify-end mb-1 sm:mb-2">
+        <button
+          onClick={() => setIsAddPanelOpen(true)}
+          className="flex items-center gap-1.5 sm:gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
+        >
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">추가하기</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+      </div>
 
       {/* Category Tabs and Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-border">
         <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
           {categories.map((category) => {
-            const Icon = getCategoryIcon(category);
             const label = getCategoryLabel(category);
             const isSelected = selectedCategory === category;
 
@@ -311,13 +274,12 @@ export function FeedTabContent({
                   setSelectedCategory(category);
                   setCurrentFolder(null);
                 }}
-                className={`flex items-center gap-1.5 sm:gap-2 h-8 sm:h-10 px-3 sm:px-5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                className={`flex items-center pb-2 px-1 text-xs sm:text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 ${
                   isSelected
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground border border-border hover:border-primary/30'
+                    ? 'border-black text-black'
+                    : 'border-transparent text-muted-foreground hover:text-black hover:border-black/20'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {label}
               </button>
             );
@@ -325,13 +287,13 @@ export function FeedTabContent({
         </nav>
 
         <div className="relative w-full md:w-64 lg:w-72 shrink-0">
-          <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
+          <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search in feed..."
+            placeholder="제목"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 sm:h-10 pl-9 sm:pl-11 pr-4 rounded-full bg-muted text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow placeholder:text-muted-foreground"
+            className="w-full h-9 sm:h-10 pl-7 pr-2 bg-transparent border-b-2 border-black rounded-none text-xs sm:text-sm font-bold focus:outline-none placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -361,21 +323,22 @@ export function FeedTabContent({
               </div>
             )}
 
-            {/* Folder Cards */}
+            {/* Folder Cards - Bookshelf/Study Concept */}
             {!currentFolder && selectedCategory !== 'All' &&
               folders.map((folder) => (
                 <motion.div
                   layout
                   key={`folder-${folder}`}
                   onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-square flex-col items-start justify-end p-4 overflow-hidden rounded-xl border border-border bg-muted transition-all duration-300 cursor-pointer hover:border-foreground/20 hover:shadow-lg"
+                  className="group relative flex aspect-[3/4] flex-col items-start justify-end p-5 overflow-hidden bg-[#FAF9F6] border-l-4 border-black/80 shadow-sm transition-all duration-500 cursor-pointer hover:shadow-md hover:-translate-y-2"
                 >
-                  <Folder className="absolute top-4 right-4 w-6 h-6 text-muted-foreground" />
-                  <h3 className="text-sm font-bold text-foreground line-clamp-2">
+                  <Folder className="absolute top-5 right-5 w-5 h-5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                  <h3 className="text-xs font-bold text-foreground uppercase tracking-widest leading-relaxed line-clamp-3">
                     {folder}
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {filteredItems.filter((i) => i.sub_category === folder).length} items
+                  <div className="mt-2 w-full h-[1px] bg-black/5" />
+                  <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tighter italic">
+                    {filteredItems.filter((i) => i.sub_category === folder).length} Vol.
                   </p>
                 </motion.div>
               ))}
@@ -400,18 +363,12 @@ export function FeedTabContent({
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
               <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
             </div>
-            <h3 className="editorial-heading text-xl sm:text-2xl md:text-3xl text-foreground mb-2 sm:mb-3">start your collection</h3>
-            <p className="text-muted-foreground font-medium mb-6 sm:mb-8 max-w-sm text-xs sm:text-sm">
-              Add items to build your personal mood board.
-              <br />
-              Curate your unique aesthetic.
-            </p>
             <button
               onClick={() => setIsAddPanelOpen(true)}
-              className="flex items-center gap-2 h-10 sm:h-12 px-5 sm:px-6 bg-primary text-primary-foreground rounded-full text-xs sm:text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
             >
               <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Add First Item
+              첫 아이템 넣기
             </button>
           </div>
         )}
@@ -449,7 +406,7 @@ export function FeedTabContent({
             >
               <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-background p-6 sm:p-8 shadow-2xl border border-border">
                 <div className="flex items-center justify-between mb-6 sm:mb-8">
-                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">add item</h3>
+                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">추가하기</h3>
                   <button
                     onClick={() => setIsAddPanelOpen(false)}
                     className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -461,14 +418,14 @@ export function FeedTabContent({
                 <form onSubmit={handleAddItem} className="space-y-4 sm:space-y-5">
                   <div>
                     <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-                      URL or Product Name
+                      URL 혹은 상품이름
                     </label>
                     <input
                       type="url"
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
                     />
                   </div>
                   <div>
@@ -480,7 +437,7 @@ export function FeedTabContent({
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
                     />
                   </div>
                   <button
@@ -489,7 +446,7 @@ export function FeedTabContent({
                     className={`w-full h-10 sm:h-12 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
                       isAddButtonSuccess
                         ? 'bg-green-600 text-white'
-                        : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50'
+                        : 'bg-black text-white hover:opacity-90 disabled:opacity-50'
                     }`}
                   >
                     <AnimatePresence mode="wait" initial={false}>
