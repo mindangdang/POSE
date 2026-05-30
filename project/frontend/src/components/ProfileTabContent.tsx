@@ -226,25 +226,25 @@ function buildTasteProfileSections(taste: string): TasteProfileSection[] {
 
 function ProfileHeader({ user }: ProfileHeaderProps) {
   return (
-    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 border-b border-border pb-8">
-      <div className="space-y-4">
-        <div className="w-20 h-20 rounded-full bg-muted p-0.5">
-          <div className="w-full h-full bg-background rounded-full flex items-center justify-center overflow-hidden">
-            <User className="w-10 h-10 text-foreground" />
+    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 pb-10 border-b border-border">
+      <div className="space-y-6">
+        <div className="w-24 h-24 rounded-full bg-muted overflow-hidden">
+          <div className="w-full h-full bg-gradient-to-br from-muted to-muted-foreground/10 flex items-center justify-center">
+            <User className="w-12 h-12 text-muted-foreground" />
           </div>
         </div>
-        <div className="space-y-1">
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+        <div className="space-y-2">
+          <h2 className="editorial-heading text-4xl md:text-5xl lg:text-6xl text-foreground">
             {user?.username || 'Anonymous'}
           </h2>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide bg-muted inline-block px-3 py-1 rounded-full">
-            POSE Creator No. {user?.id || '000'}
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+            POSE Creator #{user?.id || '000'}
           </p>
         </div>
       </div>
-      <div className="text-left md:text-right max-w-xs">
-        <p className="text-xl font-bold text-foreground leading-tight">
-          My Vibe is my POSE
+      <div className="text-left md:text-right">
+        <p className="text-lg font-medium text-muted-foreground">
+          My Vibe is my <span className="text-foreground font-bold">POSE</span>
         </p>
       </div>
     </div>
@@ -266,32 +266,30 @@ function TasteSectionCard({ section }: TasteSectionCardProps) {
   };
 
   return (
-    <div className={`rounded-[2rem] border bg-gradient-to-br ${section.accent} p-6 backdrop-blur-sm`}>
+    <div className="rounded-2xl border border-border bg-muted/50 p-6">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h5 className="mt-2 text-xl font-black tracking-tight text-black capitalize">
-            {section.title}
-          </h5>
-        </div>
-        <Compass className="h-5 w-5 text-blue-200" />
+        <h5 className="text-lg font-bold text-foreground capitalize">
+          {section.title}
+        </h5>
+        <Compass className="h-5 w-5 text-muted-foreground" />
       </div>
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-3">
         {paragraphs.map((paragraph, lineIndex) => (
           <div
             key={`${section.title}-${lineIndex}`}
-            className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm shadow-slate-950/5"
+            className="rounded-xl border border-border bg-background px-4 py-4"
           >
             {paragraph.title ? (
               <button
                 type="button"
                 onClick={() => toggleParagraph(lineIndex)}
-                className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-100 via-blue-100 to-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-blue-600 transition-all hover:brightness-95"
+                className="inline-flex items-center rounded-full bg-muted px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-foreground transition-all hover:bg-muted/80"
               >
                 #{paragraph.title}
               </button>
             ) : null}
             {openParagraphs[lineIndex] !== false ? (
-              <p className="mt-3 text-sm font-medium leading-6 text-gray-700">
+              <p className="mt-3 text-sm font-medium leading-6 text-muted-foreground">
                 {paragraph.description}
               </p>
             ) : null}
@@ -311,23 +309,22 @@ function TasteSummaryCard({
   user,
 }: TasteSummaryCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-[3rem] border border-slate-100 bg-white shadow-[0_30px_80px_-40px_rgba(15,23,42,0.14)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.08),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.07),_transparent_24%),linear-gradient(180deg,_rgba(255,255,255,0.99),_rgba(248,250,252,0.98))]" />
-      <div className="relative p-8 md:p-10 space-y-8">
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-background">
+      <div className="p-8 md:p-10 space-y-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.3em] text-blue-600">
-              <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-blue-600">
-                <Zap className="w-3.5 h-3.5" fill="currentColor" />
-                Taste Analysis
-              </div>
+          <div className="space-y-4">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              <Zap className="w-3.5 h-3.5" fill="currentColor" />
+              Taste Analysis
             </span>
             <div>
-              <h4 className="text-3xl md:text-4xl font-black tracking-tighter text-black">
-                {user?.username || 'Anonymous'}님의 취향 한 장 요약
+              <h4 className="editorial-heading text-3xl md:text-4xl text-foreground">
+                {user?.username || 'Anonymous'}&apos;s
+                <br />
+                <span className="text-muted-foreground">Style DNA</span>
               </h4>
-              <p className="mt-2 text-sm md:text-base font-medium text-slate-500">
-                AI가 모아본 취향의 결, 좋아하는 무드, 다시 찾게 될 영감 포인트예요.
+              <p className="mt-3 text-sm font-medium text-muted-foreground max-w-md">
+                AI-curated insights about your aesthetic preferences, mood patterns, and style inspirations.
               </p>
             </div>
           </div>
@@ -342,30 +339,30 @@ function TasteSummaryCard({
           ))}
         </div>
 
-        <div className="rounded-[2rem] border border-dashed border-sky-100 bg-white p-5 text-sm font-medium leading-7 text-slate-600">
-          <span className="mr-2 inline-flex rounded-full bg-sky-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-white">
+        <div className="rounded-2xl bg-muted p-5 text-sm font-medium text-muted-foreground">
+          <span className="mr-2 inline-flex rounded-full bg-foreground px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-background">
             Share Tip
           </span>
-          공유 버튼을 누르면 프로필 문구를 먼저 클립보드에 복사한 뒤, 인스타그램으로 이동할 수 있게 도와드려요.
+          Click share to copy your profile text and open Instagram.
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-6">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-6">
           <button
             onClick={onGenerateTaste}
             disabled={isGeneratingTaste}
-            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-900 shadow-sm transition-all hover:bg-slate-50"
+            className="flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-xs font-bold uppercase tracking-wider text-foreground transition-all hover:bg-muted"
           >
             {isGeneratingTaste ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4 text-blue-500" />
+              <Sparkles className="w-4 h-4" />
             )}
             {isGeneratingTaste ? 'Analyzing...' : 'Re-Analyze'}
           </button>
           <button
             onClick={onShareProfile}
             disabled={isSharingProfile}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-500/20 transition-all hover:from-sky-600 hover:to-blue-700"
+            className="flex items-center gap-2 rounded-full bg-foreground px-6 py-3 text-xs font-bold uppercase tracking-wider text-background transition-all hover:opacity-90"
           >
             {isSharingProfile ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -387,40 +384,48 @@ function EmptyTasteState({
   onGoToFeed,
 }: EmptyTasteStateProps) {
   return (
-    <div className="py-20 bg-muted rounded-2xl flex flex-col items-center justify-center text-center space-y-6 px-4 border-2 border-dashed border-border">
-      <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center">
-        <Sparkles className="w-7 h-7 text-accent" />
+    <div className="py-24 flex flex-col items-center justify-center text-center">
+      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
+        <Sparkles className="w-8 h-8 text-muted-foreground" />
       </div>
 
       {hasItems ? (
-        <div className="space-y-4 flex flex-col items-center">
-          <p className="text-muted-foreground font-medium text-base max-w-sm">
-            충분한 영감이 모였습니다.
-            <br />
-            당신의 무의식적인 패턴을 꺼내볼까요?
-          </p>
+        <div className="space-y-6 flex flex-col items-center">
+          <div>
+            <h3 className="editorial-heading text-3xl text-foreground mb-3">ANALYZE YOUR TASTE</h3>
+            <p className="text-muted-foreground font-medium text-sm max-w-sm">
+              You have enough inspirations collected.
+              <br />
+              Let AI discover your hidden patterns.
+            </p>
+          </div>
           <button
             onClick={onGenerateTaste}
             disabled={isGeneratingTaste}
-            className="h-11 px-6 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
+            className="h-12 px-6 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
           >
             {isGeneratingTaste ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Zap className="w-4 h-4" />
             )}
-            {isGeneratingTaste ? '분석 중...' : '내 취향 분석하기'}
+            {isGeneratingTaste ? 'Analyzing...' : 'Generate Taste Profile'}
           </button>
         </div>
       ) : (
-        <div className="space-y-4 flex flex-col items-center">
-          <p className="text-muted-foreground font-medium">아직 수집된 영감이 없습니다.</p>
+        <div className="space-y-6 flex flex-col items-center">
+          <div>
+            <h3 className="editorial-heading text-3xl text-foreground mb-3">NO DATA YET</h3>
+            <p className="text-muted-foreground font-medium text-sm">
+              Start collecting inspirations to discover your taste.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onGoToFeed}
-            className="h-10 px-6 bg-background border border-border text-foreground rounded-full text-sm font-medium hover:bg-muted transition-colors"
+            className="h-11 px-6 bg-background border border-border text-foreground rounded-full text-sm font-medium hover:bg-muted transition-colors"
           >
-            피드 탐색하기
+            Explore Feed
           </button>
         </div>
       )}
@@ -440,12 +445,12 @@ function getProfileImageUrl(item: SavedItem) {
 
 function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridProps) {
   return (
-    <div className="space-y-6 pt-8">
-      <div className="flex items-center justify-between border-b border-border pb-4">
+    <div className="space-y-6 pt-10">
+      <div className="flex items-center justify-between pb-4 border-b border-border">
         <h4 className="text-lg font-bold text-foreground">
-          최근 영감
+          Recent Inspirations
         </h4>
-        <span className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+        <span className="text-xs font-medium text-muted-foreground">
           {items.length} Items
         </span>
       </div>
@@ -458,7 +463,7 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
           >
             <img
               src={getProfileImageUrl(item)}
-              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-500"
               referrerPolicy="no-referrer"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -476,6 +481,7 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
                 }
               }}
             />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
           </div>
         ))}
       </div>

@@ -221,30 +221,146 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted font-sans">
-        <div className="flex flex-col items-center gap-8 p-10 bg-background rounded-2xl shadow-xl border border-border">
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-black text-foreground">POSE</h1>
-            <p className="text-muted-foreground font-medium">
-              당신의 취향에서 시작되는 새로운 발견
-            </p>
-          </div>
-          <div className="flex w-full flex-col items-center gap-4">
-            <div className="w-full flex justify-center min-h-[44px]">
-              <GoogleLoginButton
-                onSuccess={(userData) => setUser(userData)}
-                onError={(msg) => alert(msg)}
-              />
+      <div className="min-h-screen bg-background font-sans">
+        {/* Header */}
+        <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-12 h-16">
+          <span className="text-xl font-black tracking-tight text-foreground">POSE</span>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+            <span className="cursor-pointer hover:text-foreground transition-colors">ABOUT</span>
+            <span className="cursor-pointer hover:text-foreground transition-colors">PROJECTS</span>
+            <span className="cursor-pointer hover:text-foreground transition-colors">SERVICES</span>
+          </nav>
+        </header>
+
+        {/* Hero Section */}
+        <main className="relative min-h-screen flex flex-col">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col lg:flex-row">
+            {/* Left - Typography */}
+            <div className="flex-1 flex flex-col justify-center px-6 lg:px-12 pt-24 lg:pt-0">
+              <div className="max-w-2xl">
+                <h1 className="editorial-heading text-6xl sm:text-7xl lg:text-8xl xl:text-9xl text-foreground">
+                  CRAFTING
+                  <br />
+                  <span className="text-muted-foreground">YOUR</span>
+                  <br />
+                  STYLE
+                </h1>
+                
+                <div className="mt-8 lg:mt-12 space-y-4 max-w-md">
+                  <p className="text-sm lg:text-base text-muted-foreground leading-relaxed">
+                    POSE is your personal curation platform.
+                    <br />
+                    Discover, collect, and define your unique taste.
+                  </p>
+                  
+                  <div className="flex flex-col gap-3 pt-4">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="w-8 h-px bg-border"></span>
+                      <span>AI. SEARCH. DISCOVER.</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Login Buttons */}
+                <div className="mt-10 lg:mt-14 flex flex-col gap-4 max-w-xs">
+                  <div className="w-full flex justify-start">
+                    <GoogleLoginButton
+                      onSuccess={(userData) => setUser(userData)}
+                      onError={(msg) => alert(msg)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGuestLogin}
+                    className="w-full h-11 rounded-lg border border-border bg-background text-sm font-medium text-foreground transition hover:bg-muted"
+                  >
+                    Continue as Guest
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleGuestLogin}
-              className="w-full max-w-[320px] rounded-2xl border border-border bg-muted px-6 py-3 text-sm font-semibold text-foreground transition hover:bg-muted/80"
-            >
-              게스트 로그인
-            </button>
+
+            {/* Right - Image Grid */}
+            <div className="flex-1 relative lg:h-screen overflow-hidden">
+              <div className="absolute inset-0 grid grid-cols-2 gap-2 p-4 lg:p-6">
+                <div className="space-y-2">
+                  <div className="aspect-[3/4] bg-muted rounded-lg overflow-hidden">
+                    <img 
+                      src="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=600&q=80" 
+                      alt="Fashion inspiration"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                    <img 
+                      src="https://images.unsplash.com/photo-1558171813-4c088753af8f?w=600&q=80" 
+                      alt="Style inspiration"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2 pt-8">
+                  <div className="aspect-square bg-muted rounded-lg overflow-hidden">
+                    <img 
+                      src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80" 
+                      alt="Design inspiration"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="aspect-[3/4] bg-muted rounded-lg overflow-hidden">
+                    <img 
+                      src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80" 
+                      alt="Product inspiration"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+
+          {/* Bottom Features */}
+          <div className="border-t border-border bg-background">
+            <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8 lg:py-12">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-foreground flex items-center justify-center">
+                      <span className="text-xs font-bold text-background">01</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-foreground">DISCOVER</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    AI-powered search finds items that match your unique aesthetic and style preferences.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-foreground flex items-center justify-center">
+                      <span className="text-xs font-bold text-background">02</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-foreground">COLLECT</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Save and organize your inspirations. Build a personal collection that reflects your taste.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-foreground flex items-center justify-center">
+                      <span className="text-xs font-bold text-background">03</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-foreground">DEFINE</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Get AI-generated insights about your style DNA. Understand and share your unique taste profile.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }

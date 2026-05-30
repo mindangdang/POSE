@@ -402,18 +402,17 @@ export function SearchTabContent({
                 initial={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20, height: 0, marginBottom: -32 }}
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-center gap-8 overflow-hidden"
+                className="flex flex-col items-center gap-6 overflow-hidden"
               >
-                <div className="flex flex-row items-center justify-center gap-4 text-center text-5xl font-black">
-                  <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-tr from-blue-500 via-yellow-300 to-purple-500 p-0.5">
-                    <div className="w-full h-full bg-black rounded-[14px] flex items-center justify-center">
-                      <Zap className="w-8 h-8 text-white" fill="white"/>
-                    </div>
-                  </div>
-                  <h1 className="flex items-center justify-center leading-none">POSE!</h1>
-                </div>
-                <p className="text-center text-xl font-light text-gray-900">
-                  당신의 취향에서 시작되는 새로운 발견
+                <h1 className="editorial-heading text-5xl sm:text-6xl lg:text-7xl text-foreground text-center">
+                  DISCOVER
+                  <br />
+                  <span className="text-muted-foreground">YOUR STYLE</span>
+                </h1>
+                <p className="text-center text-sm sm:text-base font-medium text-muted-foreground max-w-md">
+                  Search for items that match your aesthetic.
+                  <br />
+                  AI-powered discovery for your unique taste.
                 </p>
               </motion.div>
             )}
@@ -576,12 +575,12 @@ export function SearchTabContent({
         {/* 검색 결과 영역 */}
         {(loading || searchResults.length > 0) && (
           <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="min-h-[60vh] bg-muted/50 p-6 md:p-10 rounded-2xl border border-border items-center justify-center flex"
+            className="min-h-[60vh]"
           >
-            <div className="w-full flex flex-col space-y-8">
+            <div className="w-full flex flex-col">
               <AnimatePresence>
                 {loading && (
                   <motion.div
@@ -589,17 +588,17 @@ export function SearchTabContent({
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="flex flex-col items-center justify-center gap-4 py-4 overflow-hidden"
+                    className="flex flex-col items-center justify-center gap-4 py-8 overflow-hidden"
                   >
-                    <Loader2 className="w-8 h-8 animate-spin text-foreground" />
-                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-muted-foreground animate-pulse text-center">
+                    <div className="w-12 h-12 rounded-full border-2 border-muted border-t-foreground animate-spin" />
+                    <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-medium text-muted-foreground text-center">
                       {searchResults.length > 0
-                        ? `분석 중... (현재까지 발견된 아이템: ${searchResults.length}개)`
+                        ? `Discovering... (${searchResults.length} items found)`
                         : searchMode === "digging"
-                        ? "검색 중..."
+                        ? "Searching..."
                         : searchMode === "ai"
-                        ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
-                        : "분석 중..."}
+                        ? "AI is finding your style...\nThis may take 10-15 seconds"
+                        : "Analyzing..."}
                     </p>
                   </motion.div>
                 )}
@@ -609,62 +608,67 @@ export function SearchTabContent({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center bg-background p-6 rounded-2xl border border-border"
+                  className="flex flex-col items-center bg-muted/50 p-8 rounded-2xl border border-border mb-8"
                 >
-                  <span className="text-xs font-bold tracking-widest uppercase text-accent mb-4 flex items-center gap-2">
+                  <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground mb-4 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" /> Generated Vibe
                   </span>
                   <img
                     src={generatedImage}
                     alt="AI Generated Vibe"
-                    className="w-48 md:w-64 aspect-[3/4] object-cover rounded-2xl shadow-md"
+                    className="w-48 md:w-56 aspect-[3/4] object-cover rounded-xl shadow-lg"
                   />
-                  <p className="text-xs text-muted-foreground mt-4 font-medium">를 기반으로 검색한 상품입니다.</p>
+                  <p className="text-xs text-muted-foreground mt-4 font-medium">Based on your style input</p>
                 </motion.div>
               )}
 
-              <motion.div layout className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {/* Pinterest-style Masonry Grid */}
+              <div className="masonry-grid">
                 <AnimatePresence>
                   {searchResults.map((item, index) => (
                     <SearchResultCard
                       key={item.id}
-                      delay={0.05 * (index % 12)}
+                      delay={0.03 * (index % 20)}
                       item={item}
                       onClick={() => setSelectedItem(item)}
                       onSave={handleSaveToFeed}
                       onSearchSecondhand={handleSecondhandSearch}
                     />
                   ))}
-
-                  {loading && Array.from({ length: Math.max(5, 10 - searchResults.length) }).map((_, i) => (
-                    <motion.div
-                      key={`skeleton-${i}`}
-                      layout
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                      className="flex flex-col"
-                    >
-                      <div className="aspect-square w-full bg-muted rounded-xl animate-pulse mb-3" />
-                      <div className="space-y-2">
-                        <div className="h-3 bg-muted rounded w-1/3 animate-pulse" />
-                        <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
-                      </div>
-                    </motion.div>
-                  ))}
                 </AnimatePresence>
-              </motion.div>
+              </div>
+
+              {/* Loading Skeletons */}
+              {loading && (
+                <div className="masonry-grid mt-4">
+                  {Array.from({ length: Math.max(5, 10 - searchResults.length) }).map((_, i) => (
+                    <div key={`skeleton-${i}`} className="masonry-item">
+                      <div 
+                        className="w-full bg-muted rounded-2xl animate-pulse" 
+                        style={{ 
+                          aspectRatio: [3/4, 4/5, 1, 2/3, 5/6][i % 5]
+                        }}
+                      />
+                      <div className="mt-3 space-y-2 px-1">
+                        <div className="h-2 bg-muted rounded w-1/3 animate-pulse" />
+                        <div className="h-3 bg-muted rounded w-3/4 animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div ref={bottomRef} className="h-4" />
-            {searchResults.length > 0 && hasMore && (
-                <div className="flex justify-center pt-8 w-full">
+              
+              {searchResults.length > 0 && hasMore && (
+                <div className="flex justify-center py-10 w-full">
                   <button
                     onClick={handleLoadMore}
                     disabled={loading}
-                    className="h-11 px-8 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+                    className="h-12 px-8 bg-foreground text-background rounded-full text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    더 보기
+                    Load More
                   </button>
                 </div>
               )}

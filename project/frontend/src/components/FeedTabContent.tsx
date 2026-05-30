@@ -261,18 +261,22 @@ export function FeedTabContent({
       className="flex flex-col min-h-[calc(100vh-200px)]"
     >
       {/* Header Section */}
-      <header className="mb-8">
-        <div className="flex items-center justify-between mb-4">
+      <header className="mb-10">
+        <div className="flex items-start justify-between mb-6">
           <div>
-            <span className="text-accent text-xs font-bold tracking-widest uppercase">MY COLLECTION</span>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">내 피드</h1>
+            <span className="text-[10px] font-semibold text-muted-foreground tracking-[0.2em] uppercase">MY COLLECTION</span>
+            <h1 className="editorial-heading text-4xl md:text-5xl lg:text-6xl text-foreground mt-2">
+              YOUR
+              <br />
+              <span className="text-muted-foreground">FEED</span>
+            </h1>
           </div>
           <button
             onClick={() => setIsAddPanelOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 h-11 px-5 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="w-4 h-4" />
-            아이템 추가
+            Add Item
           </button>
         </div>
 
@@ -284,7 +288,7 @@ export function FeedTabContent({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="text-muted-foreground font-medium italic"
+            className="text-sm text-muted-foreground font-medium italic max-w-lg"
           >
             {feedQuotes[quoteIndex]}
           </motion.p>
@@ -292,7 +296,7 @@ export function FeedTabContent({
       </header>
 
       {/* Category Tabs and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-border">
         <nav className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
           {categories.map((category) => {
             const Icon = getCategoryIcon(category);
@@ -306,10 +310,10 @@ export function FeedTabContent({
                   setSelectedCategory(category);
                   setCurrentFolder(null);
                 }}
-                className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-2 h-10 px-5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                   isSelected
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                    ? 'bg-foreground text-background'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground border border-border hover:border-foreground/20'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -319,14 +323,14 @@ export function FeedTabContent({
           })}
         </nav>
 
-        <div className="relative w-full md:w-64 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative w-full md:w-72 shrink-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="피드 내 아이템 검색..."
+            placeholder="Search in feed..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-full bg-muted text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+            className="w-full h-10 pl-11 pr-4 rounded-full bg-muted text-sm font-medium focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-shadow placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -391,27 +395,32 @@ export function FeedTabContent({
 
         {/* Empty State */}
         {items.length === 0 && !addItemMutation.isPending && (
-          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
-            <h3 className="text-xl font-bold text-foreground mb-2">POSE</h3>
-            <p className="text-muted-foreground font-medium mb-4">
-              아이템 링크를 넣고 나만의 바이브를 수집하세요.
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-6">
+              <Plus className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="editorial-heading text-3xl text-foreground mb-3">START YOUR COLLECTION</h3>
+            <p className="text-muted-foreground font-medium mb-8 max-w-sm">
+              Add items to build your personal mood board.
+              <br />
+              Curate your unique aesthetic.
             </p>
             <button
               onClick={() => setIsAddPanelOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 h-12 px-6 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
             >
               <Plus className="w-4 h-4" />
-              첫 아이템 추가하기
+              Add First Item
             </button>
           </div>
         )}
 
         {/* Empty State for Search */}
         {items.length > 0 && itemsToDisplay.length === 0 && searchQuery.trim() !== '' && (
-          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
-            <h3 className="text-xl font-bold text-foreground mb-2">검색 결과 없음</h3>
-            <p className="text-muted-foreground font-medium mb-4">
-              조건에 맞는 아이템을 찾을 수 없습니다.
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <h3 className="editorial-heading text-2xl text-foreground mb-3">NO RESULTS</h3>
+            <p className="text-muted-foreground font-medium">
+              No items match your search criteria.
             </p>
           </div>
         )}
@@ -426,7 +435,7 @@ export function FeedTabContent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
               onClick={() => setIsAddPanelOpen(false)}
             />
             <motion.div
@@ -437,49 +446,49 @@ export function FeedTabContent({
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-foreground">새 아이템 추가하기</h3>
+              <div className="w-full max-w-md rounded-3xl bg-background p-8 shadow-2xl border border-border">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="editorial-heading text-2xl text-foreground">ADD ITEM</h3>
                   <button
                     onClick={() => setIsAddPanelOpen(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <form onSubmit={handleAddItem} className="space-y-4">
+                <form onSubmit={handleAddItem} className="space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">
-                      URL 또는 제품명
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      URL or Product Name
                     </label>
                     <input
                       type="url"
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-12 px-4 bg-muted rounded-xl text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">
-                      Session ID (선택)
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      Session ID (Optional)
                     </label>
                     <input
                       type="password"
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-12 px-4 bg-muted rounded-xl text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={`w-full h-11 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                    className={`w-full h-12 flex items-center justify-center rounded-full text-sm font-semibold transition-all ${
                       isAddButtonSuccess
-                        ? 'bg-green-500 text-primary-foreground'
-                        : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-foreground text-background hover:opacity-90 disabled:opacity-50'
                     }`}
                   >
                     <AnimatePresence mode="wait" initial={false}>
@@ -494,17 +503,17 @@ export function FeedTabContent({
                         {addItemMutation.isPending ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            추가 중...
+                            Adding...
                           </>
                         ) : isAddButtonSuccess ? (
                           <>
                             <Check className="w-4 h-4" />
-                            추가 완료!
+                            Added!
                           </>
                         ) : (
                           <>
                             <Plus className="w-4 h-4" />
-                            추가하기
+                            Add Item
                           </>
                         )}
                       </motion.span>
