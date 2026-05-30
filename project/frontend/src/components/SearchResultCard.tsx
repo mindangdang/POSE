@@ -86,7 +86,7 @@ export function SearchResultCard({
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-medium">
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-bold">
             No Image
           </div>
         )}
@@ -136,7 +136,7 @@ export function SearchResultCard({
               e.stopPropagation();
               onSearchSecondhand?.(title);
             }}
-            className="h-8 sm:h-9 px-2.5 sm:px-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-md text-xs font-medium text-foreground hover:bg-white transition-colors"
+            className="h-8 sm:h-9 px-2.5 sm:px-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-md text-xs font-bold text-foreground hover:bg-white transition-colors uppercase tracking-tight"
             aria-label="Search secondhand"
           >
             <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -152,7 +152,7 @@ export function SearchResultCard({
             {item.category}
           </span>
         )}
-        <h3 className="text-xs sm:text-sm font-medium text-foreground line-clamp-2 leading-snug">
+        <h3 className="text-xs sm:text-sm font-bold text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
       </div>

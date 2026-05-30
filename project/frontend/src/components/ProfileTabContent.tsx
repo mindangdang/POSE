@@ -237,15 +237,10 @@ function ProfileHeader({ user }: ProfileHeaderProps) {
           <h2 className="editorial-heading text-4xl md:text-5xl lg:text-6xl text-foreground">
             {user?.username || 'Anonymous'}
           </h2>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-[0.15em]">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">
             POSE Creator #{user?.id || '000'}
           </p>
         </div>
-      </div>
-      <div className="text-left md:text-right">
-        <p className="text-lg font-medium text-muted-foreground">
-          My Vibe is my <span className="text-foreground font-bold">POSE</span>
-        </p>
       </div>
     </div>
   );
@@ -289,7 +284,7 @@ function TasteSectionCard({ section }: TasteSectionCardProps) {
               </button>
             ) : null}
             {openParagraphs[lineIndex] !== false ? (
-              <p className="mt-3 text-sm font-medium leading-6 text-muted-foreground">
+              <p className="mt-3 text-sm font-bold leading-relaxed text-muted-foreground">
                 {paragraph.description}
               </p>
             ) : null}

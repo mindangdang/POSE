@@ -1,4 +1,4 @@
-import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google';
 import type { AppUser } from '../types/user';
 
 type GoogleLoginButtonProps = {
@@ -7,17 +7,13 @@ type GoogleLoginButtonProps = {
 };
 
 export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps) {
-  const handleSuccess = async (response: CredentialResponse) => {
-    if (!response.credential) return;
-    
+  const login = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
     try {
-      // 백엔드로 Google JWT 토큰 전송
       const res = await fetch('/api/auth/google', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token: response.credential }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: tokenResponse.access_token }),
       });
       
       if (!res.ok) {
@@ -35,12 +31,16 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
       console.error("Login Error:", error);
       onError(error.message || '로그인 중 오류가 발생했습니다.');
     }
-  };
+    },
+    onError: () => onError('구글 로그인 팝업 호출에 실패했습니다.'),
+  });
 
   return (
-    <GoogleLogin
-      onSuccess={handleSuccess}
-      onError={() => onError('구글 로그인 팝업 호출에 실패했습니다.')}
-    />
+    <button
+      onClick={() => login()}
+      className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-foreground hover:opacity-70 transition-opacity py-1"
+    >
+      Sign in with Google
+    </button>
   );
 }
