@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles, BrainCircuit, Zap, Image as ImageIcon, X, Plus } from 'lucide-react';
+import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -12,6 +12,8 @@ type SearchTabContentProps = {
   refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
   user: AppUser | null;
+  searchSecondhandQuery?: string;
+  searchSecondhandTrigger?: number;
 };
 
 export function SearchTabContent({
@@ -19,10 +21,10 @@ export function SearchTabContent({
   refreshItems,
   refreshTaste,
   user,
+  searchSecondhandQuery,
+  searchSecondhandTrigger,
 }: SearchTabContentProps) {
-  const [searchMode, setSearchMode] = useState<"digging" | "ai" | "multimodal">("digging");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [searchMode, setSearchMode] = useState<"digging" | "ai">("digging");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
@@ -42,7 +44,6 @@ export function SearchTabContent({
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
     { value: "detail", label: "상세 검색", icon: Zap, activeClass: "text-yellow-500 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-yellow-500 hover:cursor-pointer" },
     { value: "ai", label: "AI 검색", icon: BrainCircuit, activeClass: "text-blue-600 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-blue-600 hover:cursor-pointer" },
-    { value: "multimodal", label: "이미지 검색", icon: ImageIcon, activeClass: "text-purple-600 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-purple-600 hover:cursor-pointer" },
   ] as const;
   const activeMode = searchMode === "digging" && isDetailedSearch
     ? modeOptions[1]
@@ -50,8 +51,6 @@ export function SearchTabContent({
       ? modeOptions[0]
     : searchMode === "ai"
       ? modeOptions[2]
-      : searchMode === "multimodal"
-        ? modeOptions[3]
         : null;
   const ActiveModeIcon = activeMode?.icon ?? Plus;
   const detailFields = [
@@ -197,31 +196,13 @@ export function SearchTabContent({
 
       const token = localStorage.getItem('access_token');
       const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-
-      if (searchMode === "multimodal") {
-        if (!imageFile) {
-          throw new Error("검색을 위해 이미지를 붙여넣기 해주세요. (Ctrl+V / Cmd+V)");
-        }
-        const formData = new FormData();
-        formData.append('image', imageFile);
-        if (currentQuery) {
-          formData.append('user_text', currentQuery);
-        }
-
-        res = await fetch('/api/multimodal', {
-          method: 'POST',
-          headers: authHeaders,
-          body: formData
-        });
-      } else {
-        const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
-        });
-      }
-
+      const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
+      });
+      
       if (res.status === 429) {
         setQuotaCountdown(60);
         setLoading(false);
@@ -262,24 +243,6 @@ export function SearchTabContent({
     }
   };
 
-  // 이미지 붙여넣기 핸들러
-  const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-    const items = event.clipboardData.items;
-    let file: File | null = null;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        file = items[i].getAsFile();
-        break;
-      }
-    }
-    if (!file) return;
-
-    setSearchMode("multimodal");
-    setImageFile(file);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-  };
-
   // 1. 엔터 쳐서 '새롭게 검색'할 때
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -296,12 +259,7 @@ export function SearchTabContent({
       if (!finalQuery.trim()) return;
       setSearchQuery(finalQuery); // 더 보기(Pagination) 기능을 위해 통합된 쿼리로 업데이트
     } else {
-      if (searchMode !== "multimodal" && !searchQuery) return;
-    }
-
-    if (searchMode === "multimodal" && !imageFile) {
-      alert("검색을 위해 이미지를 붙여넣기 해주세요. (Ctrl+V / Cmd+V)");
-      return;
+      if (!searchQuery) return;
     }
 
     setCurrentPage(1);       // 1페이지로 리셋
@@ -317,6 +275,38 @@ export function SearchTabContent({
     setCurrentPage(nextPage);      // 페이지 번호 1 증가
     await fetchResults(nextPage, true); // 다음 페이지 데이터 가져와서 이어 붙이기
   };
+
+  const handleSecondhandSearch = async (title: string) => {
+    setSearchMode("digging");
+    setIsDetailedSearch(false);
+    setSearchQuery(title);
+    setSearchResults([]);
+    setLoading(true);
+    setGeneratedImage(null);
+    setHasMore(false);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch('/api/search/secondhand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ query: title })
+      });
+      if (!res.ok) throw new Error("Secondhand search failed");
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!searchSecondhandQuery || searchSecondhandTrigger === undefined) return;
+    void handleSecondhandSearch(searchSecondhandQuery);
+  }, [searchSecondhandQuery, searchSecondhandTrigger]);
 
   const applySelectedMode = (mode: ModeOptionValue) => {
     if (mode === "digging") {
@@ -431,20 +421,6 @@ export function SearchTabContent({
 
           <form onSubmit={handleSearch} className="relative group max-w-3xl mx-auto w-full flex flex-col gap-4">
 
-          <AnimatePresence>
-            {previewUrl && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="relative w-32 h-32 mx-auto">
-                <img src={previewUrl} alt="preview" className="w-full h-full object-cover rounded-2xl shadow-md border-4 border-white" />
-                <button
-                  type="button"
-                  onClick={() => { setPreviewUrl(null); setImageFile(null); }}
-                  className="absolute -top-3 -right-3 bg-black text-white rounded-full p-1.5 shadow-lg hover:bg-gray-800 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
           <motion.div
             layout
             transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
@@ -565,13 +541,10 @@ export function SearchTabContent({
               >
                 <input
                   type="text"
-                  onPaste={handlePaste}
                   placeholder={
                     searchMode === "digging"
                       ? "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
-                      : searchMode === "ai"
-                      ? "떠오르는 스타일을 자유롭게 입력해보세요"
-                      : "이미지를 붙여넣으면 스타일을 찾아드려요 (설명 추가 가능 ex: similiar color)"
+                      : "떠오르는 스타일을 자유롭게 입력해보세요"
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -626,7 +599,7 @@ export function SearchTabContent({
                         ? "검색 중..."
                         : searchMode === "ai"
                         ? "AI 검색 중... \n 10~15초 소요될 수 있어요"
-                        : "이미지 분석 중...\n 10~15초 소요될 수 있어요"}
+                        : "분석 중..."}
                     </p>
                   </motion.div>
                 )}
@@ -659,6 +632,7 @@ export function SearchTabContent({
                       item={item}
                       onClick={() => setSelectedItem(item)}
                       onSave={handleSaveToFeed}
+                      onSearchSecondhand={handleSecondhandSearch}
                     />
                   ))}
 

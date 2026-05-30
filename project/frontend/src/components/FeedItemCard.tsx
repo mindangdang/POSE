@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Instagram, Sparkles, Trash2 } from 'lucide-react';
+import { Instagram, Sparkles, Trash2, Search } from 'lucide-react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -9,6 +9,7 @@ type FeedItemCardProps = {
   factKeysToShow: string[];
   onDelete: (id: number) => void | Promise<void>;
   onSelect: () => void;
+  onSearchSecondhand?: (title: string) => void;
 };
 
 export function FeedItemCard({
@@ -16,6 +17,7 @@ export function FeedItemCard({
   factKeysToShow,
   onDelete,
   onSelect,
+  onSearchSecondhand,
 }: FeedItemCardProps) {
   const facts = parseItemFacts(item);
   const title = getItemTitle(item);
@@ -103,22 +105,35 @@ export function FeedItemCard({
         )}
 
         {/* Source */}
-        <div className="pt-2">
-          {item.url && item.url.startsWith('http') ? (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Instagram className="w-3 h-3" /> View Source
-            </a>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Sparkles className="w-3 h-3" /> AI Curated
-            </span>
-          )}
+        <div className="pt-2 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            {item.url && item.url.startsWith('http') ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Instagram className="w-3 h-3" /> View Source
+              </a>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Sparkles className="w-3 h-3" /> AI Curated
+              </span>
+            )}
+          </div>
+          
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSearchSecondhand?.(title);
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-muted hover:bg-accent hover:text-accent-foreground text-[10px] font-bold transition-colors"
+          >
+            <Search className="w-3 h-3" />
+            이 상품의 세컨핸드 매물찾기
+          </button>
         </div>
       </div>
     </motion.div>

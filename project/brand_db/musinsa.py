@@ -30,7 +30,6 @@ def fetch_musinsa_brands():
                 "brand_name": brand.get("name"),
                 "brand_name_eng": brand.get("englishName"),
                 "link": brand.get("linkUrl"),
-                "category_list": brand.get("categoryList")
             })
         return brands
     except Exception as e:
@@ -54,17 +53,15 @@ def initialize_database():
             id SERIAL PRIMARY KEY,
             brand_name TEXT NOT NULL,
             brand_name_eng TEXT,
+            keywords TEXT,
             link TEXT,
-            category_list JSONB,
+            target_group TEXT,
+            mean_price TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(brand_name, link)
         );
         """
         cursor.execute(create_table_query)
-
-        # 2. 카테고리 리스트 검색을 위한 GIN 인덱스 생성
-        print(" category_list 데이터 고속 검색 인덱스(GIN) 생성 중...")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_category_list_gin ON brands USING GIN (category_list);")
 
         # 작업 확정
         conn.commit()
@@ -92,14 +89,14 @@ def insert_brands_to_db(brands):
         with psycopg.connect(neon_url) as conn:
             with conn.cursor() as cursor:
                 insert_query = """
-                INSERT INTO brands (brand_name, brand_name_eng, link, category_list)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO brands (brand_name, brand_name_eng, link)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (brand_name, link) DO NOTHING;
                 """
                 
                 # 데이터를 튜플 리스트로 변환 (JSON 데이터는 json.dumps로 직렬화)
                 brand_tuples = [
-                    (b['brand_name'], b['brand_name_eng'], b['link'], json.dumps(b['category_list']))
+                    (b['brand_name'], b['brand_name_eng'], b['link'])
                     for b in brands
                 ]
                 

@@ -33,3 +33,15 @@ class ManualItemCreate(BaseModel):
     facts: dict
     url: str
     image_url: Optional[str] = ""
+
+
+class ExtensionProductImport(BaseModel):
+    """Extension에서 보내는 상품 정보"""
+    url: str
+    title: str
+    image_url: str
+    description: Optional[str] = ""
+    brand: Optional[str] = ""
+    price: Optional[str] = None
+    currency: Optional[str] = "KRW"
+    source: Optional[str] = "extension_content_script"

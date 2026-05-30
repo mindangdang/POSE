@@ -22,6 +22,8 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
   }, [item]);
 
   const displayItem = viewedItem || item;
+  const modalTitle = displayItem ? getItemTitle(displayItem) : '';
+  const facts = displayItem ? parseItemFacts(displayItem) : null;
 
   useEffect(() => {
     if (displayItem) {
@@ -34,14 +36,12 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
       }
       
       const token = localStorage.getItem('access_token');
-      const facts = parseItemFacts(displayItem) as any;
-
       const fetchSimilarItems = async () => {
         try {
           let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//') 
             ? displayItem.image_url 
-            : facts?.local_image_url 
-              ? `/api/images/${facts.local_image_url}`
+            : (facts as any)?.local_image_url 
+              ? `/api/images/${(facts as any).local_image_url}`
               : displayItem.image_url 
                 ? `/api/images/${displayItem.image_url}` 
                 : '';
@@ -49,26 +49,19 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
           if (targetUrl.startsWith('//')) {
             targetUrl = `https:${targetUrl}`;
           }
-
-          const formData = new FormData();
           
-          if (targetUrl.startsWith('/api/') || targetUrl.startsWith('data:')) {
-            const response = await fetch(targetUrl);
-            const blob = await response.blob();
-            formData.append('image', blob, 'image.jpg');
-          } else if (targetUrl) {
-            formData.append('image_url', targetUrl);
-          } else {
-            const blob = new Blob([''], { type: 'image/jpeg' });
-            formData.append('image', blob, 'image.jpg');
-          }
+          // SerpApi는 공용 URL이 필요하므로, 로컬 경로인 경우 현재 도메인을 붙여줍니다.
+          const absoluteUrl = targetUrl.startsWith('/api/') 
+            ? `${window.location.origin}${targetUrl}` 
+            : targetUrl;
 
-          const res = await fetch('/api/multimodal', {
+          const res = await fetch('/api/lens', {
             method: 'POST',
             headers: { 
+              'Content-Type': 'application/json',
               ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: formData,
+            body: JSON.stringify({ query: absoluteUrl || modalTitle }),
           });
           const data = await res.json();
           if (isMounted && data.success && data.results) {
@@ -92,14 +85,12 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
       setSimilarItems([]);
       setIsLoadingSimilar(false);
     }
-  }, [displayItem]);
+  }, [displayItem, modalTitle, facts]);
 
   if (!displayItem) {
     return null;
   }
 
-  const facts = parseItemFacts(displayItem);
-  const modalTitle = getItemTitle(displayItem);
   const factEntries =
     facts && typeof facts === 'object'
       ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
