@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest, ExtensionProductImport
+from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
@@ -448,71 +448,3 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
 
 ######################################################################################
-
-@router.post("/import-product")
-async def import_product_from_extension(
-    payload: ExtensionProductImport,
-    request: Request,
-    repos: Repositories = Depends(get_repos),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Chrome Extension에서 상품 정보를 받아 저장합니다.
-    인증이 필요합니다.
-    """
-    try:
-        print(f"Extension Import Request: {payload.title} from {payload.source}")
-        user_id = str(current_user.get("sub"))
-        
-        # 필수 필드 검증
-        if not payload.title or not payload.image_url:
-            raise HTTPException(
-                status_code=400, 
-                detail="제목(title)과 이미지(image_url)는 필수입니다."
-            )
-        
-        # 상품 정보를 facts에 정리
-        facts = {
-            "title": payload.title,
-            "description": payload.description or "",
-            "brand": payload.brand or "정보 없음",
-            "price": payload.price or "가격 미상",
-            "currency": payload.currency or "KRW",
-        }
-        
-        # Extension 상품 임포트용 category 설정
-        recommend = f"[{payload.source}] {payload.brand or '상품'} - {payload.title}"
-        
-        # 데이터베이스에 저장
-        try:
-            item_id = await repos.saved_posts.create_manual_item(
-                user_id=str(user_id),
-                url=payload.url,
-                category="PRODUCT",
-                sub_category="IMPORTED",
-                title=payload.title,
-                image_url=payload.image_url,
-                recommend=recommend,
-                facts=facts
-            )
-            await repos.saved_posts.conn.commit()
-            
-            return {
-                "success": True,
-                "message": f"상품이 성공적으로 저장되었습니다.",
-                "item_id": item_id
-            }
-        except Exception as e:
-            await repos.saved_posts.conn.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=f"데이터베이스 저장 실패: {str(e)}"
-            ) from e
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"상품 임포트 중 오류 발생: {str(e)}"
-        ) from e
