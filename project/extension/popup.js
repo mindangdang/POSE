@@ -1,3 +1,25 @@
+async function sendMessageToTab(tabId, message) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, (response) => {
+      if (chrome.runtime.lastError) {
+        return reject(new Error(chrome.runtime.lastError.message));
+      }
+      resolve(response);
+    });
+  });
+}
+
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"]
+    });
+  } catch (err) {
+    throw new Error("현재 탭에 콘텐츠 스크립트를 주입할 수 없습니다. 지원되는 웹 페이지에서 시도하세요.");
+  }
+}
+
 document.getElementById('saveBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const saveBtn = document.getElementById('saveBtn');
@@ -5,7 +27,22 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   saveBtn.textContent = '처리 중...';
   
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type: "EXTRACT_PRODUCT" });
+    if (!tab || !tab.id) {
+      throw new Error('현재 활성 탭 정보를 가져올 수 없습니다.');
+    }
+
+    let response;
+    try {
+      response = await sendMessageToTab(tab.id, { type: "EXTRACT_PRODUCT" });
+    } catch (sendError) {
+      if (sendError.message.includes('Receiving end does not exist')) {
+        await ensureContentScript(tab.id);
+        response = await sendMessageToTab(tab.id, { type: "EXTRACT_PRODUCT" });
+      } else {
+        throw sendError;
+      }
+    }
+
     if (response && response.title && response.image_url) {
       const saveResponse = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ type: "SAVE_TO_SERVER", data: response }, (result) => {

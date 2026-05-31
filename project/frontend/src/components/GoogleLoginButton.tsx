@@ -1,4 +1,4 @@
-import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import type { AppUser } from '../types/user';
 
 type GoogleLoginButtonProps = {
@@ -7,21 +7,18 @@ type GoogleLoginButtonProps = {
 };
 
 export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps) {
-  const handleSuccess = async (response: CredentialResponse) => {
-    if (!response.credential) return;
-    
+  const handleSuccess = async (credentialResponse: any) => {
     try {
-      // 백엔드로 Google JWT 토큰 전송
+      // Send the JWT credential to backend for verification
       const res = await fetch('/api/auth/google', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token: response.credential }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: credentialResponse.credential }),
       });
       
       if (!res.ok) {
-        throw new Error('서버 인증에 실패했습니다.');
+        const errorData = await res.json();
+        throw new Error(errorData.detail || '서버 인증에 실패했습니다.');
       }
       
       const data = await res.json();

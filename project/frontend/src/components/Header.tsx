@@ -7,12 +7,15 @@ type HeaderProps = {
   onLogout: () => void;
   currentTab: string;
   onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
+  onAboutClick?: () => void;
+  ambientColor?: string;
+  isAmbientActive?: boolean;
 };
 
 const categories = [
-  { id: 'search', label: '검색', hasDropdown: false },
-  { id: 'feed', label: '피드', hasDropdown: false },
-  { id: 'profile', label: '테이스팅', hasDropdown: false },
+  { id: 'search', label: 'Window', hasDropdown: false },
+  { id: 'feed', label: 'Closet', hasDropdown: false },
+  { id: 'profile', label: 'Notebook', hasDropdown: false },
 ];
 
 export function Header({
@@ -20,40 +23,71 @@ export function Header({
   onLogout,
   currentTab,
   onTabChange,
+  onAboutClick,
+  ambientColor,
+  isAmbientActive,
 }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // 조명 모드 시 텍스트에 적용할 미세한 색상 변조 스타일
+  const ambientTextStyle = isAmbientActive ? { color: ambientColor, filter: 'brightness(1.5) saturate(1.2)' } : {};
+
   return (
-    <header className="sticky top-0 z-50 bg-background border-b border-border">
+    <header className="sticky top-0 z-50 bg-black border-b border-white/10">
       {/* Main Header */}
-      <div className="flex items-center justify-between h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-black tracking-tight text-foreground">POSE</span>
+          <span className="text-2xl font-logo tracking-tight text-white transition-colors duration-1000" style={ambientTextStyle}>RoomShow</span>
         </a>
 
+        {/* Center Navigation - Desktop */}
+        <nav className="hidden md:flex items-center gap-6 lg:gap-8">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
+              className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
+                currentTab === category.id
+                  ? 'text-white'
+                  : 'text-white/60 hover:text-white'
+              }`}
+              style={currentTab === category.id ? ambientTextStyle : {}}
+            >
+              {category.label}
+              {currentTab === category.id && (
+                <span 
+                  className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full transition-all duration-1000" 
+                  style={isAmbientActive ? { backgroundColor: ambientColor } : {}}
+                />
+              )}
+            </button>
+          ))}
+        </nav>
+
         {/* Right Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-4 lg:gap-6">
           {user ? (
             <>
-              <span className="text-sm font-medium text-foreground">
+              <button
+                onClick={onAboutClick}
+                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 tracking-widest uppercase mr-4"
+              >
+                ABOUT
+              </button>
+              <span className="text-xl font-logo text-white/40 mr-4 transition-all duration-1000" style={isAmbientActive ? { color: ambientColor, opacity: 0.6 } : {}}>
                 @{user.name || user.username || 'user'}
               </span>
               <button
                 onClick={onLogout}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 uppercase tracking-widest"
               >
-                로그아웃
+                Logout
               </button>
             </>
           ) : (
             <>
-              <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                회원 가입
-              </button>
-              <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                로그인
-              </button>
+              <button onClick={onAboutClick} className="text-xl font-logo text-white/60 hover:text-white transition-colors tracking-widest uppercase">ABOUT</button>
             </>
           )}
         </nav>
@@ -61,38 +95,18 @@ export function Header({
         {/* Mobile Menu Button */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-foreground"
+          className="md:hidden p-2 text-white"
           aria-label="Toggle menu"
         >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-      </div>
-
-      {/* Category Navigation - Desktop */}
-      <div className="hidden md:block border-t border-border">
-        <nav className="category-nav flex items-center gap-6 h-12 px-4 lg:px-8 max-w-[1400px] mx-auto overflow-x-auto">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
-              className={`flex items-center gap-1 text-sm font-medium whitespace-nowrap transition-colors ${
-                currentTab === category.id
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {category.label}
-              {category.hasDropdown && <ChevronDown className="w-4 h-4" />}
-            </button>
-          ))}
-        </nav>
       </div>
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg">
+        <div className="md:hidden absolute top-16 left-0 right-0 bg-black border-b border-white/10 shadow-lg">
           {/* Mobile Categories */}
-          <nav className="border-t border-border">
+          <nav className="py-2">
             {categories.map((category) => (
               <button
                 key={category.id}
@@ -100,10 +114,10 @@ export function Header({
                   onTabChange(category.id as 'feed' | 'search' | 'profile');
                   setIsMobileMenuOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium ${
+                className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${
                   currentTab === category.id
-                    ? 'text-foreground bg-muted'
-                    : 'text-muted-foreground'
+                    ? 'text-white bg-white/10'
+                    : 'text-white/60'
                 }`}
               >
                 {category.label}
@@ -126,16 +140,16 @@ export function Header({
                   }}
                   className="w-full text-left text-sm font-medium text-muted-foreground py-2"
                 >
-                  로그아웃
+                  Logout
                 </button>
               </>
             ) : (
               <>
                 <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  회원 가입
+                  Sign Up
                 </button>
                 <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  로그인
+                  Login
                 </button>
               </>
             )}

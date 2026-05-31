@@ -136,7 +136,7 @@ FAKE_HEADERS = {
 # 단일 이미지 다운로드용 헬퍼 함수 (Non-blocking 파일 저장)
 async def _download_single_image(client: httpx.AsyncClient, url: str, save_dir: str) -> str:
     try:
-        response = await client.get(url, timeout=10.0)
+        response = await client.get(url, timeout=15.0, follow_redirects=True)
         response.raise_for_status()
 
         # 고유한 UUID 파일명 생성 (여러 요청이 겹쳐도 덮어쓰기 방지)

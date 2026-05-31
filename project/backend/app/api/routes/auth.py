@@ -21,14 +21,18 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/google")
 
 class GoogleAuthRequest(BaseModel):
-    token: str
+    access_token: str
 
 @router.post("/auth/google")
 async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection)):
     try:
+        # Verify GOOGLE_CLIENT_ID is configured
+        if not GOOGLE_CLIENT_ID:
+            raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+        
         # 1. 프론트엔드에서 보낸 구글 토큰 검증
         idinfo = id_token.verify_oauth2_token(
-            request.token, 
+            request.access_token, 
             requests.Request(), 
             GOOGLE_CLIENT_ID
         )
@@ -65,8 +69,10 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
         user_data = {"id": google_id, "email": email, "name": name, "profile_image": picture}
         return {"access_token": internal_token, "token_type": "bearer", "user": user_data}
         
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid Google authentication token")
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
 
 @router.post("/auth/guest")
 async def guest_auth(conn=Depends(get_db_connection)):

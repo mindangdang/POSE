@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { Plus, ThumbsUp, ThumbsDown, Search } from 'lucide-react';
+import { Plus, ThumbsUp, ThumbsDown, Search, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
@@ -10,6 +11,8 @@ type SearchResultCardProps = {
   onClick: () => void;
   onSave: (e: React.MouseEvent<HTMLButtonElement>, item: SavedItem) => void | Promise<void>;
   onSearchSecondhand?: (title: string) => void;
+  onLike?: (item: SavedItem) => void;
+  onDislike?: (item: SavedItem) => void;
 };
 
 export function SearchResultCard({
@@ -18,28 +21,45 @@ export function SearchResultCard({
   onClick,
   onSave,
   onSearchSecondhand,
+  onLike,
+  onDislike,
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemFacts(item);
+  const aspectRatio = 'aspect-[2/3]';
+  const [liked, setLiked] = useState(false);
+  const [disliked, setDisliked] = useState(false);
+
+  const handleLike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLiked(!liked);
+    if (disliked) setDisliked(false);
+    onLike?.(item);
+  };
+
+  const handleDislike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDisliked(!disliked);
+    if (liked) setLiked(false);
+    onDislike?.(item);
+  };
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      transition={{ delay, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ delay, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       onClick={onClick}
-      className="group cursor-pointer"
-      whileHover={{ y: -4 }}
+      className="masonry-item group cursor-pointer"
     >
       {/* Image Container */}
-      <div className="relative aspect-square w-full bg-muted rounded-xl overflow-hidden mb-3">
+      <div className={`relative w-full ${aspectRatio} bg-muted rounded-2xl sm:rounded-3xl overflow-hidden`}>
         {item.image_url ? (
           <img
             src={item.image_url}
             alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out"
             referrerPolicy="no-referrer"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
@@ -57,59 +77,82 @@ export function SearchResultCard({
           </div>
         )}
         
-        {/* Hover Overlay */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         
-        {/* Save Button */}
-        <button
-          onClick={(e) => onSave(e, item)}
-          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-primary hover:text-primary-foreground shadow-sm"
-          aria-label="Save to feed"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        {/* Save Button - Top Right */}
+        <div className="absolute top-2 sm:top-3 right-2 sm:right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <button
+            onClick={(e) => onSave(e, item)}
+            className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white rounded-full shadow-lg hover:scale-105 transition-transform"
+            aria-label="Save to feed"
+          >
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-foreground" />
+          </button>
+        </div>
 
-        {/* Like Button */}
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-2 left-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
-          aria-label="Like item"
-        >
-          <ThumbsUp className="w-4 h-4" />
-        </button>
-
-        {/* Dislike Button */}
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-2 left-11 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-red-50 hover:text-red-600 shadow-sm"
-          aria-label="Dislike item"
-        >
-          <ThumbsDown className="w-4 h-4" />
-        </button>
-
-        {/* Secondhand Search Button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSearchSecondhand?.(title);
-          }}
-          className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-green-50 hover:text-green-600 shadow-sm"
-          aria-label="Search secondhand"
-        >
-          <Search className="w-4 h-4" />
-        </button>
+        {/* Like/Dislike and Search - Bottom */}
+        <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <button
+            onClick={handleLike}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
+              liked 
+                ? 'bg-black text-white scale-110' 
+                : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
+            }`}
+            aria-label="Like item"
+          >
+            <ThumbsUp className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${liked ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            onClick={handleDislike}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
+              disliked 
+                ? 'bg-red-500 text-white scale-110' 
+                : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
+            }`}
+            aria-label="Dislike item"
+          >
+            <ThumbsDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${disliked ? 'fill-current' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="space-y-1">
+      <div className="mt-2 sm:mt-3 space-y-0.5 sm:space-y-1 px-1">
         {item.category && (
-          <span className="text-xs font-medium text-accent uppercase tracking-wide">
+          <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-wider">
             {item.category}
           </span>
         )}
-        <h3 className="text-sm font-medium text-foreground line-clamp-2 leading-snug">
+        <h3 className="text-xs sm:text-sm font-bold text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
+
+        {/* Source and Secondhand */}
+        <div className="pt-1 flex flex-col gap-1 sm:gap-1.5">
+          {item.url && item.url.startsWith('http') && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit"
+            >
+              <ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source
+            </a>
+          )}
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSearchSecondhand?.(title);
+            }}
+            className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit uppercase tracking-tight font-bold"
+          >
+            <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Search Secondhand
+          </button>
+        </div>
       </div>
     </motion.div>
   );

@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search } from 'lucide-react';
+import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -18,16 +18,6 @@ type FeedTabContentProps = {
   user: AppUser | null;
 };
 
-const feedQuotes = [
-  '"Buy less, choose well, make it last."',
-  '"You can find inspiration in everything If you can\'t, then you\'re not looking properly"',
-  '"Fashion should be a from of escapism, and not a from of imprisonment."',
-  '"I always find beauty in things that are odd and imperfect, they are much more interesting."',
-  '"To be noticed without striving to be noticed, this is what elegance is about."',
-  '"Simplicity is the ultimate sophistication."',
-  '"Don\'t be afraid to fail. Be afraid not to try."',
-];
-
 export function FeedTabContent({
   items,
   onItemsChange,
@@ -43,17 +33,8 @@ export function FeedTabContent({
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
-  const [quoteIndex, setQuoteIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const addSuccessTimeout = useRef<number | null>(null);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setQuoteIndex((currentIndex) => (currentIndex + 1) % feedQuotes.length);
-    }, 10000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -226,18 +207,26 @@ export function FeedTabContent({
   const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newUrl || !user) return;
-    await addItemMutation.mutateAsync({
-      nextSessionId: sessionId,
-      nextUrl: newUrl,
-      userId: user.id,
-    });
+    try {
+      await addItemMutation.mutateAsync({
+        nextSessionId: sessionId,
+        nextUrl: newUrl,
+        userId: user.id,
+      });
+    } catch (err) {
+      // Error is already handled by addItemMutation.onError
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (!user) return;
     const shouldDelete = window.confirm('정말로 삭제하시겠습니까?');
     if (!shouldDelete) return;
-    await deleteItemMutation.mutateAsync({ id, userId: user.id });
+    try {
+      await deleteItemMutation.mutateAsync({ id, userId: user.id });
+    } catch (err) {
+      // Error is already handled by deleteItemMutation.onError
+    }
   };
 
   const getCategoryIcon = (category: string) => {
@@ -260,42 +249,29 @@ export function FeedTabContent({
       exit={{ opacity: 0 }}
       className="flex flex-col min-h-[calc(100vh-200px)]"
     >
-      {/* Header Section */}
-      <header className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <span className="text-accent text-xs font-bold tracking-widest uppercase">MY COLLECTION</span>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground mt-1">내 피드</h1>
-          </div>
-          <button
-            onClick={() => setIsAddPanelOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4" />
-            아이템 추가
-          </button>
-        </div>
+      {/* Page Title */}
+      <div className="mb-2 sm:mb-3">
+        <h1 className="editorial-heading text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground">
+          Find What you Loves.
+        </h1>
+      </div>
 
-        {/* Quote */}
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={quoteIndex}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="text-muted-foreground font-medium italic"
-          >
-            {feedQuotes[quoteIndex]}
-          </motion.p>
-        </AnimatePresence>
-      </header>
+      {/* Add Item Button Position - Directly above search toolbar */}
+      <div className="flex justify-end mb-1 sm:mb-2">
+        <button
+          onClick={() => setIsAddPanelOpen(true)}
+          className="flex items-center gap-1.5 sm:gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
+        >
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">추가하기</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+      </div>
 
       {/* Category Tabs and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <nav className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-border">
+        <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
           {categories.map((category) => {
-            const Icon = getCategoryIcon(category);
             const label = getCategoryLabel(category);
             const isSelected = selectedCategory === category;
 
@@ -306,27 +282,26 @@ export function FeedTabContent({
                   setSelectedCategory(category);
                   setCurrentFolder(null);
                 }}
-                className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center pb-2 px-1 text-xs sm:text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 ${
                   isSelected
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                    ? 'border-black text-black'
+                    : 'border-transparent text-muted-foreground hover:text-black hover:border-black/20'
                 }`}
               >
-                <Icon className="w-4 h-4" />
                 {label}
               </button>
             );
           })}
         </nav>
 
-        <div className="relative w-full md:w-64 shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative w-full md:w-64 lg:w-72 shrink-0">
+          <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="피드 내 아이템 검색..."
+            placeholder="제목"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-full bg-muted text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+            className="w-full h-9 sm:h-10 pl-7 pr-2 bg-transparent border-b-2 border-black rounded-none text-xs sm:text-sm font-bold focus:outline-none placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -356,24 +331,113 @@ export function FeedTabContent({
               </div>
             )}
 
-            {/* Folder Cards */}
+            {/* Folder Cards - Interactive Closet Interior Layout */}
             {!currentFolder && selectedCategory !== 'All' &&
-              folders.map((folder) => (
-                <motion.div
-                  layout
-                  key={`folder-${folder}`}
-                  onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-square flex-col items-start justify-end p-4 overflow-hidden rounded-xl border border-border bg-muted transition-all duration-300 cursor-pointer hover:border-foreground/20 hover:shadow-lg"
-                >
-                  <Folder className="absolute top-4 right-4 w-6 h-6 text-muted-foreground" />
-                  <h3 className="text-sm font-bold text-foreground line-clamp-2">
-                    {folder}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {filteredItems.filter((i) => i.sub_category === folder).length} items
-                  </p>
-                </motion.div>
-              ))}
+              (
+                <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+                  
+                  {/* Left Column: Hanging Area and Bottom Drawer */}
+                  <div className="lg:col-span-3 space-y-6">
+                    {/* Hanging Area (Outer & Top) */}
+                    <div className="relative min-h-[320px] bg-white border border-zinc-200 rounded-[2.5rem] p-8 overflow-hidden group/hanging shadow-sm">
+                      <div className="absolute top-10 left-8 right-8 h-1 bg-zinc-200 rounded-full shadow-inner" /> {/* Closet Rod */}
+                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <Shirt className="w-3 h-3" /> Hanging Section
+                      </div>
+                      <div className="flex flex-wrap gap-6 pt-12">
+                        {folders.filter(f => ['outer', 'top', 'outerwear', 'tops'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
+                          >
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                              {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
+                                <Wind className="w-4 h-4" />
+                              ) : (
+                                <Shirt className="w-4 h-4" />
+                              )}
+                            </div>
+                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bottom Drawer (Bottom) */}
+                    <div className="relative min-h-[180px] bg-zinc-100 border border-zinc-200 rounded-[2.5rem] p-8 shadow-inner overflow-hidden">
+                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" /> {/* Drawer Handle */}
+                      <div className="flex flex-wrap gap-6 justify-center">
+                        {folders.filter(f => ['bottom', 'bottoms', 'pants'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
+                          >
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                              <Columns2 className="w-4 h-4" />
+                            </div>
+                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Shoes and Accessories Sub-drawer */}
+                  <div className="lg:col-span-1 relative bg-zinc-200/40 border border-zinc-200 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-sm overflow-hidden">
+                    <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Box className="w-3 h-3" /> Side Storage
+                    </div>
+                    <div className="flex flex-col gap-6 pt-8 items-center">
+                      {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                        <motion.div
+                          layout
+                          key={`folder-${folder}`}
+                          onClick={() => setCurrentFolder(folder)}
+                          className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
+                        >
+                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                            {['shoes'].includes(folder.toLowerCase()) ? (
+                              <Footprints className="w-4 h-4" />
+                            ) : (
+                              <Gem className="w-4 h-4" />
+                            )}
+                          </div>
+                          <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Miscellaneous Section for undefined folders */}
+                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
+                    <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
+                      <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
+                      <div className="flex flex-wrap gap-4">
+                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex px-6 py-3 items-center justify-center bg-white border border-zinc-200 rounded-full shadow-sm transition-all duration-300 cursor-pointer hover:bg-black hover:text-white hover:border-black"
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{folder}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            }
 
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
@@ -391,27 +455,26 @@ export function FeedTabContent({
 
         {/* Empty State */}
         {items.length === 0 && !addItemMutation.isPending && (
-          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
-            <h3 className="text-xl font-bold text-foreground mb-2">POSE</h3>
-            <p className="text-muted-foreground font-medium mb-4">
-              아이템 링크를 넣고 나만의 바이브를 수집하세요.
-            </p>
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
+              <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
+            </div>
             <button
               onClick={() => setIsAddPanelOpen(true)}
-              className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
             >
-              <Plus className="w-4 h-4" />
-              첫 아이템 추가하기
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              첫 아이템 넣기
             </button>
           </div>
         )}
 
         {/* Empty State for Search */}
         {items.length > 0 && itemsToDisplay.length === 0 && searchQuery.trim() !== '' && (
-          <div className="flex flex-col items-center justify-center py-20 bg-muted rounded-2xl border-2 border-dashed border-border">
-            <h3 className="text-xl font-bold text-foreground mb-2">검색 결과 없음</h3>
-            <p className="text-muted-foreground font-medium mb-4">
-              조건에 맞는 아이템을 찾을 수 없습니다.
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+            <h3 className="editorial-heading text-xl sm:text-2xl text-foreground mb-2 sm:mb-3">no results</h3>
+            <p className="text-muted-foreground font-medium text-xs sm:text-sm">
+              No items match your search criteria.
             </p>
           </div>
         )}
@@ -426,7 +489,7 @@ export function FeedTabContent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
               onClick={() => setIsAddPanelOpen(false)}
             />
             <motion.div
@@ -437,49 +500,49 @@ export function FeedTabContent({
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-foreground">새 아이템 추가하기</h3>
+              <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-background p-6 sm:p-8 shadow-2xl border border-border">
+                <div className="flex items-center justify-between mb-6 sm:mb-8">
+                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">추가하기</h3>
                   <button
                     onClick={() => setIsAddPanelOpen(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
 
-                <form onSubmit={handleAddItem} className="space-y-4">
+                <form onSubmit={handleAddItem} className="space-y-4 sm:space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">
-                      URL 또는 제품명
+                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
+                      URL 혹은 상품이름
                     </label>
                     <input
                       type="url"
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">
-                      Session ID (선택)
+                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
+                      Session ID (Optional)
                     </label>
                     <input
                       type="password"
                       placeholder="Session ID"
                       value={sessionId}
                       onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full h-11 px-4 bg-muted rounded-lg text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={`w-full h-11 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                    className={`w-full h-10 sm:h-12 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
                       isAddButtonSuccess
-                        ? 'bg-green-500 text-primary-foreground'
-                        : 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-black text-white hover:opacity-90 disabled:opacity-50'
                     }`}
                   >
                     <AnimatePresence mode="wait" initial={false}>
@@ -494,17 +557,17 @@ export function FeedTabContent({
                         {addItemMutation.isPending ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            추가 중...
+                            Adding...
                           </>
                         ) : isAddButtonSuccess ? (
                           <>
                             <Check className="w-4 h-4" />
-                            추가 완료!
+                            Added!
                           </>
                         ) : (
                           <>
                             <Plus className="w-4 h-4" />
-                            추가하기
+                            Add Item
                           </>
                         )}
                       </motion.span>
