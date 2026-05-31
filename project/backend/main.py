@@ -17,7 +17,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 확장 프로그램 환경에서는 "*" 또는 특정 extension ID 허용
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
