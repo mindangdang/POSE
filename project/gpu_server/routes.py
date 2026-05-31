@@ -9,11 +9,14 @@ from project.backend.app.core.settings import IMAGE_DIR
 import torch
     
 router = APIRouter()
-pipeline = FashionSiglipReRankingPipeline()
+
+def get_pipeline():
+    return FashionSiglipReRankingPipeline()
 
 @router.post("/embedding")
 async def embed_image(request: EmbedRequest):
     try:
+        pipeline = get_pipeline()
         image_url = request.image_url
         if not image_url:
             return {"vector": None}
@@ -38,6 +41,7 @@ async def embed_image(request: EmbedRequest):
 @router.post("/build_taste_vector")
 async def build_taste_vector(request: TasteVectorRequest):
     try:
+        pipeline = get_pipeline()
         taste_profile = pipeline.build_user_taste_vector(request.image_vectors)
         if taste_profile is not None:
             return {
@@ -53,6 +57,7 @@ async def build_taste_vector(request: TasteVectorRequest):
 @router.post("/encode_text")
 async def encode_text(request: EncodeTextRequest):
     try:
+        pipeline = get_pipeline()
         return {"vector": pipeline.encode_text(request.text).cpu().tolist()}
     except Exception as e:
         print(f"텍스트 인코딩 에러: {e}")
@@ -61,6 +66,7 @@ async def encode_text(request: EncodeTextRequest):
 @router.post("/evaluate_single_item")
 async def evaluate_single_item_endpoint(request: EvaluateRequest):
     try:
+        pipeline = get_pipeline()
         user_taste_profile = None
         if request.user_taste_profile:
             consensus_tensor = torch.tensor(request.user_taste_profile["consensus"], device=pipeline.device)
