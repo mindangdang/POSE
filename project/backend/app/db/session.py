@@ -18,6 +18,7 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                         source_url TEXT,
                         title TEXT,
                         category TEXT,
+                        sub_category TEXT,
                         image_url TEXT,
                         recommend TEXT,
                         image_vector vector(768),
@@ -30,10 +31,11 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                 await cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS taste_profile (
-                        id INTEGER PRIMARY KEY DEFAULT 1,
+                        id SERIAL PRIMARY KEY,
+                        user_id TEXT UNIQUE NOT NULL,
                         summary TEXT,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        CONSTRAINT one_row CHECK (id = 1)
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
                     """
                 )
@@ -71,6 +73,12 @@ async def get_db_connection(
             conn = await pool_used.getconn()
             await _ping_connection(conn)
             yield conn
+            try:
+                yield conn
+            except Exception:
+                if not getattr(conn, "closed", False):
+                    await conn.rollback()
+                raise
             return
         except (OperationalError, InterfaceError) as exc:
             if conn is not None:

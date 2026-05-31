@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus } from 'lucide-react';
+import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, Music } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -61,13 +61,14 @@ export function SearchTabContent({
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
   const hasSearchActivity = loading || searchResults.length > 0 || quotaCountdown !== null;
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   // 모달 제어 상태
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
-    { value: "detail", label: "상세 검색", icon: Zap, activeClass: "text-yellow-500 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-yellow-500 hover:cursor-pointer" },
-    { value: "ai", label: "AI 검색", icon: BrainCircuit, activeClass: "text-blue-600 cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-blue-600 hover:cursor-pointer" },
+    { value: "detail", label: "상세 검색", icon: Zap, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
+    { value: "ai", label: "AI 검색", icon: BrainCircuit, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
   ] as const;
   const activeMode = searchMode === "digging" && isDetailedSearch
     ? modeOptions[1]
@@ -598,6 +599,53 @@ export function SearchTabContent({
                 />
               </motion.div>
             )}
+
+            <div className="absolute right-12 top-1/2 -translate-y-1/2 flex items-center">
+              <button
+                type="button"
+                onClick={() => setIsPlayerOpen(!isPlayerOpen)}
+                title="Shopping Playlist"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-black hover:bg-muted transition-colors"
+              >
+                <Music className="w-4 h-4" />
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-20"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-black/10"></span>
+                </span>
+              </button>
+
+              <AnimatePresence>
+                {isPlayerOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 top-12 z-[100] w-72 overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+                  >
+                    <div className="flex items-center justify-between border-b border-border p-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                        <Music className="w-3 h-3" /> RoomShow Selects
+                      </span>
+                      <button onClick={() => setIsPlayerOpen(false)} className="rounded-full p-1 hover:bg-muted">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="aspect-video w-full bg-black">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        src="https://www.youtube.com/embed/videoseries?list=PL4fGSI1pDJn6jWqsS_4v6n_33p_D3l4a6"
+                        title="Zara Playlist"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="opacity-90"
+                      ></iframe>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <button
               disabled={loading || quotaCountdown !== null}

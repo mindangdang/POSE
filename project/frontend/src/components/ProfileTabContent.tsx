@@ -376,24 +376,14 @@ function EmptyTasteState({
       {hasItems ? (
         <div className="space-y-6 flex flex-col items-center">
           <div>
-            <h3 className="editorial-heading text-3xl text-foreground mb-3">ANALYZE YOUR TASTE</h3>
-            <p className="text-muted-foreground font-medium text-sm max-w-sm">
-              You have enough inspirations collected.
-              <br />
-              Let AI discover your hidden patterns.
-            </p>
+            <h3 className="editorial-heading text-3xl text-foreground mb-3">넌 어떤 사람이고 싶어</h3>
           </div>
           <button
             onClick={onGenerateTaste}
             disabled={isGeneratingTaste}
-            className="h-12 px-6 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
+            className="pb-1 px-1 border-b-2 border-black text-black text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity disabled:opacity-50"
           >
-            {isGeneratingTaste ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Zap className="w-4 h-4" />
-            )}
-            {isGeneratingTaste ? 'Analyzing...' : 'Generate Taste Profile'}
+            {isGeneratingTaste ? 'Analyzing...' : "Let's findout"}
           </button>
         </div>
       ) : (
@@ -429,10 +419,10 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
     <div className="space-y-6 pt-10">
       <div className="flex items-center justify-between pb-4 border-b border-border">
         <h4 className="text-lg font-bold text-foreground">
-          내 책장
+          My Closet
         </h4>
         <span className="text-xs font-medium text-muted-foreground">
-          {items.length} 권
+          {items.length} 개
         </span>
       </div>
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">

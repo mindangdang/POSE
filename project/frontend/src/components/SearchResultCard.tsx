@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Plus, ThumbsUp, ThumbsDown, Search, Heart } from 'lucide-react';
+import { Plus, ThumbsUp, ThumbsDown, Search, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
@@ -15,20 +15,6 @@ type SearchResultCardProps = {
   onDislike?: (item: SavedItem) => void;
 };
 
-// Generate random aspect ratios for Pinterest-style masonry
-const aspectRatios = [
-  'aspect-[3/4]',
-  'aspect-[4/5]',
-  'aspect-square',
-  'aspect-[2/3]',
-  'aspect-[5/6]',
-];
-
-function getAspectRatio(id: string | number): string {
-  const hash = String(id).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return aspectRatios[hash % aspectRatios.length];
-}
-
 export function SearchResultCard({
   item,
   delay,
@@ -40,7 +26,7 @@ export function SearchResultCard({
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemFacts(item);
-  const aspectRatio = getAspectRatio(item.id);
+  const aspectRatio = 'aspect-[2/3]';
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
 
@@ -107,40 +93,27 @@ export function SearchResultCard({
 
         {/* Like/Dislike and Search - Bottom */}
         <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-200">
-          <div className="flex gap-1.5 sm:gap-2">
-            <button
-              onClick={handleLike}
-              className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
-                liked 
-                  ? 'bg-black text-white scale-110' 
-                  : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
-              }`}
-              aria-label="Like item"
-            >
-              <ThumbsUp className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${liked ? 'fill-current' : ''}`} />
-            </button>
-            <button
-              onClick={handleDislike}
-              className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
-                disliked 
-                  ? 'bg-red-500 text-white scale-110' 
-                  : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
-              }`}
-              aria-label="Dislike item"
-            >
-              <ThumbsDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${disliked ? 'fill-current' : ''}`} />
-            </button>
-          </div>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSearchSecondhand?.(title);
-            }}
-            className="h-8 sm:h-9 px-2.5 sm:px-3 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-full shadow-md text-xs font-bold text-foreground hover:bg-white transition-colors uppercase tracking-tight"
-            aria-label="Search secondhand"
+            onClick={handleLike}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
+              liked 
+                ? 'bg-black text-white scale-110' 
+                : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
+            }`}
+            aria-label="Like item"
           >
-            <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">secondhand</span>
+            <ThumbsUp className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${liked ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            onClick={handleDislike}
+            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
+              disliked 
+                ? 'bg-red-500 text-white scale-110' 
+                : 'bg-white/90 backdrop-blur-sm text-foreground hover:bg-white'
+            }`}
+            aria-label="Dislike item"
+          >
+            <ThumbsDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${disliked ? 'fill-current' : ''}`} />
           </button>
         </div>
       </div>
@@ -155,6 +128,31 @@ export function SearchResultCard({
         <h3 className="text-xs sm:text-sm font-bold text-foreground line-clamp-2 leading-snug">
           {title}
         </h3>
+
+        {/* Source and Secondhand */}
+        <div className="pt-1 flex flex-col gap-1 sm:gap-1.5">
+          {item.url && item.url.startsWith('http') && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit"
+            >
+              <ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source
+            </a>
+          )}
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSearchSecondhand?.(title);
+            }}
+            className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit uppercase tracking-tight font-bold"
+          >
+            <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Search Secondhand
+          </button>
+        </div>
       </div>
     </motion.div>
   );

@@ -13,14 +13,15 @@ import type { AppUser } from './types/user';
 
 // Add Logo Font
 const fontStyles = `
-  @import url('https://api.fontshare.com/v2/css?f[]=comico@400&display=swap');
+  @import url('https://api.fontshare.com/v2/css?f[]=new-title@400,700,800&display=swap');
   @font-face {
     font-family: 'Pretendard-Regular';
     src: url('https://fastly.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
     font-weight: 400;
     font-style: normal;
   }
-  .font-logo { font-family: 'comico', sans-serif; }
+  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
+  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
   body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
   .leather-header {
     background-color: #080808;
@@ -230,7 +231,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
               className="w-full max-w-lg rounded-3xl bg-background p-8 shadow-2xl border border-border"
             >
               <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold font-logo text-foreground">Welcome to Demian's room</h3>
+                  <h3 className="text-2xl font-bold font-logo text-foreground">Welcome to RoomShow</h3>
                 <button onClick={() => setIsAboutModalOpen(false)} className="p-2 hover:bg-muted rounded-full">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -243,7 +244,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 </div>
                 <div className="flex gap-3 items-start">
                     <span className="text-lg leading-none mt-1.5"></span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Bookcase (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
                 </div>
                 <div className="flex gap-3 items-start">
                     <span className="text-lg leading-none mt-1.5"></span>
@@ -337,7 +338,7 @@ export default function App() {
 
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-black border-b border-white/10">
-          <span className="text-2xl font-logo tracking-tight text-white">Demian's room</span>
+          <span className="text-2xl font-logo tracking-tight text-white">RoomShow</span>
           <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-white/60">
             <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-white transition-colors uppercase tracking-widest">ABOUT</span>
           </nav>
@@ -354,7 +355,7 @@ export default function App() {
                 <br />
                 Digg yourself 
                 <br />
-                in Demian's room
+                in RoomShow
                 </h1>
                 
                 {/* Login Buttons */}
@@ -400,7 +401,7 @@ export default function App() {
                 className="w-full max-w-lg rounded-3xl bg-background p-8 shadow-2xl border border-border"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold font-logo text-foreground">About Demian's room</h3>
+                  <h3 className="text-2xl font-bold font-logo text-foreground">About RoomShow</h3>
                   <button onClick={() => setIsAboutModalOpen(false)} className="p-2 hover:bg-muted rounded-full">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -413,7 +414,7 @@ export default function App() {
                   </div>
                   <div className="flex gap-3 items-start">
                     <span className="text-lg leading-none mt-1.5">📚</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Bookcase (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
                   </div>
                   <div className="flex gap-3 items-start">
                     <span className="text-lg leading-none mt-1.5">📓</span>

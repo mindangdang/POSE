@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search } from 'lucide-react';
+import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -244,7 +244,7 @@ export function FeedTabContent({
       {/* Page Title */}
       <div className="mb-2 sm:mb-3">
         <h1 className="editorial-heading text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground">
-          나를 형용하는 것들.
+          Find What you Loves.
         </h1>
       </div>
 
@@ -330,16 +330,19 @@ export function FeedTabContent({
                   layout
                   key={`folder-${folder}`}
                   onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-[3/4] flex-col items-start justify-end p-5 overflow-hidden bg-[#FAF9F6] border-l-4 border-black/80 shadow-sm transition-all duration-500 cursor-pointer hover:shadow-md hover:-translate-y-2"
+                  className="group relative flex aspect-square flex-col items-center justify-center p-6 overflow-hidden bg-white border border-border rounded-2xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
                 >
-                  <Folder className="absolute top-5 right-5 w-5 h-5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-widest leading-relaxed line-clamp-3">
+                  <div className="absolute top-4 right-4 flex items-center gap-1 opacity-20 group-hover:opacity-100 transition-opacity">
+                    <Hash className="w-3 h-3 text-black" />
+                    <span className="text-[10px] font-bold text-black">{filteredItems.filter((i) => i.sub_category === folder).length}</span>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-black group-hover:text-white transition-colors">
+                    <Folder className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-[11px] font-bold text-foreground uppercase tracking-[0.2em] text-center leading-relaxed px-2">
                     {folder}
                   </h3>
-                  <div className="mt-2 w-full h-[1px] bg-black/5" />
-                  <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tighter italic">
-                    {filteredItems.filter((i) => i.sub_category === folder).length} Vol.
-                  </p>
+                  <div className="absolute bottom-0 left-0 w-full h-1 bg-black scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500" />
                 </motion.div>
               ))}
 

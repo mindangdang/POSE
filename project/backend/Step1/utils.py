@@ -170,10 +170,14 @@ async def build_taste_profile(user_id: str):
     
     if image_vectors:
         payload = {"image_vectors": image_vectors}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{GPU_SERVER_URL}/build_taste_vector", json=payload, timeout=15.0)
-        if response.status_code == 200:
-            return response.json().get("vector")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{GPU_SERVER_URL}/build_taste_vector", json=payload, timeout=15.0)
+            if response.status_code == 200:
+                return response.json().get("vector")
+        except Exception as e:
+            print(f"취향 벡터 합성 에러 (GPU 서버 연결 실패): {e}")
+
     return None
 
 async def encode_text(query: str):
