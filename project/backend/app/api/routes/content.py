@@ -35,7 +35,8 @@ from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
 load_backend_env()
-LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
+FAIL_IMAGE_DIR = Path("project/backend/fail_images")
+FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
 
@@ -153,6 +154,14 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                 else:
                     item_title = item.get('facts', {}).get('title', 'Unknown')
                     print(f"[{item_title}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+                    # Requirement: Save images that fail the threshold for review
+                    if target_url:
+                        try:
+                            if target_url.startswith("//"):
+                                target_url = f"https:{target_url}"
+                            await download_images([target_url], str(FAIL_IMAGE_DIR))
+                        except Exception as dl_err:
+                            print(f"실패 이미지 다운로드 에러: {dl_err}")
             except Exception as e:
                 print(f"개별 아이템 평가 에러: {e}")
 
@@ -427,10 +436,17 @@ async def delete_item(
 
 @router.get("/images/{filename}")
 async def serve_image(filename: str):
-    image_path = LOCAL_IMAGE_DIR / filename
-    if not image_path.exists() or not image_path.is_file():
-        raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path=image_path)
+    # 1. 일반 저장 폴더 우선 확인
+    normal_path = Path(IMAGE_DIR) / filename
+    if normal_path.exists() and normal_path.is_file():
+        return FileResponse(path=normal_path)
+    
+    # 2. 실패 이미지 폴더 확인 (디버깅용)
+    fail_path = FAIL_IMAGE_DIR / filename
+    if fail_path.exists() and fail_path.is_file():
+        return FileResponse(path=fail_path)
+
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 @router.websocket("/ws/{user_id}")

@@ -8,7 +8,7 @@ import open_clip
 # 멀티스레딩 억제로 CPU/RAM 스파이크 방지
 os.environ["OMP_NUM_THREADS"] = "1"
 if os.environ.get("HF_HUB_OFFLINE") is None:
-    os.environ["HF_HUB_OFFLINE"] = "0"  # 기본적으로 온라인 다운로드 허용
+    os.environ["HF_HUB_OFFLINE"] = "1"  
 
 
 class FashionSiglipReRankingPipeline:
