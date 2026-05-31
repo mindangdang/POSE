@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash } from 'lucide-react';
+import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { parseItemFacts } from '../lib/itemFacts';
@@ -207,18 +207,26 @@ export function FeedTabContent({
   const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newUrl || !user) return;
-    await addItemMutation.mutateAsync({
-      nextSessionId: sessionId,
-      nextUrl: newUrl,
-      userId: user.id,
-    });
+    try {
+      await addItemMutation.mutateAsync({
+        nextSessionId: sessionId,
+        nextUrl: newUrl,
+        userId: user.id,
+      });
+    } catch (err) {
+      // Error is already handled by addItemMutation.onError
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (!user) return;
     const shouldDelete = window.confirm('정말로 삭제하시겠습니까?');
     if (!shouldDelete) return;
-    await deleteItemMutation.mutateAsync({ id, userId: user.id });
+    try {
+      await deleteItemMutation.mutateAsync({ id, userId: user.id });
+    } catch (err) {
+      // Error is already handled by deleteItemMutation.onError
+    }
   };
 
   const getCategoryIcon = (category: string) => {
@@ -323,28 +331,113 @@ export function FeedTabContent({
               </div>
             )}
 
-            {/* Folder Cards - Bookshelf/Study Concept */}
+            {/* Folder Cards - Interactive Closet Interior Layout */}
             {!currentFolder && selectedCategory !== 'All' &&
-              folders.map((folder) => (
-                <motion.div
-                  layout
-                  key={`folder-${folder}`}
-                  onClick={() => setCurrentFolder(folder)}
-                  className="group relative flex aspect-square flex-col items-center justify-center p-6 overflow-hidden bg-white border border-border rounded-2xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
-                >
-                  <div className="absolute top-4 right-4 flex items-center gap-1 opacity-20 group-hover:opacity-100 transition-opacity">
-                    <Hash className="w-3 h-3 text-black" />
-                    <span className="text-[10px] font-bold text-black">{filteredItems.filter((i) => i.sub_category === folder).length}</span>
+              (
+                <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+                  
+                  {/* Left Column: Hanging Area and Bottom Drawer */}
+                  <div className="lg:col-span-3 space-y-6">
+                    {/* Hanging Area (Outer & Top) */}
+                    <div className="relative min-h-[320px] bg-white border border-zinc-200 rounded-[2.5rem] p-8 overflow-hidden group/hanging shadow-sm">
+                      <div className="absolute top-10 left-8 right-8 h-1 bg-zinc-200 rounded-full shadow-inner" /> {/* Closet Rod */}
+                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <Shirt className="w-3 h-3" /> Hanging Section
+                      </div>
+                      <div className="flex flex-wrap gap-6 pt-12">
+                        {folders.filter(f => ['outer', 'top', 'outerwear', 'tops'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
+                          >
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                              {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
+                                <Wind className="w-4 h-4" />
+                              ) : (
+                                <Shirt className="w-4 h-4" />
+                              )}
+                            </div>
+                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bottom Drawer (Bottom) */}
+                    <div className="relative min-h-[180px] bg-zinc-100 border border-zinc-200 rounded-[2.5rem] p-8 shadow-inner overflow-hidden">
+                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" /> {/* Drawer Handle */}
+                      <div className="flex flex-wrap gap-6 justify-center">
+                        {folders.filter(f => ['bottom', 'bottoms', 'pants'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
+                          >
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                              <Columns2 className="w-4 h-4" />
+                            </div>
+                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-black group-hover:text-white transition-colors">
-                    <Folder className="w-4 h-4" />
+
+                  {/* Right Column: Shoes and Accessories Sub-drawer */}
+                  <div className="lg:col-span-1 relative bg-zinc-200/40 border border-zinc-200 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-sm overflow-hidden">
+                    <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Box className="w-3 h-3" /> Side Storage
+                    </div>
+                    <div className="flex flex-col gap-6 pt-8 items-center">
+                      {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                        <motion.div
+                          layout
+                          key={`folder-${folder}`}
+                          onClick={() => setCurrentFolder(folder)}
+                          className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
+                        >
+                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                            {['shoes'].includes(folder.toLowerCase()) ? (
+                              <Footprints className="w-4 h-4" />
+                            ) : (
+                              <Gem className="w-4 h-4" />
+                            )}
+                          </div>
+                          <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                        </motion.div>
+                      ))}
+                    </div>
                   </div>
-                  <h3 className="text-[11px] font-bold text-foreground uppercase tracking-[0.2em] text-center leading-relaxed px-2">
-                    {folder}
-                  </h3>
-                  <div className="absolute bottom-0 left-0 w-full h-1 bg-black scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500" />
-                </motion.div>
-              ))}
+
+                  {/* Miscellaneous Section for undefined folders */}
+                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
+                    <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
+                      <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
+                      <div className="flex flex-wrap gap-4">
+                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                          <motion.div
+                            layout
+                            key={`folder-${folder}`}
+                            onClick={() => setCurrentFolder(folder)}
+                            className="group/item relative flex px-6 py-3 items-center justify-center bg-white border border-zinc-200 rounded-full shadow-sm transition-all duration-300 cursor-pointer hover:bg-black hover:text-white hover:border-black"
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{folder}</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            }
 
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
