@@ -10,7 +10,6 @@ from fastapi import WebSocket
 import httpx
 import uuid
 import json
-from project.backend.Step2.preferance_llm import fetch_user_data_from_neon
 
 class ConnectionManager:
     def __init__(self):
@@ -145,69 +144,3 @@ async def fetch_from_single_site(client: httpx.AsyncClient, base_query: str, tra
     except Exception as e:
         print(f"[{domain}] 검색 실패: {e}")
         return []
-
-def _parse_vectors_batch(items):
-    vectors = []
-    for item in items:
-        v_str = item.get("image_vector")
-        if v_str:
-            try:
-                vec = json.loads(v_str)
-                if isinstance(vec, list) and len(vec) == 768:
-                    vectors.append(vec)
-            except Exception as e:
-                print(f"벡터 파싱 에러: {e}")
-    return vectors
-
-async def build_taste_profile(user_id: str):
-    # Google ID(sub)는 21자리의 문자열이므로 int 대신 str로 안전하게 넘깁니다.
-    wishlist_db_items = await fetch_user_data_from_neon(user_id)
-    if not wishlist_db_items:
-        return None
-    print(f"[User {user_id}] 위시리스트 {len(wishlist_db_items)}개 벡터 DB 로딩 및 합성 시작...")
-
-    image_vectors = await asyncio.to_thread(_parse_vectors_batch, wishlist_db_items)
-    
-    if image_vectors:
-        payload = {"image_vectors": image_vectors}
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(f"{GPU_SERVER_URL}/build_taste_vector", json=payload, timeout=15.0)
-            if response.status_code == 200:
-                return response.json().get("vector")
-        except Exception as e:
-            print(f"취향 벡터 합성 에러 (GPU 서버 연결 실패): {e}")
-
-    return None
-
-async def encode_text(query: str):
-    try:
-        payload = {"text": query}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{GPU_SERVER_URL}/encode_text", json=payload, timeout=15.0)
-        if response.status_code == 200:
-            return response.json().get("vector")
-    except Exception as e:
-        print(f"텍스트 벡터화 에러: {e}")
-    return None
-
-async def evaluate_single_item(item: dict, user_taste_profile: dict, query_vector: list, semantic_thresh: float, aesthetic_thresh: float):
-    try:
-        payload = {
-            "item": item,
-            "user_taste_profile": user_taste_profile,
-            "query_vector": query_vector,
-            "semantic_thresh": semantic_thresh,
-            "aesthetic_thresh": aesthetic_thresh
-        }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{GPU_SERVER_URL}/evaluate_single_item", json=payload, timeout=20.0)
-        if response.status_code == 200:
-            result = response.json().get("result")
-            if result is not None:
-                return result
-            else:
-                print(f"GPU 서버 에러 (HTTP {response.status_code}): {response.text}")
-    except Exception as e:
-        print(f"단일 아이템 평가 에러: {e}")
-    return None

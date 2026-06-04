@@ -10,9 +10,3 @@ class TasteVectorRequest(BaseModel):
 class EncodeTextRequest(BaseModel):
     text: str
 
-class EvaluateRequest(BaseModel):
-    item: dict
-    user_taste_profile: dict
-    query_vector: list[float] | list[list[float]]
-    semantic_thresh: float = 0.10
-    aesthetic_thresh: float = 0.0

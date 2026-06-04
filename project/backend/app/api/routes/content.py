@@ -26,7 +26,6 @@ from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
-from project.backend.Step3.query_extend_llm import optimize_query_with_llm
 from project.backend.Step3.image_generate_search import generate_image_from_query,upload_generated_image
 from project.backend.Step1.utils import *
 from project.backend.Step1.instagram_crawler import download_images
@@ -102,86 +101,22 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         return
 
     try:
-        # 1. 유저 취향 프로필(Consensus + Memory) 합성과 LLM 쿼리 확장, 쿼리 임베딩을 비동기 병렬 처리
-        user_taste_profile, extended_query_result = await asyncio.gather(
-            build_taste_profile(user_id),
-            optimize_query_with_llm(query),
-        )
-
-        extended_query = extended_query_result.get('final_query', query)
-        translated_query = extended_query_result.get('translated_query', query)
-        query_vector = await encode_text(translated_query)
-
-        print(f"SerpApi로 쏘는 쿼리: {extended_query}")
-        print(f"번역된 쿼리: {translated_query}")
-
-        # 3. SerpApi로 여러 쇼핑몰에서 검색 (병렬)
         try:
             current_page = max(1, int(page)) if page is not None else 1
         except ValueError:
             current_page = 1
 
-        model_semaphore = asyncio.Semaphore(4)
-        
-        async def process_single_item(item: dict):
-            try:
-                target_url = item.get("image_url")
-                if not target_url:
-                    return
-                    
-                async with model_semaphore:
-                    await asyncio.sleep(0.01)
-                    evaluated_item = await evaluate_single_item(
-                        item,
-                        user_taste_profile,
-                        query_vector,
-                        0.65,  
-                        0.1
-                    )
-
-                if evaluated_item:
-                    if manager:
-                        payload = {
-                            "type": "SEARCH_SUCCESS",
-                            "results": [evaluated_item],
-                            "is_append": True
-                        }
-                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                        item_title = item.get('facts', {}).get('title', 'Unknown')
-                        # Uvicorn의 전송 큐가 처리될 수 있도록 루프 권한 양보
-                        await asyncio.sleep(0.01)
-                        print(f"[{item_title}] 임계값 통과! 프론트로 전송 완료.")
-                else:
-                    item_title = item.get('facts', {}).get('title', 'Unknown')
-                    print(f"[{item_title}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
-                    # Requirement: Save images that fail the threshold for review
-                    if target_url:
-                        try:
-                            if target_url.startswith("//"):
-                                target_url = f"https:{target_url}"
-                            await download_images([target_url], str(FAIL_IMAGE_DIR))
-                        except Exception as dl_err:
-                            print(f"실패 이미지 다운로드 에러: {dl_err}")
-            except Exception as e:
-                print(f"개별 아이템 평가 에러: {e}")
-
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
-                site_items = await fetch_from_single_site(client, extended_query, translated_query, domain, name, current_page, serp_api_key)
-                if user_taste_profile is not None:
-                    eval_tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
-                    await asyncio.gather(*eval_tasks, return_exceptions=True)
-                else:
-                    print(f"[{name}] 취향 벡터가 없어 평가 없이 즉시 프론트로 전송: {len(site_items)}개")
-                    if manager:
-                        payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
-                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                        await asyncio.sleep(0.01)
+                site_items = await fetch_from_single_site(client, query, query, domain, name, current_page, serp_api_key)
+                if manager:
+                    payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
+                    await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                    await asyncio.sleep(0.01)
             except Exception as e:
                 print(f"쇼핑몰 검색 스트리밍 처리 에러: {e}")
 
-        print("여러 쇼핑몰 병렬 검색 및 실시간 평가 시작...")
-        # 모든 이미지 다운로드를 위한 단일 HTTP/2 클라이언트를 공유하여 속도 개선
+        print("여러 쇼핑몰 병렬 검색 및 실시간 전송 시작...")
         async with httpx.AsyncClient(timeout=60.0) as client:
             site_tasks = [asyncio.create_task(process_site(domain, name, client)) for domain, name in domain_map.items()]
             await asyncio.gather(*site_tasks, return_exceptions=True)
