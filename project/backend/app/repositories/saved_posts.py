@@ -79,7 +79,6 @@ class SavedPostsRepository:
     ) -> int:
         """
         상품 아이템을 생성하고 ID를 반환합니다.
-        Extension import 등에 사용됩니다.
         """
         async with self.conn.cursor() as cursor:
             await cursor.execute(

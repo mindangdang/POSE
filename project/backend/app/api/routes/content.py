@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest, ExtensionProductImport
+from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
 from project.backend.Step3.query_extend_llm import optimize_query_with_llm
@@ -35,7 +35,8 @@ from project.backend.Step2.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
 load_backend_env()
-LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
+FAIL_IMAGE_DIR = Path("project/backend/fail_images")
+FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
 
@@ -153,6 +154,14 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
                 else:
                     item_title = item.get('facts', {}).get('title', 'Unknown')
                     print(f"[{item_title}] GPU 서버 평가 탈락 (임계값 미달 또는 오류)")
+                    # Requirement: Save images that fail the threshold for review
+                    if target_url:
+                        try:
+                            if target_url.startswith("//"):
+                                target_url = f"https:{target_url}"
+                            await download_images([target_url], str(FAIL_IMAGE_DIR))
+                        except Exception as dl_err:
+                            print(f"실패 이미지 다운로드 에러: {dl_err}")
             except Exception as e:
                 print(f"개별 아이템 평가 에러: {e}")
 
@@ -427,10 +436,17 @@ async def delete_item(
 
 @router.get("/images/{filename}")
 async def serve_image(filename: str):
-    image_path = LOCAL_IMAGE_DIR / filename
-    if not image_path.exists() or not image_path.is_file():
-        raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path=image_path)
+    # 1. 일반 저장 폴더 우선 확인
+    normal_path = Path(IMAGE_DIR) / filename
+    if normal_path.exists() and normal_path.is_file():
+        return FileResponse(path=normal_path)
+    
+    # 2. 실패 이미지 폴더 확인 (디버깅용)
+    fail_path = FAIL_IMAGE_DIR / filename
+    if fail_path.exists() and fail_path.is_file():
+        return FileResponse(path=fail_path)
+
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 @router.websocket("/ws/{user_id}")
@@ -448,71 +464,3 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
 
 ######################################################################################
-
-@router.post("/import-product")
-async def import_product_from_extension(
-    payload: ExtensionProductImport,
-    request: Request,
-    repos: Repositories = Depends(get_repos),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Chrome Extension에서 상품 정보를 받아 저장합니다.
-    인증이 필요합니다.
-    """
-    try:
-        print(f"Extension Import Request: {payload.title} from {payload.source}")
-        user_id = str(current_user.get("sub"))
-        
-        # 필수 필드 검증
-        if not payload.title or not payload.image_url:
-            raise HTTPException(
-                status_code=400, 
-                detail="제목(title)과 이미지(image_url)는 필수입니다."
-            )
-        
-        # 상품 정보를 facts에 정리
-        facts = {
-            "title": payload.title,
-            "description": payload.description or "",
-            "brand": payload.brand or "정보 없음",
-            "price": payload.price or "가격 미상",
-            "currency": payload.currency or "KRW",
-        }
-        
-        # Extension 상품 임포트용 category 설정
-        recommend = f"[{payload.source}] {payload.brand or '상품'} - {payload.title}"
-        
-        # 데이터베이스에 저장
-        try:
-            item_id = await repos.saved_posts.create_manual_item(
-                user_id=str(user_id),
-                url=payload.url,
-                category="PRODUCT",
-                sub_category="IMPORTED",
-                title=payload.title,
-                image_url=payload.image_url,
-                recommend=recommend,
-                facts=facts
-            )
-            await repos.saved_posts.conn.commit()
-            
-            return {
-                "success": True,
-                "message": f"상품이 성공적으로 저장되었습니다.",
-                "item_id": item_id
-            }
-        except Exception as e:
-            await repos.saved_posts.conn.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=f"데이터베이스 저장 실패: {str(e)}"
-            ) from e
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"상품 임포트 중 오류 발생: {str(e)}"
-        ) from e

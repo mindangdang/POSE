@@ -7,7 +7,8 @@ import open_clip
 
 # 멀티스레딩 억제로 CPU/RAM 스파이크 방지
 os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1" # 캐시 되어 있는 모델이 없는 경우에 0으로 설정. ls -la ~/.cache/huggingface/hub/로 확인
+if os.environ.get("HF_HUB_OFFLINE") is None:
+    os.environ["HF_HUB_OFFLINE"] = "1"  
 
 
 class FashionSiglipReRankingPipeline:
@@ -27,18 +28,59 @@ class FashionSiglipReRankingPipeline:
         
         print("Marqo-FashionSigLIP 모델 로드 중 (In-Memory 모드)...")
         self.model_id = "hf-hub:Marqo/marqo-fashionSigLIP"
-        
-        # open_clip을 통한 모델, 전처리 모듈 및 토크나이저 로드
-        self.model, _, self.preprocess = open_clip.create_model_and_transforms(self.model_id, cache_dir="/home/vscode/.cache/huggingface/hub")
-        self.tokenizer = open_clip.get_tokenizer(self.model_id, cache_dir="/home/vscode/.cache/huggingface/hub")
-        
+        self.cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+        self.hf_offline = os.environ.get("HF_HUB_OFFLINE", "0")
+        print(f"OpenCLIP 로드 설정: HF_HUB_OFFLINE={self.hf_offline}, cache_dir={self.cache_dir}")
+
+        # open_clip을 통한 모델 및 전처리 모듈 로드
+        try:
+            self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                self.model_id,
+                cache_dir=self.cache_dir
+            )
+        except OSError as e:
+            print(f"OpenCLIP 모델 로드 실패: {e}")
+            if self.hf_offline == "1":
+                print("HF_HUB_OFFLINE=1로 인해 로컬 캐시만 사용하도록 설정되어 있습니다. 온라인 다운로드를 시도합니다.")
+                os.environ["HF_HUB_OFFLINE"] = "0"
+                self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+                    self.model_id,
+                    cache_dir=self.cache_dir
+                )
+            else:
+                raise
+
+        try:
+            self.tokenizer = open_clip.get_tokenizer(
+                self.model_id,
+                cache_dir=self.cache_dir
+            )
+        except OSError as e:
+            print(f"OpenCLIP 토크나이저 로드 실패: {e}")
+            if self.hf_offline == "1":
+                print("HF_HUB_OFFLINE=1로 인해 로컬 캐시만 사용하도록 설정되어 있습니다. 온라인 다운로드를 시도합니다.")
+                os.environ["HF_HUB_OFFLINE"] = "0"
+                self.tokenizer = open_clip.get_tokenizer(
+                    self.model_id,
+                    cache_dir=self.cache_dir
+                )
+            else:
+                raise
+
         if self.device == "cuda":
             self.model = self.model.to(torch.bfloat16)
         self.model = self.model.to(self.device)
         self.model.eval()
-        self.model = torch.compile(self.model)
         
-        print("모델 웜업 진행 중 (Dummy 데이터 컴파일 수행)...")
+        # torch.compile은 성능을 향상시키지만 초기 컴파일 시 메모리 사용량이 급증하여 프로세스가 종료될 수 있습니다.
+        # 저사양 환경에서는 USE_TORCH_COMPILE=0 환경변수를 통해 비활성화할 수 있습니다.
+        if os.environ.get("USE_TORCH_COMPILE", "1") == "1":
+            print("torch.compile() 활성화됨. 첫 실행 시 컴파일로 인해 시간이 소요될 수 있습니다.")
+            self.model = torch.compile(self.model)
+        else:
+            print("torch.compile() 비활성화됨. (추론 성능보다 안정성 우선)")
+
+        print("모델 웜업 진행 중 (Dummy 데이터 실행)...")
         try:
             with torch.no_grad():
                 dummy_img = Image.new("RGB", (224, 224), "WHITE")

@@ -740,8 +740,8 @@ export function SearchTabContent({
                 </motion.div>
               )}
 
-              {/* Pinterest-style Masonry Grid */}
-              <div className="masonry-grid">
+              {/* Orderly Grid Layout: Left to Right, Top to Bottom */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 <AnimatePresence>
                   {searchResults.map((item, index) => (
                     <SearchResultCard
@@ -758,13 +758,13 @@ export function SearchTabContent({
 
               {/* Loading Skeletons */}
               {loading && (
-                <div className="masonry-grid mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-4">
                   {Array.from({ length: Math.max(5, 10 - searchResults.length) }).map((_, i) => (
-                    <div key={`skeleton-${i}`} className="masonry-item">
+                    <div key={`skeleton-${i}`} className="relative">
                       <div 
                         className="w-full bg-muted rounded-2xl animate-pulse" 
                         style={{ 
-                          aspectRatio: [3/4, 4/5, 1, 2/3, 5/6][i % 5]
+                          aspectRatio: '3/4'
                         }}
                       />
                       <div className="mt-3 space-y-2 px-1">
