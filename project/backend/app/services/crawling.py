@@ -199,7 +199,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         desc = data.get("description", "").strip()
         analysis_text = "\n".join(part for part in [title, desc] if part and part.lower() != "no description available")
         if len(analysis_text) < 3:
-            return {"recommend": "", "key_details": "", "sub_category": "미분류"}
+            return {"title": "", "recommend": "", "price": "", "key_details": "", "sub_category": "미분류"}
             
         return await analyze_description_with_gemini(analysis_text)
 
@@ -211,6 +211,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     ai_parsed_data = ai_parsed_data or {}
 
     brand_info = data.get("brand", "")
+    clean_title = ai_parsed_data.get("title", "")
     final_key_details = ai_parsed_data.get("key_details", "")
     if brand_info:
         final_key_details = f"[{brand_info}] {final_key_details}".strip()
@@ -219,12 +220,12 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     return [
         {
             "category": "PRODUCT",
-            "title": data.get("title", "Unknown"),
+            "title": clean_title or data.get("title", "Unknown"),
             "recommend": ai_parsed_data.get("recommend", ""),
             "sub_category": sub_category,
             "image_url": normalized_image_url,
             "facts": {
-                "title": data.get("title", ""),
+                "title": clean_title,
                 "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                 "location_text": data.get("source", ""),
                 "key_details": final_key_details,
