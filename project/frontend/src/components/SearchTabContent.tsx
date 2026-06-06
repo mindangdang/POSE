@@ -91,8 +91,12 @@ export function SearchTabContent({
   const [activeDomainMap, setActiveDomainMap] = useState<Record<string, string> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
+  const fetchTypeRef = useRef<"initial" | "append" | null>(null);
+  const appendCountRef = useRef(0);
+  const pendingLoadMoreRef = useRef(false);
   // displayActivity: determines compact layout (results/loading/quota)
   const displayActivity = loading || searchResults.length > 0 || quotaCountdown !== null || searchActive;
   const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
@@ -157,20 +161,39 @@ export function SearchTabContent({
 
             setSearchResults(prev => {
               if (!data.is_append) return incoming;
-              
+
               const existingIds = new Set(prev.map(i => i.id));
               const existingUrls = new Set(prev.map(i => i.url));
               const uniqueIncoming = incoming.filter((i: SavedItem) => !existingIds.has(i.id) && !existingUrls.has(i.url));
-              
+              if (uniqueIncoming.length > 0) {
+                appendCountRef.current += uniqueIncoming.length;
+              }
+
               return [...prev, ...uniqueIncoming];
             });
           } else if (data.type === "SEARCH_FINISHED" || data.type === "SEARCH_ERROR") {
-            // Respect minimum loading display time
             const started = loadingStartRef.current || Date.now();
             const elapsed = Date.now() - started;
             const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-            setTimeout(() => setLoading(false), remaining);
-            if (data.type === "SEARCH_ERROR") setTimeout(() => alert(data.message || "검색 중 오류가 발생했습니다."), remaining);
+
+            const finishSearch = () => {
+              if (fetchTypeRef.current === "append") {
+                setIsLoadingMore(false);
+                if (appendCountRef.current === 0) setHasMore(false);
+                pendingLoadMoreRef.current = false;
+              } else {
+                setLoading(false);
+              }
+              fetchTypeRef.current = null;
+              appendCountRef.current = 0;
+            };
+
+            setTimeout(() => {
+              finishSearch();
+              if (data.type === "SEARCH_ERROR") {
+                alert(data.message || "검색 중 오류가 발생했습니다.");
+              }
+            }, remaining);
           }
         } catch (err) {
           // JSON 파싱 에러 등 처리
@@ -198,7 +221,7 @@ export function SearchTabContent({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore && searchResults.length > 0) {
+        if (entries[0].isIntersecting && !loading && !isLoadingMore && hasMore && searchResults.length > 0) {
           handleLoadMore();
         }
       },
@@ -207,7 +230,7 @@ export function SearchTabContent({
 
     observer.observe(currentBottomRef);
     return () => observer.unobserve(currentBottomRef);
-  }, [loading, hasMore, searchResults.length, currentPage]);
+  }, [loading, isLoadingMore, hasMore, searchResults.length, currentPage]);
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
@@ -221,7 +244,17 @@ export function SearchTabContent({
     const myFetchId = ++fetchCounterRef.current;
     const startedAt = Date.now();
     loadingStartRef.current = startedAt;
-    setLoading(true);
+
+    if (isAppend) {
+      setIsLoadingMore(true);
+      pendingLoadMoreRef.current = true;
+      appendCountRef.current = 0;
+      fetchTypeRef.current = "append";
+    } else {
+      setLoading(true);
+      fetchTypeRef.current = "initial";
+    }
+
     try {
       const currentQuery = queryOverride ?? searchQuery;
       const token = localStorage.getItem('access_token');
@@ -291,7 +324,13 @@ export function SearchTabContent({
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
         setTimeout(() => {
-          if (myFetchId === fetchCounterRef.current) setLoading(false);
+          if (myFetchId === fetchCounterRef.current) {
+            if (isAppend) {
+              setIsLoadingMore(false);
+            } else {
+              setLoading(false);
+            }
+          }
         }, remaining);
       }
     }
@@ -355,7 +394,7 @@ export function SearchTabContent({
 
   // 2. '더 보기' 버튼을 눌렀을 때
   const handleLoadMore = async () => {
-    if (loading || !hasMore) return;
+    if (loading || isLoadingMore || !hasMore) return;
 
     const nextPage = currentPage + 1;
     await fetchResults(nextPage, true); // 다음 페이지 데이터 가져와서 이어 붙이기
@@ -822,7 +861,7 @@ export function SearchTabContent({
                   </motion.div>
                 )}
 
-                {loading && searchResults.length > 0 && (
+                {(loading || isLoadingMore) && searchResults.length > 0 && (
                   <motion.div
                     key="loading-inline"
                     initial={{ opacity: 0, y: -10 }}
@@ -872,7 +911,7 @@ export function SearchTabContent({
               </div>
 
               {/* Loading Skeletons */}
-              {loading && (
+{loading && searchResults.length === 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-4">
                   {Array.from({ length: Math.max(5, 10 - searchResults.length) }).map((_, i) => (
                     <div key={`skeleton-${i}`} className="relative">
@@ -897,11 +936,11 @@ export function SearchTabContent({
                 <div className="flex justify-center py-10 w-full">
                   <button
                     onClick={handleLoadMore}
-                    disabled={loading}
+                    disabled={loading || isLoadingMore}
                     className="h-12 px-8 bg-foreground text-background rounded-full text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
                   >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Load More
+                    {(loading || isLoadingMore) ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    <span>{(loading || isLoadingMore) ? 'Loading...' : 'Load More'}</span>
                   </button>
                 </div>
               )}
