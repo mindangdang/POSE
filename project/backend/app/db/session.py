@@ -72,7 +72,6 @@ async def get_db_connection(
         try:
             conn = await pool_used.getconn()
             await _ping_connection(conn)
-            yield conn
             try:
                 yield conn
             except Exception:
