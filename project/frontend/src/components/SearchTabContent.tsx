@@ -74,7 +74,8 @@ export function SearchTabContent({
   const [shops, setShops] = useState(SELECT_SHOPS);
   const [searchMode, setSearchMode] = useState<"digging" | "ai">("digging");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [pastedImage, setPastedImage] = useState<string | null>(null);
+  const [pastedFile, setPastedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
   const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" , brand: "" });
@@ -216,7 +217,7 @@ export function SearchTabContent({
     if (quotaCountdown === 0) setQuotaCountdown(null);
   }, [quotaCountdown]);
 
-  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null) => {
+  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null, fileOverride?: File | null) => {
     const myFetchId = ++fetchCounterRef.current;
     const startedAt = Date.now();
     loadingStartRef.current = startedAt;
@@ -226,22 +227,35 @@ export function SearchTabContent({
       const token = localStorage.getItem('access_token');
       const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
       
-      const body: any = { query: currentQuery, page };
-      const currentDomainMap = domainMapOverride ?? activeDomainMap;
-      if (currentDomainMap) body.domain_map = currentDomainMap;
-      // If query is a pasted data URL image, signal backend not to persist/upload it
-      if (typeof currentQuery === 'string' && currentQuery.startsWith('data:')) {
-        body.no_store = true;
-      }
+      const currentFile = fileOverride ?? pastedFile;
+      let res: Response;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(body)
-      });
+      if (searchMode === "ai") {
+        const formData = new FormData();
+        if (currentFile) formData.append('file', currentFile);
+        if (currentQuery) formData.append('query', currentQuery);
+
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: formData
+        });
+      } else {
+        const body: any = { query: currentQuery, page };
+        const currentDomainMap = domainMapOverride ?? activeDomainMap;
+        if (currentDomainMap) body.domain_map = currentDomainMap;
+
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(body)
+        });
+      }
       
       if (res.status === 429) {
         setQuotaCountdown(60);
@@ -288,14 +302,11 @@ export function SearchTabContent({
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf("image") !== -1) {
         const file = items[i].getAsFile();
+
         if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const dataUrl = event.target?.result as string;
-            setPastedImage(dataUrl);
-            setSearchMode("ai"); // 이미지는 렌즈 검색으로 자동 전환
-          };
-          reader.readAsDataURL(file);
+          setPastedFile(file);
+          setPreviewUrl(URL.createObjectURL(file));
+          setSearchMode("ai");
         }
       }
     }
@@ -313,9 +324,9 @@ export function SearchTabContent({
     let domainMap: Record<string, string> | null = null;
 
     // 붙여넣은 이미지가 있는 경우 AI 모드에서 이미지 검색 우선 수행
-    if (searchMode === "ai" && pastedImage) {
+    if (searchMode === "ai" && pastedFile) {
       setCurrentPage(1);
-      return await fetchResults(1, false, pastedImage, null);
+      return await fetchResults(1, false, undefined, null, pastedFile);
     }
 
     if (searchMode === "digging" && isDetailedSearch) {
@@ -545,7 +556,7 @@ export function SearchTabContent({
                     <ActiveModeIcon className="h-5 w-5" />
                   </button>
 
-                  {searchMode === "digging" && !displayActivity && !pastedImage && (
+                  {searchMode === "digging" && !displayActivity && !previewUrl && (
                     <button
                       type="button"
                       onClick={() => setIsDetailedSearch(!isDetailedSearch)}
@@ -555,10 +566,17 @@ export function SearchTabContent({
                     </button>
                   )}
 
-                  {pastedImage && (
+                  {previewUrl && (
                     <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center gap-1 bg-black/5 p-1 rounded-lg border border-border">
-                      <img src={pastedImage} className="w-8 h-8 object-cover rounded-md" />
-                      <button type="button" onClick={() => setPastedImage(null)} className="p-0.5 hover:bg-black/10 rounded-full">
+                      <img src={previewUrl} className="w-8 h-8 object-cover rounded-md" />
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPreviewUrl(null);
+                          setPastedFile(null);
+                        }} 
+                        className="p-0.5 hover:bg-black/10 rounded-full"
+                      >
                         <X className="w-3 h-3 text-muted-foreground" />
                       </button>
                     </motion.div>
@@ -637,10 +655,10 @@ export function SearchTabContent({
                         <input
                           type="text"
                           placeholder={searchMode === "digging" ? "스타일을 검색해보세요" : "이미지 검색이 가능합니다"}
-                          value={pastedImage ? "" : searchQuery}
+                          value={previewUrl ? "" : searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           onPaste={handlePaste}
-                          className={`h-full w-full bg-transparent ${pastedImage ? 'pl-32' : 'pl-28'} pr-24 text-base font-bold placeholder:text-muted-foreground outline-none`}
+                          className={`h-full w-full bg-transparent ${previewUrl ? 'pl-32' : 'pl-28'} pr-24 text-base font-bold placeholder:text-muted-foreground outline-none`}
                         />
                       </div>
                     </motion.div>

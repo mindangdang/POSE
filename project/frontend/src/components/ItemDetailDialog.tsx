@@ -55,13 +55,15 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
             ? `${window.location.origin}${targetUrl}` 
             : targetUrl;
 
+          const formData = new FormData();
+          formData.append('query', absoluteUrl || modalTitle);
+
           const res = await fetch('/api/lens', {
             method: 'POST',
             headers: { 
-              'Content-Type': 'application/json',
               ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
-            body: JSON.stringify({ query: absoluteUrl || modalTitle }),
+            body: formData,
           });
           const data = await res.json();
           if (isMounted && data.success && data.results) {
