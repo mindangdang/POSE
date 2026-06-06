@@ -564,7 +564,7 @@ export function ProfileTabContent({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-4xl mx-auto space-y-10"
+      className="max-w-4xl mx-auto space-y-10 pb-40"
     >
       <ProfileHeader user={user} />
 

@@ -38,7 +38,7 @@ export function Header({
       <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-logo tracking-tight text-white transition-colors duration-1000" style={ambientTextStyle}>RoomShow</span>
+          <span className="text-2xl font-logo tracking-wide text-white transition-colors duration-1000" style={ambientTextStyle}>RoomShow</span>
         </a>
 
         {/* Center Navigation - Desktop */}

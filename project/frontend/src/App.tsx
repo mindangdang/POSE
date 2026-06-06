@@ -20,8 +20,8 @@ const fontStyles = `
     font-weight: 400;
     font-style: normal;
   }
-  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
+  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
+  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
   body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
   .leather-header {
     background-color: #080808;
@@ -338,7 +338,7 @@ export default function App() {
 
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-black border-b border-white/10">
-          <span className="text-2xl font-logo tracking-tight text-white">RoomShow</span>
+          <span className="text-2xl font-logo tracking-wide text-white">RoomShow</span>
           <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-white/60">
             <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-white transition-colors uppercase tracking-widest">ABOUT</span>
           </nav>
@@ -351,7 +351,7 @@ export default function App() {
             {/* Left - Typography */}
             <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-12 pt-20 sm:pt-24 lg:pt-0 pb-8 lg:pb-0">
               <div className="max-w-2xl">
-                <h1 className="font-logo text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] text-foreground tracking-[-0.07em] leading-[0.8] transition-all">
+                <h1 className="font-logo text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] text-foreground tracking-tight leading-[0.8] transition-all">
                 <br />
                 Digg yourself 
                 <br />

@@ -1,10 +1,11 @@
 import os
-import uuid
 import asyncio
 import traceback
 import json
-from typing import Optional
 import httpx
+import base64
+from io import BytesIO
+from PIL import Image
 from pathlib import Path
 
 from fastapi import (
@@ -14,9 +15,6 @@ from fastapi import (
     Depends,
     HTTPException,
     Request,
-    UploadFile,
-    Form,
-    File,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -38,8 +36,6 @@ FAIL_IMAGE_DIR = Path("project/backend/fail_images")
 FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
-
-# 메모리 주소가 보장된 단일 매니저 전역 객체 생성
 websocket_manager_instance = ConnectionManager()
 
 @router.post("/extract-url")
@@ -90,8 +86,9 @@ async def extract_and_save_url(
 
 ######################################################################################
 
-async def background_pse_search(app: FastAPI, user_id: str, query: str, page: int):
-    manager = getattr(app.state, "websocket_manager", None)
+async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Optional[int], custom_domain_map: Optional[dict] = None):
+    # 전역 매니저 객체를 직접 참조하거나 app.state에서 안전하게 가져옵니다.
+    manager = getattr(app.state, "websocket_manager", websocket_manager_instance)
     serp_api_key = os.environ.get("SERP_API_KEY")
     
     if not serp_api_key:
@@ -101,36 +98,63 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: in
         return
 
     try:
-        try:
-            current_page = max(1, int(page)) if page is not None else 1
-        except ValueError:
-            current_page = 1
+        # page 파라미터 타입 안정성 및 기본값 처리
+        current_page = 1
+        if page is not None:
+            try:
+                current_page = max(1, int(page))
+            except (ValueError, TypeError):
+                current_page = 1
+
+        model_semaphore = asyncio.Semaphore(4)
+        async def process_single_item(item: dict):
+            try:
+                target_url = item.get("image_url")
+                if not target_url:
+                    return
+                    
+                async with model_semaphore:
+                    if manager:
+                        payload = {
+                            "type": "SEARCH_SUCCESS",
+                            "results": [item],
+                            "is_append": True
+                        }
+                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+                        item_title = item.get('facts', {}).get('title', 'Unknown')
+                        print(f"[{item_title}] 프론트로 전송 완료.")
+
+            except Exception as e:
+                print(f"개별 아이템 전송 에러: {e}")
 
         async def process_site(domain: str, name: str, client: httpx.AsyncClient):
             try:
-                site_items = await fetch_from_single_site(client, query, query, domain, name, current_page, serp_api_key)
-                if manager:
-                    payload = {"type": "SEARCH_SUCCESS", "results": site_items, "is_append": True}
-                    await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                    await asyncio.sleep(0.01)
+                product_hierarchy_query = "(> products)"
+                exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
+                final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
+                site_items = await fetch_from_single_site(client, final_query, domain, name, current_page, serp_api_key)
+                tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
+                await asyncio.gather(*tasks, return_exceptions=True)
+                    
             except Exception as e:
-                print(f"쇼핑몰 검색 스트리밍 처리 에러: {e}")
+                print(f"쇼핑몰 검색 스트리밍 처리 에러 ({domain}): {e}")
 
         print("여러 쇼핑몰 병렬 검색 및 실시간 전송 시작...")
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            site_tasks = [asyncio.create_task(process_site(domain, name, client)) for domain, name in domain_map.items()]
-            await asyncio.gather(*site_tasks, return_exceptions=True)
-            
-        print("모든 쇼핑몰 검색 및 스트리밍 완료.")
+        target_domains = custom_domain_map if custom_domain_map is not None else domain_map
         
-        if manager:
-            await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
-    
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            site_tasks = [asyncio.create_task(process_site(domain, name, client)) for domain, name in target_domains.items()]
+            await asyncio.gather(*site_tasks, return_exceptions=True)
+        print("모든 쇼핑몰 검색 및 스트리밍 완료.")
+
     except Exception as exc:
         traceback.print_exc()
         if manager:
-            payload = {"type": "SEARCH_ERROR", "message": f"쇼핑 검색 중 오류: {exc}"}
+            payload = {"type": "SEARCH_ERROR", "message": f"쇼핑 검색 중 오류: {str(exc)}"}
             await manager.broadcast_to_user(user_id, json.dumps(payload))
+    finally:
+        if manager:
+            await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
 
 @router.post("/pse")
 async def run_serpapi_search(
@@ -142,7 +166,7 @@ async def run_serpapi_search(
     request.app.state.websocket_manager = websocket_manager_instance
 
     user_id = str(current_user.get("sub"))
-    background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page)
+    background_tasks.add_task(background_pse_search, request.app, user_id, payload.query, payload.page, payload.domain_map)
 
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
 
@@ -154,10 +178,18 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 
-    url = "https://serpapi.com/search"
-
-    # 쿼리가 URL 형태인 경우 즉시 해당 URL로 렌즈 검색 수행, 아니면 이미지 생성 후 검색
-    if payload.query.startswith(("http://", "https://", "//")):
+    # 쿼리가 Base64 이미지 데이터인 경우 처리
+    if payload.query.startswith("data:image"):
+        try:
+            # data:image/png;base64,... 형태에서 데이터 부분만 추출
+            header, encoded = payload.query.split(",", 1)
+            image_data = base64.b64decode(encoded)
+            image = Image.open(BytesIO(image_data))
+            search_image_url = await upload_generated_image(image)
+        except Exception as e:
+            print(f"Base64 이미지 디코딩 실패: {e}")
+            raise HTTPException(status_code=400, detail="유효하지 않은 이미지 데이터입니다.")
+    elif payload.query.startswith(("http://", "https://", "//")):
         search_image_url = payload.query if not payload.query.startswith("//") else f"https:{payload.query}"
     else:
         image = await generate_image_from_query(payload.query)
@@ -176,39 +208,14 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     try:
         # 무한 대기 방지를 위한 안전한 타임아웃 설정
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(url, params=params)
-            if response.status_code != 200:
-                print(f"SerpApi 에러 내용: {response.text}")
-            response.raise_for_status()
-            search_data = response.json()
-
-        items = search_data.get("visual_matches", [])
-        print(f"구글 렌즈가 가져온 전체 원본 데이터 개수: {len(items)}")
-
-        results = []
-        for item in items:
-            link = item.get("link", "")
-            title = item.get("title", "상품명 없음")
-            image_url = item.get("thumbnail", "")
-            extracted_price = item.get("price", "가격 미상")
-            if isinstance(extracted_price, dict):
-                extracted_price = extracted_price.get("value", "")
-            source = item.get("source", "알 수 없는 샵")
-
-            results.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "category": "PRODUCT",
-                    "sub_category": "PRODUCT",
-                    "recommend": f"{source}에서 발견한 힙한 아이템",
-                    "image_url": image_url,
-                    "url": link,
-                    "facts": {
-                        "title": title,
-                        "Price": extracted_price,
-                        "Shop": source,
-                    },
-                }
+            results = await fetch_from_single_site(
+                client=client,
+                query=search_image_url,
+                domain="google_lens",
+                site_name=None,
+                current_page=1,
+                serp_api_key=serp_api_key,
+                params=params
             )
 
         print(f" 통과한 최종결과 개수: {len(results)}")
@@ -217,67 +224,6 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     except Exception as exc:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
-
-######################################################################################
-
-@router.post("/search/secondhand")
-async def search_secondhand(payload: SearchRequest):
-    serp_api_key = os.environ.get("SERP_API_KEY")
-    if not serp_api_key:
-        raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
-
-    url = "https://serpapi.com/search"
-    query = f"{payload.query} site:fruitsfamily.co.kr"
-
-    params = {
-        "engine": "google",
-        "q": query,
-        "api_key": serp_api_key,
-        "tbm": "isch",
-        "gl": "kr",
-        "hl": "ko"
-    }
-
-    print(f"후루츠패밀리 매물 디깅 시작: {query}")
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(url, params=params)
-            if response.status_code != 200:
-                print(f"SerpApi 에러 내용: {response.text}")
-            response.raise_for_status()
-            search_data = response.json()
-
-        items = search_data.get("images_results", [])
-        print(f"검색된 전체 원본 데이터 개수: {len(items)}")
-
-        results = []
-        for item in items:
-            link = item.get("link", "")
-            title = item.get("title", "상품명 없음")
-            image_url = item.get("original") or item.get("thumbnail", "")
-            source = "후루츠패밀리"
-
-            results.append(
-                {
-                    "id": str(uuid.uuid4()),
-                    "category": "PRODUCT",
-                    "sub_category": "SECONDHAND",
-                    "recommend": f"{source}에서 발견한 매물",
-                    "image_url": image_url,
-                    "url": link,
-                    "facts": {
-                        "title": title,
-                        "Shop": source,
-                    },
-                }
-            )
-
-        print(f" 통과한 최종결과 개수: {len(results)}")
-        return {"success": True, "results": results}
-    except Exception as exc:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"매물 검색 중 오류: {exc}") from exc
 
 ######################################################################################
 

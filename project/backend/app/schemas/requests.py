@@ -16,13 +16,7 @@ class SearchRequest(BaseModel):
     query: str
     page: Optional[int] = 1
     user_id: int | str | None = None
-
-class FeedbackRequest(BaseModel):
-    user_id: str | int
-    query: str
-    result: str
-    feedback_type: str
-    reason: Optional[str] = ""
+    domain_map: Optional[dict[str, str]] = None 
 
 
 class ManualItemCreate(BaseModel):

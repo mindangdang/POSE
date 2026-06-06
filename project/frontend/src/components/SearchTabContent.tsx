@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, Music } from 'lucide-react';
+import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, Music, ExternalLink } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -18,25 +18,41 @@ type SearchTabContentProps = {
 
 const SUGGESTION_POOL = [
   "빈티지 리바이스",
-  "미니멀 셋업",
+  "폴로 카라티",
   "아카이브 헬무트랭",
-  "오버핏 가디건",
-  "시티보이 룩",
-  "고프코어 자켓",
-  "와이드 실루엣 팬츠",
+  "슬림핏 반팔",
+  "유니폼",
+  "아크테릭스 바람막이",
+  "와이드 팬츠",
   "디스트로이드 데님",
-  "크롭 레이어링",
-  "테크니컬 웨어",
-  "90년대 스트릿",
-  "그런지 무드",
+  "빈티지 돌체 앤 가바나",
+  "테크웨어",
+  "웨스턴 셔츠",
+  "그런지 팬츠",
   "올드머니 룩",
   "가죽 자켓",
-  "발레코어",
-  "Y2K 스타일",
-  "클래식 트렌치 코트",
+  "포엣코어",
+  "Y2K",
+  "버버리 트렌치 코트",
   "헤비 스웨트셔츠",
-  "워크웨어 부츠",
-  "보헤미안 시크"
+  "팀버랜드 부츠",
+  "펜던트 목걸이"
+];
+
+const SELECT_SHOPS = [
+  { name: "FRUITS FAMILY", desc: "감도높은 빈티지/세컨핸드 매물 거래용", url: "https://fruitsfamily.com" },
+  { name: "FETCHING", desc: "전 세계 럭셔리 편집샵 아이템 비교 직구", url: "https://fetching.co.kr" },
+  { name: "HYPEBEAST", desc: "글로벌 스트릿 패션 트렌드 및 큐레이션", url: "https://hypebeast.kr" },
+  { name: "EMPTY", desc: "무신사가 제안하는 실험적 디자이너 브랜드", url: "https://empty.seoul.kr" },
+  { name: "WORKSOUT", desc: "하이엔드 스트릿웨어와 라이프스타일 셀렉샵", url: "https://worksout.co.kr" },
+  { name: "8DIVISION", desc: "남성 헤리티지 및 컨템포러리 셀렉샵", url: "https://8division.com" },
+  { name: "IAMSHOP", desc: "고감도 컨템포러리 브랜드 및 워크웨어 큐레이션", url: "https://iamshop-online.com" },
+  { name: "THE BOUNCE", desc: "국내외 인기 스트릿 브랜드를 모은 멀티샵", url: "https://thebounce.co.kr" },
+  { name: "THE X SHOP", desc: "스트릿 컬처와 스케이트보드 편집 매장", url: "https://thexshop.co.kr" },
+  { name: "COLLECTIV", desc: "세컨핸드 패션의 새로운 가치를 제안하는 플랫폼", url: "https://collectiv.kr" },
+  { name: "KREAM", desc: "한정판 스니커즈와 럭셔리 아이템 거래 플랫폼", url: "https://kream.co.kr" },
+  { name: "MUSINSA", desc: "국내 최대 패션 스토어 및 트렌드 큐레이션", url: "https://musinsa.com" },
+  { name: "EQL", desc: "한섬에서 제안하는 감각적인 라이프스타일 셀렉샵", url: "https://eqlstore.com" },
 ];
 
 export function SearchTabContent({
@@ -47,42 +63,42 @@ export function SearchTabContent({
   searchSecondhandQuery,
   searchSecondhandTrigger,
 }: SearchTabContentProps) {
+  const [shops, setShops] = useState(SELECT_SHOPS);
   const [searchMode, setSearchMode] = useState<"digging" | "ai">("digging");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [pastedImage, setPastedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
-  const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" });
+  const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" , brand: "", site: "" });
   const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
+  const [activeDomainMap, setActiveDomainMap] = useState<Record<string, string> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
   const hasSearchActivity = loading || searchResults.length > 0 || quotaCountdown !== null;
+  const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
+  const [newShopData, setNewShopData] = useState({ name: "", url: "", desc: "" });
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   // 모달 제어 상태
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
-    { value: "detail", label: "상세 검색", icon: Zap, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
     { value: "ai", label: "AI 검색", icon: BrainCircuit, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
   ] as const;
-  const activeMode = searchMode === "digging" && isDetailedSearch
-    ? modeOptions[1]
-    : searchMode === "digging"
-      ? modeOptions[0]
-    : searchMode === "ai"
-      ? modeOptions[2]
-        : null;
+  const activeMode = modeOptions.find(opt => opt.value === searchMode) || modeOptions[0];
   const ActiveModeIcon = activeMode?.icon ?? Plus;
   const detailFields = [
     { key: "mood", placeholder: "무드", suggestions: ["빈티지", "미니멀", "스트릿"] },
     { key: "color", placeholder: "색상", suggestions: ["블랙", "연청", "아이보리"] },
     { key: "fit", placeholder: "핏", suggestions: ["오버핏", "크롭", "와이드"] },
     { key: "category", placeholder: "카테고리", suggestions: ["티셔츠", "자켓", "팬츠"] },
+    { key: "brand", placeholder: "브랜드", suggestions: ["리바이스", "엘무드", "노이어"] },
+    { key: "site", placeholder: "사이트", suggestions: [] }
   ] as const;
 
   useEffect(() => {
@@ -219,7 +235,7 @@ export function SearchTabContent({
     }
   }, [quotaCountdown]);
 
-  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string) => {
+  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null) => {
     setLoading(true);
     try {
       let res;
@@ -228,10 +244,15 @@ export function SearchTabContent({
       const token = localStorage.getItem('access_token');
       const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
+      
+      const body: any = { query: currentQuery, page: page };
+      const currentDomainMap = domainMapOverride !== undefined ? domainMapOverride : activeDomainMap;
+      if (currentDomainMap) body.domain_map = currentDomainMap;
+
       res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ query: currentQuery, page: page }) // 백엔드에 page 번호도 같이 보냄!
+        body: JSON.stringify(body)
       });
       
       if (res.status === 429) {
@@ -273,6 +294,25 @@ export function SearchTabContent({
       setLoading(false);
     }
   };
+  
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            setPastedImage(dataUrl);
+            setSearchMode("ai"); // 이미지는 렌즈 검색으로 자동 전환
+            if (!searchQuery) setSearchQuery("Pasted Image");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+  };
 
   // 1. 엔터 쳐서 '새롭게 검색'할 때
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -280,15 +320,40 @@ export function SearchTabContent({
     if (!user) return;
 
     let finalQuery = searchQuery;
+    let domainMap: Record<string, string> | null = null;
+
+    // 붙여넣은 이미지가 있는 경우 AI 모드에서 이미지 검색 우선 수행
+    if (searchMode === "ai" && pastedImage) {
+      setCurrentPage(1);
+      setSearchResults([]);
+      await fetchResults(1, false, pastedImage, null);
+      return;
+    }
+
     if (searchMode === "digging" && isDetailedSearch) {
-      finalQuery = [
+      const detailParts = [
         detailedSearchQuery.mood,
         detailedSearchQuery.color,
         detailedSearchQuery.fit,
-        detailedSearchQuery.category
+        detailedSearchQuery.category,
+        detailedSearchQuery.brand
       ].filter(Boolean).join(" ");
+      
+      // 상세 필드가 비어있으면 메인 검색어 사용
+      finalQuery = detailParts || searchQuery;
+      
+      if (detailedSearchQuery.site) {
+        const shop = shops.find(s => s.name === detailedSearchQuery.site);
+        if (shop) {
+          let domain = "";
+          try { domain = new URL(shop.url).hostname.replace('www.', ''); }
+          catch (e) { domain = shop.url.replace('https://', '').replace('http://', '').split('/')[0]; }
+          domainMap = { [domain]: shop.name };
+        }
+      }
+
       if (!finalQuery.trim()) return;
-      setSearchQuery(finalQuery); // 더 보기(Pagination) 기능을 위해 통합된 쿼리로 업데이트
+      if (detailParts) setSearchQuery(finalQuery); 
     } else {
       if (!searchQuery) return;
     }
@@ -297,7 +362,8 @@ export function SearchTabContent({
     setSearchResults([]);    // 기존 화면 싹 지우기
     setGeneratedImage(null);
     setHasMore(true);        // 무한 스크롤 상태 리셋
-    await fetchResults(1, false, finalQuery); // 1페이지 데이터 가져와서 덮어쓰기
+    setActiveDomainMap(domainMap);
+    await fetchResults(1, false, finalQuery, domainMap); // 1페이지 데이터 가져와서 덮어쓰기
   };
 
   // 2. '더 보기' 버튼을 눌렀을 때
@@ -319,19 +385,35 @@ export function SearchTabContent({
     try {
       const token = localStorage.getItem('access_token');
       const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/search/secondhand', {
+      const res = await fetch('/api/pse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ query: title })
+        body: JSON.stringify({ 
+          query: title, 
+          page: 1,
+          domain_map: { 
+            "fruitsfamily.com": "후루츠패밀리",
+            "collectiv.kr": "콜랙티브",
+            "m.bunjang.co.kr": "번개장터"
+          }
+        })
       });
-      if (!res.ok) throw new Error("Secondhand search failed");
-      const data = await res.json();
-      setSearchResults(data.results || []);
+      if (!res.ok) throw new Error("Search failed");
+      // 결과는 WebSocket(SEARCH_SUCCESS)을 통해 수신됩니다.
     } catch (error: any) {
       alert(error.message);
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleShopSearch = (name: string) => {
+    // UI 상태 업데이트
+    setSearchMode("digging");
+    setIsDetailedSearch(true);
+    setDetailedSearchQuery(prev => ({ ...prev, site: name }));
+    
+    // 입력창으로 포커스를 유도하기 위해 최상단으로 스크롤
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -340,14 +422,9 @@ export function SearchTabContent({
   }, [searchSecondhandQuery, searchSecondhandTrigger]);
 
   const applySelectedMode = (mode: ModeOptionValue) => {
-    if (mode === "digging") {
-      setSearchMode("digging");
-      setIsDetailedSearch(false);
-    } else if (mode === "detail") {
-      setSearchMode("digging");
-      setIsDetailedSearch(true);
-    } else {
-      setSearchMode(mode);
+    setSearchMode(mode);
+    // AI 모드로 변경하거나 다른 모드로 갈 때 상세 검색창 닫기
+    if (mode !== "digging") {
       setIsDetailedSearch(false);
     }
   };
@@ -355,7 +432,7 @@ export function SearchTabContent({
   const handleSelectMode = (mode: ModeOptionValue) => {
     setIsModeMenuOpen(false);
 
-    if (showDetailedSuggestions && mode !== "detail") {
+    if (showDetailedSuggestions) {
       setShowDetailedSuggestions(false);
       window.setTimeout(() => applySelectedMode(mode), 110);
       return;
@@ -407,6 +484,20 @@ export function SearchTabContent({
     }
   };
 
+  const handleAddShop = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newShopData.name || !newShopData.url) return;
+
+    const formattedUrl = newShopData.url.startsWith('http') 
+      ? newShopData.url 
+      : `https://${newShopData.url}`;
+
+    const newShop = { ...newShopData, url: formattedUrl };
+    setShops(prev => [newShop, ...prev]);
+    setNewShopData({ name: "", url: "", desc: "" });
+    setIsAddShopModalOpen(false);
+  };
+
   return (
     <>
       <motion.div
@@ -418,7 +509,7 @@ export function SearchTabContent({
           "relative",
           "mx-auto flex w-full flex-col transition-[max-width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
           hasSearchActivity ? "max-w-6xl" : "max-w-4xl",
-          hasSearchActivity ? "space-y-8 py-8" : "min-h-[calc(100vh-8rem)] justify-center",
+        hasSearchActivity ? "space-y-8 py-8 pb-40" : "min-h-[110vh] pt-20 pb-60",
         ].join(" ")}
       >
         {/* Subtle Background Image Layer for Window Tab */}
@@ -473,7 +564,7 @@ export function SearchTabContent({
             transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             className="relative w-full"
           >
-            <div className="absolute left-3 top-1/2 z-20 -translate-y-1/2">
+            <div className="absolute left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5">
               <button
                 type="button"
                 aria-label={activeMode ? `${activeMode.label} 모드 변경` : "검색 모드 선택"}
@@ -485,6 +576,38 @@ export function SearchTabContent({
               >
                 <ActiveModeIcon className="h-5 w-5" />
               </button>
+
+              {searchMode === "digging" && !hasSearchActivity && !pastedImage && (
+                <button
+                  type="button"
+                  onClick={() => setIsDetailedSearch(!isDetailedSearch)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                    isDetailedSearch 
+                      ? "bg-black text-white shadow-md" 
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                  title={isDetailedSearch ? "일반 검색으로 전환" : "상세 검색으로 전환"}
+                >
+                  <Zap className={`h-4 w-4 ${isDetailedSearch ? "fill-current" : ""}`} />
+                </button>
+              )}
+
+              {pastedImage && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-1 bg-black/5 p-1 rounded-lg border border-border group/preview"
+                >
+                  <img src={pastedImage} className="w-8 h-8 object-cover rounded-md" />
+                  <button 
+                    type="button"
+                    onClick={() => { setPastedImage(null); if (searchQuery === "Pasted Image") setSearchQuery(""); }}
+                    className="p-0.5 hover:bg-black/10 rounded-full transition-colors"
+                  >
+                    <X className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </motion.div>
+              )}
 
               <AnimatePresence>
                 {isModeMenuOpen && (
@@ -518,9 +641,9 @@ export function SearchTabContent({
               <motion.div
                 layout
                 initial={false}
-                animate={{ height: 240 }}
+                animate={{ height: 360 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="flex w-full flex-col justify-center border-b-2 border-foreground bg-background py-0 pl-16 pr-16"
+                className="flex w-full flex-col justify-center border-b-2 border-foreground bg-transparent py-0 pl-28 pr-16"
               >
                 {detailFields.map(({ key, placeholder, suggestions }, index) => (
                   <div
@@ -584,18 +707,20 @@ export function SearchTabContent({
                 initial={false}
                 animate={{ height: 56 }}
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full border-b-2 border-foreground bg-background transition-all duration-300"
+                className="w-full border-b-2 border-foreground bg-transparent transition-all duration-300"
               >
                 <input
                   type="text"
                   placeholder={
                     searchMode === "digging"
-                      ? "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
+                      ? isDetailedSearch ? "상세 조건을 입력하세요" : "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
                       : "떠오르는 스타일을 자유롭게 입력해보세요"
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-full w-full rounded-full bg-transparent pl-16 pr-16 text-base font-bold placeholder:text-muted-foreground outline-0"
+                  onPaste={handlePaste}
+                  disabled={searchMode === "digging" && isDetailedSearch}
+                  className={`h-full w-full rounded-full bg-transparent ${pastedImage ? 'pl-32' : (searchMode === 'digging' && !hasSearchActivity ? 'pl-28' : 'pl-16')} pr-24 text-base font-bold placeholder:text-muted-foreground outline-0 transition-all ${isDetailedSearch ? 'opacity-0' : 'opacity-100'}`}
                 />
               </motion.div>
             )}
@@ -657,7 +782,7 @@ export function SearchTabContent({
           </form>
 
           {/* 추천 검색어 영역 */}
-          {!hasSearchActivity && randomSuggestions.length > 0 && (
+          {!hasSearchActivity && !isDetailedSearch && randomSuggestions.length > 0 && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -676,6 +801,59 @@ export function SearchTabContent({
                   {suggestion}
                 </button>
               ))}
+            </motion.div>
+          )}
+
+          {/* 주요 편집샵 안내 영역 */}
+          {!hasSearchActivity && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="w-full max-w-3xl space-y-4 pt-8"
+            >
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Curated Shop Guide</span>
+                <button
+                  onClick={() => setIsAddShopModalOpen(true)}
+                  className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-white text-[9px] font-bold uppercase tracking-wider text-muted-foreground hover:text-black hover:border-black transition-all"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  Add Shop
+                </button>
+                <div className="h-px flex-1 bg-border/50" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {shops.map((shop) => (
+                  <div 
+                    key={`${shop.name}-${shop.url}`} 
+                    className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-white/40 backdrop-blur-sm hover:bg-white transition-all group shadow-sm"
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-[11px] font-bold text-foreground">{shop.name}</span>
+                      <span className="text-[9px] text-muted-foreground truncate">{shop.desc}</span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleShopSearch(shop.name)}
+                        className="px-2 py-1 text-[9px] font-bold text-muted-foreground border border-border rounded-md hover:bg-black hover:text-white hover:border-black transition-colors uppercase tracking-wider"
+                      >
+                        이 편집샵에서 검색하기
+                      </button>
+                      <a
+                        href={shop.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-7 h-7 rounded-full bg-muted group-hover:bg-black group-hover:text-white transition-colors"
+                        title={`${shop.name} 이동하기`}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </motion.div>
           )}
         </motion.div>
@@ -799,6 +977,76 @@ export function SearchTabContent({
         item={selectedItem}
         onOpenChange={(open) => !open && setSelectedItem(null)}
       />
+
+      {/* Add Shop Modal */}
+      <AnimatePresence>
+        {isAddShopModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAddShopModalOpen(false)}
+              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 z-[101] w-full max-w-md -translate-x-1/2 -translate-y-1/2 p-4"
+            >
+              <div className="rounded-3xl border border-border bg-background p-6 shadow-2xl sm:p-8">
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-xl font-bold tracking-tight text-foreground">새 사이트 추가</h3>
+                  <button onClick={() => setIsAddShopModalOpen(false)} className="rounded-full p-2 hover:bg-muted transition-colors">
+                    <X className="h-5 w-5 text-muted-foreground" />
+                  </button>
+                </div>
+                <form onSubmit={handleAddShop} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">사이트명</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="예: POSE SELECT"
+                      value={newShopData.name}
+                      onChange={(e) => setNewShopData(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm font-medium focus:border-black focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">URL</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="https://..."
+                      value={newShopData.url}
+                      onChange={(e) => setNewShopData(prev => ({ ...prev, url: e.target.value }))}
+                      className="w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm font-medium focus:border-black focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">설명 (선택)</label>
+                    <input
+                      type="text"
+                      placeholder="간단한 사이트 설명을 적어주세요"
+                      value={newShopData.desc}
+                      onChange={(e) => setNewShopData(prev => ({ ...prev, desc: e.target.value }))}
+                      className="w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm font-medium focus:border-black focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="mt-4 w-full rounded-full bg-black py-4 text-sm font-bold tracking-widest text-white transition-opacity hover:opacity-90 uppercase"
+                  >
+                    추가 완료
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

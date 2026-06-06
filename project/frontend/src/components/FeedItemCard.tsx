@@ -31,9 +31,13 @@ export function FeedItemCard({
     item.sub_category.trim().toUpperCase() === 'PROCESSING' ||
     facts?._source === 'feed_add';
   const categoryLabel = `${item.category}${item.sub_category ? ` / ${item.sub_category}` : ''}`;
+
+  // 사용자에게 노출할 필요가 없는 내부 메타데이터 키 목록
+  const INTERNAL_KEYS = ['title', 'image_vector', 'local_image_url', '_source', 'embedding_vector_text'];
+
   const visibleFacts = facts
     ? Object.entries(facts).filter(
-        ([key]) => key.toLowerCase() !== 'title' && factKeysToShow.includes(key.toLowerCase())
+        ([key]) => !INTERNAL_KEYS.includes(key.toLowerCase()) && factKeysToShow.includes(key.toLowerCase())
       )
     : [];
 
@@ -127,7 +131,7 @@ export function FeedItemCard({
       <div className="mt-2 sm:mt-3 space-y-1 sm:space-y-1.5 px-1">
         {/* Category */}
         {!isProcessingItem && (
-          <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-wider">
+          <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-widest">
             {categoryLabel}
           </span>
         )}

@@ -247,7 +247,7 @@ export function FeedTabContent({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col min-h-[calc(100vh-200px)]"
+      className="flex flex-col min-h-[calc(100vh-200px)] pb-40"
     >
       {/* Page Title */}
       <div className="mb-2 sm:mb-3">
@@ -260,7 +260,7 @@ export function FeedTabContent({
       <div className="flex justify-end mb-1 sm:mb-2">
         <button
           onClick={() => setIsAddPanelOpen(true)}
-          className="flex items-center gap-1.5 sm:gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
+          className="flex items-center gap-1.5 sm:gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-widest hover:opacity-70 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span className="hidden sm:inline">추가하기</span>
@@ -282,7 +282,7 @@ export function FeedTabContent({
                   setSelectedCategory(category);
                   setCurrentFolder(null);
                 }}
-                className={`flex items-center pb-2 px-1 text-xs sm:text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 ${
+                className={`flex items-center pb-2 px-1 text-xs sm:text-sm font-bold uppercase tracking-widest whitespace-nowrap transition-all border-b-2 ${
                   isSelected
                     ? 'border-black text-black'
                     : 'border-transparent text-muted-foreground hover:text-black hover:border-black/20'
