@@ -53,6 +53,8 @@ const SELECT_SHOPS = [
   { name: "KREAM", desc: "한정판 스니커즈와 럭셔리 아이템 거래 플랫폼", url: "https://kream.co.kr" },
   { name: "MUSINSA", desc: "국내 최대 패션 스토어 및 트렌드 큐레이션", url: "https://musinsa.com" },
   { name: "EQL", desc: "한섬에서 제안하는 감각적인 라이프스타일 셀렉샵", url: "https://eqlstore.com" },
+  { name: "29CM", desc: "감도깊은 취향 셀렉트샵", url: "https://29cm.co.kr" },
+  { name: "Bunjang", desc: "브랜드 중고거래 플랫폼", url: "https://bunjang.co.kr" },
 ];
 
 // URL에서 도메인을 추출하는 헬퍼 함수
