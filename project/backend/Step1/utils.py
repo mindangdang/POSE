@@ -69,13 +69,13 @@ if not GPU_SERVER_URL:
 })
 async def analyze_description_with_gemini(description: str) -> dict:
     if not description or description == "No description available":
-        return {"recommend": "", "key_details": "", "sub_category": "미분류"}
+        return {"title": "", "recommend": "", "price": "", "key_details": "", "sub_category": "미분류"}
 
     prompt = f"""
-    다음 상품설명을 분석하여 'recommend'와'key_details','sub_category'로 분리해.
+    다음 상품정보를 분석하여 'title', 'recommend', 'price' 'key_details', 'sub_category'로 분리해.
     *참고: 아우터는 패딩,코트 같은 종류고, 자켓은 블루종,가죽자켓 같은 종류야.
 
-    [상품 설명]
+    [상품 정보]
     {description} """
 
     response = await client.aio.models.generate_content(
@@ -92,7 +92,9 @@ async def analyze_description_with_gemini(description: str) -> dict:
     return {
         "recommend": data.recommend,
         "key_details": data.key_details,
-        "sub_category": data.sub_category
+        "sub_category": data.sub_category,
+        "title": data.title,
+        "price": data.price
     }
 
 domain_map = {
