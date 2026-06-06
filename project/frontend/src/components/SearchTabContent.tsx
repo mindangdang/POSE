@@ -102,7 +102,7 @@ export function SearchTabContent({
   const bottomRef = useRef<HTMLDivElement>(null);
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
-    { value: "ai", label: "AI 검색", icon: BrainCircuit, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
+    { value: "ai", label: "이미지 검색 모드", icon: BrainCircuit, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
   ] as const;
   const activeMode = modeOptions.find(opt => opt.value === searchMode) || modeOptions[0];
   const ActiveModeIcon = activeMode?.icon ?? Plus;
@@ -654,7 +654,7 @@ export function SearchTabContent({
                       <div className="relative h-14 w-full border-b-2 border-foreground">
                         <input
                           type="text"
-                          placeholder={searchMode === "digging" ? "스타일을 검색해보세요" : "이미지 검색이 가능합니다"}
+                          placeholder={searchMode === "digging" ? "머릿속에 생각나는 그대로 검색해보세요." : "원하는 이미지를 붙여넣거나 생성하고 싶은 의류 이미지를 묘사해보세요."}
                           value={previewUrl ? "" : searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           onPaste={handlePaste}
