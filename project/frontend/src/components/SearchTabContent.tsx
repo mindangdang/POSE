@@ -509,7 +509,7 @@ export function SearchTabContent({
           "relative",
           "mx-auto flex w-full flex-col transition-[max-width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
           hasSearchActivity ? "max-w-6xl" : "max-w-4xl",
-        hasSearchActivity ? "space-y-8 py-8 pb-40" : "min-h-[110vh] pt-20 pb-60",
+        hasSearchActivity ? "space-y-12 pt-10 pb-40" : "min-h-[110vh] pt-20 pb-60",
         ].join(" ")}
       >
         {/* Subtle Background Image Layer for Window Tab */}
@@ -533,8 +533,7 @@ export function SearchTabContent({
 
         <motion.div
           layout
-          className="flex w-full flex-col items-center gap-8"
-          animate={{ y: hasSearchActivity ? -56 : 0 }}
+          className={`flex w-full flex-col items-center gap-8 ${hasSearchActivity ? 'sticky top-2 z-40' : ''}`}
           transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         >
           <AnimatePresence>
