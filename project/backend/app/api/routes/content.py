@@ -7,6 +7,7 @@ import base64
 from io import BytesIO
 from PIL import Image
 from pathlib import Path
+import re
 
 from fastapi import (
     FastAPI,
@@ -18,6 +19,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+import uuid
 from fastapi.responses import FileResponse
 from project.backend.app.core.database import get_repos
 from project.backend.app.repositories import Repositories
@@ -173,7 +175,7 @@ async def run_serpapi_search(
 ######################################################################################
 
 @router.post("/lens")
-async def run_serpapi_lens_search(payload: SearchRequest):
+async def run_serpapi_lens_search(payload: SearchRequest, request: Request):
     serp_api_key = os.environ.get("SERP_API_KEY")
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
@@ -181,14 +183,15 @@ async def run_serpapi_lens_search(payload: SearchRequest):
     # 쿼리가 Base64 이미지 데이터인 경우 처리
     if payload.query.startswith("data:image"):
         try:
-            # data:image/png;base64,... 형태에서 데이터 부분만 추출
-            header, encoded = payload.query.split(",", 1)
+            # data:image/png;base64,... 에서 실제 인코딩된 데이터 부분만 추출
+            _, encoded = payload.query.split(",", 1)
             image_data = base64.b64decode(encoded)
             image = Image.open(BytesIO(image_data))
+            if image.mode in ("RGBA", "P"):
+                image = image.convert("RGB")
             search_image_url = await upload_generated_image(image)
         except Exception as e:
-            print(f"Base64 이미지 디코딩 실패: {e}")
-            raise HTTPException(status_code=400, detail="유효하지 않은 이미지 데이터입니다.")
+            raise HTTPException(status_code=400, detail=f"이미지 데이터 처리 실패: {e}")
     elif payload.query.startswith(("http://", "https://", "//")):
         search_image_url = payload.query if not payload.query.startswith("//") else f"https:{payload.query}"
     else:

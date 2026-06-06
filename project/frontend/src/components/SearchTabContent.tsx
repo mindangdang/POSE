@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, Music, ExternalLink } from 'lucide-react';
+import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, ExternalLink } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
@@ -55,6 +55,12 @@ const SELECT_SHOPS = [
   { name: "EQL", desc: "한섬에서 제안하는 감각적인 라이프스타일 셀렉샵", url: "https://eqlstore.com" },
 ];
 
+// URL에서 도메인을 추출하는 헬퍼 함수
+const getDomain = (url: string) => {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch { return url.replace(/^https?:\/\//, '').split('/')[0]; }
+};
+
 export function SearchTabContent({
   onItemsChange,
   refreshItems,
@@ -69,20 +75,25 @@ export function SearchTabContent({
   const [pastedImage, setPastedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
-  const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" , brand: "", site: "" });
+  const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" , brand: "" });
   const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
+  const MIN_LOADING_MS = 700; // 최소 로딩 표시 시간
+  const fetchCounterRef = useRef(0);
+  const loadingStartRef = useRef<number | null>(null);
   const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
+  const [selectedShopNames, setSelectedShopNames] = useState<string[]>([]);
   const [activeDomainMap, setActiveDomainMap] = useState<Record<string, string> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
-  const hasSearchActivity = loading || searchResults.length > 0 || quotaCountdown !== null;
+  // displayActivity: determines compact layout (results/loading/quota)
+  const displayActivity = loading || searchResults.length > 0 || quotaCountdown !== null || searchActive;
   const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
   const [newShopData, setNewShopData] = useState({ name: "", url: "", desc: "" });
-  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   // 모달 제어 상태
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -98,7 +109,6 @@ export function SearchTabContent({
     { key: "fit", placeholder: "핏", suggestions: ["오버핏", "크롭", "와이드"] },
     { key: "category", placeholder: "카테고리", suggestions: ["티셔츠", "자켓", "팬츠"] },
     { key: "brand", placeholder: "브랜드", suggestions: ["리바이스", "엘무드", "노이어"] },
-    { key: "site", placeholder: "사이트", suggestions: [] }
   ] as const;
 
   useEffect(() => {
@@ -110,14 +120,14 @@ export function SearchTabContent({
   type ModeOptionValue = (typeof modeOptions)[number]["value"];
 
   useEffect(() => {
-    if (searchMode !== "digging" || !isDetailedSearch || hasSearchActivity) {
+    if (searchMode !== "digging" || !isDetailedSearch || displayActivity) {
       setShowDetailedSuggestions(false);
       return;
     }
 
     const timer = window.setTimeout(() => setShowDetailedSuggestions(true), 100);
     return () => window.clearTimeout(timer);
-  }, [hasSearchActivity, isDetailedSearch, searchMode]);
+  }, [displayActivity, isDetailedSearch, searchMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -127,70 +137,44 @@ export function SearchTabContent({
     let ws: WebSocket;
 
    try {
-      console.log(`[웹소켓] 연결 시도 중... (${wsUrl})`);
       ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        console.log("[웹소켓] 연결 성공!");
-      };
-
-      ws.onerror = (error) => {
-        console.error("[웹소켓] 에러 발생:", error);
-      };
-
-      ws.onclose = (event) => {
-        console.log(`[웹소켓] 연결 종료 (코드: ${event.code}, 이유: ${event.reason})`);
-      };
-
       ws.onmessage = (event) => {
-        console.log("[웹소켓] 메시지 수신 (raw):", event.data);
         try {
           const data = JSON.parse(event.data);
-          console.log("[웹소켓] 메시지 파싱 완료:", data);
           
           if (data.type === "SEARCH_SUCCESS") {
-            console.log(`[웹소켓] 검색 결과(SEARCH_SUCCESS) ${data.results?.length || 0}개 수신, is_append: ${data.is_append}`);
-            
-            if (data.is_append) {
-              setSearchResults(prev => {
-                // 검색 결과에 고유 id가 없는 경우 프론트에서 임시 id 생성
-                const newItems = (data.results || []).map((rawItem: any) => {
-                  const item = rawItem.result ? rawItem.result : rawItem;
-                  return {
-                    ...item,
-                    id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                  };
-                });
+            const incoming: SavedItem[] = (data.results || []).map((rawItem: any) => {
+              const item: any = rawItem.result || rawItem;
+              return {
+                ...item,
+                id: item.id || `ws-${Math.random().toString(36).slice(2, 11)}`
+              } as SavedItem;
+            });
 
-                const uniqueItems = newItems.filter(
-                  (newItem: SavedItem) => !prev.some(item => item.id === newItem.id || (item.url && item.url === newItem.url))
-                );
-                
-                return [...prev, ...uniqueItems];
-              });
-            } else {
-              setSearchResults((data.results || []).map((rawItem: any) => {
-                const item = rawItem.result ? rawItem.result : rawItem;
-                return {
-                  ...item,
-                  id: item.id || `ws-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-                };
-              }));
-            }
-          } else if (data.type === "SEARCH_FINISHED") {
-            console.log("[웹소켓] 검색 완료(SEARCH_FINISHED). 로딩 상태 해제.");
-            setLoading(false);
-          } else if (data.type === "SEARCH_ERROR") {
-            console.log("[웹소켓] 검색 에러(SEARCH_ERROR):", data.message);
-            alert(data.message || "검색 중 오류가 발생했습니다.");
-            setLoading(false);
+            setSearchResults(prev => {
+              if (!data.is_append) return incoming;
+              
+              const existingIds = new Set(prev.map(i => i.id));
+              const existingUrls = new Set(prev.map(i => i.url));
+              const uniqueIncoming = incoming.filter((i: SavedItem) => !existingIds.has(i.id) && !existingUrls.has(i.url));
+              
+              return [...prev, ...uniqueIncoming];
+            });
+          } else if (data.type === "SEARCH_FINISHED" || data.type === "SEARCH_ERROR") {
+            // Respect minimum loading display time
+            const started = loadingStartRef.current || Date.now();
+            const elapsed = Date.now() - started;
+            const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+            setTimeout(() => setLoading(false), remaining);
+            if (data.type === "SEARCH_ERROR") setTimeout(() => alert(data.message || "검색 중 오류가 발생했습니다."), remaining);
           }
         } catch (err) {
-          console.error("웹소켓 메시지 파싱 오류:", err);
+          // JSON 파싱 에러 등 처리
         }
       };
     } catch (err) {
-      console.error("웹소켓 연결 에러:", err);
+      // 연결 실패 처리
     }
 
     return () => {
@@ -204,7 +188,7 @@ export function SearchTabContent({
     };
   }, [user]);
 
-  // 검색 결과 무한 스크롤 (Lazy Loading) 구현 및 자동 스크롤 제거
+  // Infinite Scroll Observer
   useEffect(() => {
     const currentBottomRef = bottomRef.current;
     if (!currentBottomRef) return;
@@ -215,14 +199,11 @@ export function SearchTabContent({
           handleLoadMore();
         }
       },
-      { threshold: 0.1, rootMargin: '200px' }
+      { threshold: 0.1, rootMargin: '1000px' } // 더 일찍 다음 아이템을 가져오도록 임계값 상향
     );
 
     observer.observe(currentBottomRef);
-
-    return () => {
-      observer.unobserve(currentBottomRef);
-    };
+    return () => observer.unobserve(currentBottomRef);
   }, [loading, hasMore, searchResults.length, currentPage]);
 
   useEffect(() => {
@@ -230,28 +211,33 @@ export function SearchTabContent({
       const timer = setTimeout(() => setQuotaCountdown(quotaCountdown - 1), 1000);
       return () => clearTimeout(timer);
     }
-    if (quotaCountdown === 0) {
-      setQuotaCountdown(null);
-    }
+    if (quotaCountdown === 0) setQuotaCountdown(null);
   }, [quotaCountdown]);
 
   const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null) => {
+    const myFetchId = ++fetchCounterRef.current;
+    const startedAt = Date.now();
+    loadingStartRef.current = startedAt;
     setLoading(true);
     try {
-      let res;
-      const currentQuery = queryOverride !== undefined ? queryOverride : searchQuery;
-
+      const currentQuery = queryOverride ?? searchQuery;
       const token = localStorage.getItem('access_token');
-      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
       
-      const body: any = { query: currentQuery, page: page };
-      const currentDomainMap = domainMapOverride !== undefined ? domainMapOverride : activeDomainMap;
+      const body: any = { query: currentQuery, page };
+      const currentDomainMap = domainMapOverride ?? activeDomainMap;
       if (currentDomainMap) body.domain_map = currentDomainMap;
+      // If query is a pasted data URL image, signal backend not to persist/upload it
+      if (typeof currentQuery === 'string' && currentQuery.startsWith('data:')) {
+        body.no_store = true;
+      }
 
-      res = await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(body)
       });
       
@@ -267,31 +253,31 @@ export function SearchTabContent({
       }
 
       const data = await res.json();
-
-      if (searchMode === "digging" && data.success && !data.results) {
-        // 검색이 백그라운드 태스크로 전환되었으므로 웹소켓 이벤트 수신 대기 (로딩 상태 유지)
-        return;
-      }
+      if (searchMode === "digging" && data.success && !data.results) return;
 
       if (isAppend) {
-        // 더 보기: 기존 결과 뒤에 새 결과를 배열로 이어 붙임
         setSearchResults(prev => [...prev, ...(data.results || [])]);
-        if (!data.results || data.results.length === 0) setHasMore(false);
+        if (!data.results?.length) setHasMore(false);
       } else {
-        // 새 검색: 기존 결과를 싹 지우고 새 결과만 보여줌
         setSearchResults(data.results || []);
-        if (!data.results || data.results.length === 0) setHasMore(false);
-        if (searchMode === "ai" && data.generated_vibe_image_url) {
-          setGeneratedImage(data.generated_vibe_image_url);
-        } else {
-          setGeneratedImage(null);
-        }
+        // 일반 검색(digging)은 계속해서 다음 페이지를 불러올 수 있도록 true 유지
+        // AI 검색(렌즈)은 API 특성상 단일 페이지 결과만 제공하므로 더 불러오기 방지
+        setHasMore(searchMode === "digging" ? true : false);
+        setGeneratedImage(searchMode === "ai" ? data.generated_vibe_image_url : null);
       }
-      setLoading(false);
     } catch (error: any) {
-      console.error(error);
       alert(error.message);
       setLoading(false);
+    } finally {
+      // Digging 모드(PSE)는 결과가 WebSocket으로 비동기 수신되므로, 
+      // HTTP 응답 직후에 로딩을 해제하지 않고 SEARCH_FINISHED 메시지를 기다립니다.
+      if (searchMode !== "digging") {
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+        setTimeout(() => {
+          if (myFetchId === fetchCounterRef.current) setLoading(false);
+        }, remaining);
+      }
     }
   };
   
@@ -306,7 +292,6 @@ export function SearchTabContent({
             const dataUrl = event.target?.result as string;
             setPastedImage(dataUrl);
             setSearchMode("ai"); // 이미지는 렌즈 검색으로 자동 전환
-            if (!searchQuery) setSearchQuery("Pasted Image");
           };
           reader.readAsDataURL(file);
         }
@@ -319,47 +304,34 @@ export function SearchTabContent({
     event.preventDefault();
     if (!user) return;
 
+    setSearchActive(true);
+
+    // loading will be handled inside fetchResults to ensure minimum display time
     let finalQuery = searchQuery;
     let domainMap: Record<string, string> | null = null;
 
     // 붙여넣은 이미지가 있는 경우 AI 모드에서 이미지 검색 우선 수행
     if (searchMode === "ai" && pastedImage) {
       setCurrentPage(1);
-      setSearchResults([]);
-      await fetchResults(1, false, pastedImage, null);
-      return;
+      return await fetchResults(1, false, pastedImage, null);
     }
 
     if (searchMode === "digging" && isDetailedSearch) {
-      const detailParts = [
-        detailedSearchQuery.mood,
-        detailedSearchQuery.color,
-        detailedSearchQuery.fit,
-        detailedSearchQuery.category,
-        detailedSearchQuery.brand
-      ].filter(Boolean).join(" ");
-      
-      // 상세 필드가 비어있으면 메인 검색어 사용
+      const detailParts = Object.values(detailedSearchQuery).filter(Boolean).join(" ");
       finalQuery = detailParts || searchQuery;
-      
-      if (detailedSearchQuery.site) {
-        const shop = shops.find(s => s.name === detailedSearchQuery.site);
-        if (shop) {
-          let domain = "";
-          try { domain = new URL(shop.url).hostname.replace('www.', ''); }
-          catch (e) { domain = shop.url.replace('https://', '').replace('http://', '').split('/')[0]; }
-          domainMap = { [domain]: shop.name };
-        }
-      }
-
       if (!finalQuery.trim()) return;
-      if (detailParts) setSearchQuery(finalQuery); 
-    } else {
-      if (!searchQuery) return;
+      setSearchQuery(finalQuery); 
+    } else if (!searchQuery.trim()) return;
+
+    if (searchMode === "digging" && selectedShopNames.length > 0) {
+      domainMap = {};
+      selectedShopNames.forEach(name => {
+        const shop = shops.find(s => s.name === name);
+        if (shop) domainMap![getDomain(shop.url)] = shop.name;
+      });
     }
 
     setCurrentPage(1);       // 1페이지로 리셋
-    setSearchResults([]);    // 기존 화면 싹 지우기
     setGeneratedImage(null);
     setHasMore(true);        // 무한 스크롤 상태 리셋
     setActiveDomainMap(domainMap);
@@ -368,19 +340,25 @@ export function SearchTabContent({
 
   // 2. '더 보기' 버튼을 눌렀을 때
   const handleLoadMore = async () => {
+    if (loading || !hasMore) return;
+
     const nextPage = currentPage + 1;
-    setCurrentPage(nextPage);      // 페이지 번호 1 증가
     await fetchResults(nextPage, true); // 다음 페이지 데이터 가져와서 이어 붙이기
+    setCurrentPage(nextPage);      // 성공 시 페이지 번호 1 증가
   };
 
   const handleSecondhandSearch = async (title: string) => {
     setSearchMode("digging");
     setIsDetailedSearch(false);
     setSearchQuery(title);
+    setSearchActive(true);
     setSearchResults([]);
+    const myFetchId = ++fetchCounterRef.current;
+    loadingStartRef.current = Date.now();
     setLoading(true);
     setGeneratedImage(null);
-    setHasMore(false);
+    setHasMore(true); // 세컨핸드 검색 시에도 무한 스크롤이 가능하도록 true로 설정
+    setCurrentPage(1);
 
     try {
       const token = localStorage.getItem('access_token');
@@ -400,20 +378,14 @@ export function SearchTabContent({
       });
       if (!res.ok) throw new Error("Search failed");
       // 결과는 WebSocket(SEARCH_SUCCESS)을 통해 수신됩니다.
-    } catch (error: any) {
-      alert(error.message);
-      setLoading(false);
+    } catch (err) {
+      const started = loadingStartRef.current || Date.now();
+      const elapsed = Date.now() - started;
+      const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+      setTimeout(() => {
+        if (myFetchId === fetchCounterRef.current) setLoading(false);
+      }, remaining);
     }
-  };
-
-  const handleShopSearch = (name: string) => {
-    // UI 상태 업데이트
-    setSearchMode("digging");
-    setIsDetailedSearch(true);
-    setDetailedSearchQuery(prev => ({ ...prev, site: name }));
-    
-    // 입력창으로 포커스를 유도하기 위해 최상단으로 스크롤
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -466,15 +438,14 @@ export function SearchTabContent({
       });
 
       if (!res.ok) throw new Error("Failed to save result");
-
-      // 내 피드(상위 컴포넌트 상태) 업데이트
-      const newItem: SavedItem = {
+      
+      onItemsChange((prev) => [{
         ...item,
-        id: Date.now(), // 고유 ID 재할당
-        created_at: new Date().toISOString(),
-      };
-      onItemsChange((prev) => [newItem, ...prev]);
-      await refreshItems();
+        id: Date.now(),
+        created_at: new Date().toISOString()
+      }, ...prev]);
+      
+      void refreshItems();
 
       alert("피드에 저장되었습니다!");
       await refreshTaste();
@@ -505,15 +476,16 @@ export function SearchTabContent({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
-        className={[
-          "relative",
-          "mx-auto flex w-full flex-col transition-[max-width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-          hasSearchActivity ? "max-w-6xl" : "max-w-4xl",
-        hasSearchActivity ? "space-y-12 pt-10 pb-40" : "min-h-[110vh] pt-20 pb-60",
-        ].join(" ")}
+        className="relative mx-auto flex w-full flex-col px-4"
+        style={{
+          maxWidth: '1400px',
+          paddingTop: displayActivity ? '2rem' : '15vh',
+          paddingBottom: displayActivity ? '10rem' : '25vh',
+          transition: 'padding 0.45s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
       >
         {/* Subtle Background Image Layer for Window Tab */}
-        {!hasSearchActivity && (
+        {!displayActivity && (
           <div className="fixed inset-x-0 top-0 h-screen pointer-events-none -z-10 overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -531,18 +503,20 @@ export function SearchTabContent({
           </div>
         )}
 
-        <motion.div
-          layout
-          className={`flex w-full flex-col items-center gap-8 ${hasSearchActivity ? 'sticky top-2 z-40' : ''}`}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        >
+        {/* Header Section with Smooth Sticky Transition */}
+        <div className={`${displayActivity ? 'sticky top-0 z-40 bg-background/95 backdrop-blur-xl -mx-4 px-4 py-6 border-b border-border/50 shadow-sm mb-12' : 'relative w-full mb-8'}`}>
+          <motion.div
+            layout
+            className="flex w-full flex-col items-center gap-8"
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          >
           <AnimatePresence>
-            {!hasSearchActivity && (
+            {!displayActivity && (
               <motion.div
                 key="search-brand"
                 initial={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20, height: 0, marginBottom: -32 }}
-                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                exit={{ opacity: 0, y: -20, height: 0, marginBottom: 0 }}
+                transition={{ duration: 0.3 }}
                 className="flex w-full max-w-3xl flex-col items-start gap-4 sm:gap-6 overflow-hidden"
               >
                 <h1 className="font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl text-foreground text-left leading-tight tracking-tight">
@@ -556,237 +530,144 @@ export function SearchTabContent({
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSearch} className="relative group max-w-3xl w-full flex flex-col gap-4">
-
-          <motion.div
-            layout
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full"
-          >
-            <div className="absolute left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5">
-              <button
-                type="button"
-                aria-label={activeMode ? `${activeMode.label} 모드 변경` : "검색 모드 선택"}
-                title={activeMode ? `${activeMode.label} 모드` : "검색 모드 선택"}
-                onClick={() => setIsModeMenuOpen((open) => !open)}
-                className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-                  activeMode ? activeMode.activeClass : "text-muted-foreground hover:bg-muted"
-                }`}
+            <form onSubmit={handleSearch} className="relative group max-w-3xl w-full flex flex-col gap-4 z-50">
+              <motion.div
+                layout
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="relative w-full"
               >
-                <ActiveModeIcon className="h-5 w-5" />
-              </button>
-
-              {searchMode === "digging" && !hasSearchActivity && !pastedImage && (
-                <button
-                  type="button"
-                  onClick={() => setIsDetailedSearch(!isDetailedSearch)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                    isDetailedSearch 
-                      ? "bg-black text-white shadow-md" 
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                  title={isDetailedSearch ? "일반 검색으로 전환" : "상세 검색으로 전환"}
-                >
-                  <Zap className={`h-4 w-4 ${isDetailedSearch ? "fill-current" : ""}`} />
-                </button>
-              )}
-
-              {pastedImage && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-1 bg-black/5 p-1 rounded-lg border border-border group/preview"
-                >
-                  <img src={pastedImage} className="w-8 h-8 object-cover rounded-md" />
-                  <button 
+                <div className="absolute left-3 top-1/2 z-30 -translate-y-1/2 flex items-center gap-1.5">
+                  <button
                     type="button"
-                    onClick={() => { setPastedImage(null); if (searchQuery === "Pasted Image") setSearchQuery(""); }}
-                    className="p-0.5 hover:bg-black/10 rounded-full transition-colors"
+                    onClick={() => setIsModeMenuOpen((open) => !open)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${activeMode.activeClass}`}
                   >
-                    <X className="w-3 h-3 text-muted-foreground" />
+                    <ActiveModeIcon className="h-5 w-5" />
                   </button>
-                </motion.div>
-              )}
 
-              <AnimatePresence>
-                {isModeMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute left-0 top-12 flex w-44 flex-col gap-1 rounded-2xl bg-background p-1.5 shadow-2xl border border-border z-[100]"
-                  >
-                    {modeOptions.map(({ value, label, icon: Icon, activeClass, hoverClass }) => (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-label={`${label} 모드`}
-                        onClick={() => handleSelectMode(value)}
-                        className={`flex h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold transition-all hover:bg-muted ${
-                          activeMode?.value === value ? activeClass : `text-muted-foreground ${hoverClass}`
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span className="whitespace-nowrap">{label}</span>
+                  {searchMode === "digging" && !displayActivity && !pastedImage && (
+                    <button
+                      type="button"
+                      onClick={() => setIsDetailedSearch(!isDetailedSearch)}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${isDetailedSearch ? "bg-black text-white shadow-md" : "text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Zap className={`h-4 w-4 ${isDetailedSearch ? "fill-current" : ""}`} />
+                    </button>
+                  )}
+
+                  {pastedImage && (
+                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center gap-1 bg-black/5 p-1 rounded-lg border border-border">
+                      <img src={pastedImage} className="w-8 h-8 object-cover rounded-md" />
+                      <button type="button" onClick={() => setPastedImage(null)} className="p-0.5 hover:bg-black/10 rounded-full">
+                        <X className="w-3 h-3 text-muted-foreground" />
                       </button>
+                    </motion.div>
+                  )}
+
+                  <AnimatePresence>
+                    {isModeMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                        className="absolute left-0 top-12 flex w-44 flex-col gap-1 rounded-2xl bg-background p-1.5 shadow-2xl border border-border z-[100]"
+                      >
+                        {modeOptions.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => handleSelectMode(opt.value)}
+                            className={`flex h-11 items-center gap-3 rounded-xl px-3 text-left text-sm font-bold transition-all hover:bg-muted ${searchMode === opt.value ? opt.activeClass : `text-muted-foreground ${opt.hoverClass}`}`}
+                          >
+                            <opt.icon className="h-4 w-4" />
+                            <span className="whitespace-nowrap">{opt.label}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {searchMode === "digging" && isDetailedSearch && !displayActivity ? (
+                  <motion.div
+                    layout
+                    animate={{ height: 300 }}
+                    className="flex w-full flex-col justify-center border-b-2 border-foreground bg-transparent pl-28 pr-16"
+                  >
+                    {detailFields.map(({ key, placeholder, suggestions }, index) => (
+                      <div key={key} className={`flex min-h-14 items-center gap-3 ${index < detailFields.length - 1 ? "border-b border-border" : ""}`}>
+                        <input
+                          type="text"
+                          placeholder={placeholder}
+                          value={detailedSearchQuery[key]}
+                          onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
+                          className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold placeholder:text-muted-foreground focus:outline-none"
+                        />
+                        <div className="flex max-w-[14rem] gap-1.5 flex-wrap justify-end">
+                          {suggestions.map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => setDetailedSearchQuery(prev => ({ ...prev, [key]: prev[key] === suggestion ? "" : suggestion }))}
+                              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${detailedSearchQuery[key] === suggestion ? "border-black bg-black text-white" : "border-border text-muted-foreground hover:border-black hover:text-black"}`}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {searchMode === "digging" && isDetailedSearch && !hasSearchActivity ? (
-              <motion.div
-                layout
-                initial={false}
-                animate={{ height: 360 }}
-                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="flex w-full flex-col justify-center border-b-2 border-foreground bg-transparent py-0 pl-28 pr-16"
-              >
-                {detailFields.map(({ key, placeholder, suggestions }, index) => (
-                  <div
-                    key={key}
-                    className={[
-                      "flex min-h-14 items-center gap-3",
-                      index < detailFields.length - 1 ? "border-b border-border" : "",
-                    ].join(" ")}
-                  >
+                ) : (
+                  <div className="relative h-14 w-full border-b-2 border-foreground">
                     <input
                       type="text"
-                      placeholder={placeholder}
-                      value={detailedSearchQuery[key]}
-                      onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold placeholder:text-muted-foreground focus:outline-none"
+                      placeholder={searchMode === "digging" ? "스타일을 검색해보세요" : "이미지 검색이 가능합니다"}
+                      value={pastedImage ? "" : searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onPaste={handlePaste}
+                      className={`h-full w-full bg-transparent ${pastedImage ? 'pl-32' : 'pl-28'} pr-24 text-base font-bold placeholder:text-muted-foreground outline-none`}
                     />
-
-                    <div className="flex w-36 shrink-0 justify-end overflow-hidden py-1 sm:w-44 md:w-52">
-                      <AnimatePresence initial={false}>
-                        {showDetailedSuggestions && (
-                          <motion.div
-                            key={`${key}-suggestions`}
-                            initial={{ opacity: 0, x: 10, scale: 0.98 }}
-                            animate={{ opacity: 1, x: 0, scale: 1 }}
-                            exit={{ opacity: 0, x: 10, scale: 0.98 }}
-                            transition={{ duration: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                            className="flex justify-end gap-1.5"
-                          >
-                            {suggestions.map((suggestion) => {
-                              const selected = detailedSearchQuery[key] === suggestion;
-
-                              return (
-                                <button
-                                  key={suggestion}
-                                  type="button"
-                                  onClick={() => setDetailedSearchQuery((prev) => ({
-                                    ...prev,
-                                    [key]: prev[key] === suggestion ? "" : suggestion,
-                                  }))}
-                                  className={[
-                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
-                                    selected
-                                      ? "border-black bg-black text-white"
-                                      : "border-border bg-background text-muted-foreground hover:border-black hover:text-black",
-                                  ].join(" ")}
-                                >
-                                  {suggestion}
-                                </button>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
                   </div>
-                ))}
-              </motion.div>
-            ) : (
-              <motion.div
-                layout
-                initial={false}
-                animate={{ height: 56 }}
-                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full border-b-2 border-foreground bg-transparent transition-all duration-300"
-              >
-                <input
-                  type="text"
-                  placeholder={
-                    searchMode === "digging"
-                      ? isDetailedSearch ? "상세 조건을 입력하세요" : "원하는 스타일을 검색해보세요 (예: 디스트로이드 데님)"
-                      : "떠오르는 스타일을 자유롭게 입력해보세요"
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onPaste={handlePaste}
-                  disabled={searchMode === "digging" && isDetailedSearch}
-                  className={`h-full w-full rounded-full bg-transparent ${pastedImage ? 'pl-32' : (searchMode === 'digging' && !hasSearchActivity ? 'pl-28' : 'pl-16')} pr-24 text-base font-bold placeholder:text-muted-foreground outline-0 transition-all ${isDetailedSearch ? 'opacity-0' : 'opacity-100'}`}
-                />
-              </motion.div>
-            )}
-
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 flex items-center">
-              <button
-                type="button"
-                onClick={() => setIsPlayerOpen(!isPlayerOpen)}
-                title="Shopping Playlist"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-black hover:bg-muted transition-colors"
-              >
-                <Music className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-20"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-black/10"></span>
-                </span>
-              </button>
-
-              <AnimatePresence>
-                {isPlayerOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 top-12 z-[100] w-72 overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
-                  >
-                    <div className="flex items-center justify-between border-b border-border p-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                        <Music className="w-3 h-3" /> RoomShow Selects
-                      </span>
-                      <button onClick={() => setIsPlayerOpen(false)} className="rounded-full p-1 hover:bg-muted">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="aspect-video w-full bg-black">
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        src="https://www.youtube.com/embed/videoseries?list=PL4fGSI1pDJn6jWqsS_4v6n_33p_D3l4a6"
-                        title="Zara Playlist"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="opacity-90"
-                      ></iframe>
-                    </div>
-                  </motion.div>
                 )}
-              </AnimatePresence>
-            </div>
 
-            <button
-              disabled={loading || quotaCountdown !== null}
-              className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : quotaCountdown !== null ? <span className="text-xs font-bold">{quotaCountdown}s</span> : <Search className="w-5 h-5" />}
-            </button>
+                <button
+                  disabled={loading || quotaCountdown !== null}
+                  className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : quotaCountdown !== null ? <span className="text-xs font-bold">{quotaCountdown}s</span> : <Search className="w-5 h-5" />}
+                </button>
+              </motion.div>
+
+              {/* Selected Shops Badges Inside Form for Layout Stability: always reserve space to avoid jump */}
+              <div className="mt-2 min-h-[2.25rem]">
+                <AnimatePresence>
+                  {selectedShopNames.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="flex flex-wrap gap-2">
+                      {selectedShopNames.map((name) => (
+                        <div key={name} className="flex items-center gap-1.5 px-3 py-1 bg-black text-white rounded-full text-[10px] font-bold uppercase">
+                          {name}
+                          <button type="button" onClick={() => setSelectedShopNames(prev => prev.filter(n => n !== name))} className="hover:text-red-400">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => setSelectedShopNames([])} className="text-[10px] font-bold text-muted-foreground hover:text-black uppercase underline">Clear All</button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </form>
           </motion.div>
-          </form>
+        </div>
 
-          {/* 추천 검색어 영역 */}
-          {!hasSearchActivity && !isDetailedSearch && randomSuggestions.length > 0 && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="w-full max-w-3xl flex flex-wrap gap-x-4 gap-y-2 px-1"
-            >
+        {/* 추천 검색어 영역 */}
+        {!displayActivity && !isDetailedSearch && randomSuggestions.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="w-full max-w-3xl mx-auto flex flex-wrap gap-x-4 gap-y-2 px-1 mb-12"
+          >
               {randomSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -800,16 +681,16 @@ export function SearchTabContent({
                   {suggestion}
                 </button>
               ))}
-            </motion.div>
-          )}
+          </motion.div>
+        )}
 
           {/* 주요 편집샵 안내 영역 */}
-          {!hasSearchActivity && (
+          {!displayActivity && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="w-full max-w-3xl space-y-4 pt-8"
+              className="w-full max-w-3xl mx-auto space-y-4 pt-8"
             >
               <div className="flex items-center gap-2 px-1">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Curated Shop Guide</span>
@@ -832,14 +713,22 @@ export function SearchTabContent({
                       <span className="text-[11px] font-bold text-foreground">{shop.name}</span>
                       <span className="text-[9px] text-muted-foreground truncate">{shop.desc}</span>
                     </div>
-                    <div className="flex items-center gap-2 ml-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleShopSearch(shop.name)}
-                        className="px-2 py-1 text-[9px] font-bold text-muted-foreground border border-border rounded-md hover:bg-black hover:text-white hover:border-black transition-colors uppercase tracking-wider"
-                      >
-                        이 편집샵에서 검색하기
-                      </button>
+                    <div className="flex items-center gap-3 ml-2 shrink-0">
+                      <label className="flex items-center gap-2 cursor-pointer group/cb">
+                        <input
+                          type="checkbox"
+                          checked={selectedShopNames.includes(shop.name)}
+                          onChange={() => {
+                            setSelectedShopNames(prev => 
+                              prev.includes(shop.name) 
+                                ? prev.filter(n => n !== shop.name) 
+                                : [...prev, shop.name]
+                            );
+                          }}
+                          className="w-4 h-4 rounded border-border text-black focus:ring-black cursor-pointer"
+                        />
+                        <span className="text-[10px] font-bold text-muted-foreground group-hover/cb:text-black transition-colors uppercase tracking-tight">선택</span>
+                      </label>
                       <a
                         href={shop.url}
                         target="_blank"
@@ -855,7 +744,6 @@ export function SearchTabContent({
               </div>
             </motion.div>
           )}
-        </motion.div>
 
         {quotaCountdown !== null && (
           <motion.div
@@ -868,7 +756,7 @@ export function SearchTabContent({
         )}
 
         {/* 검색 결과 영역 */}
-        {(loading || searchResults.length > 0) && (
+        {(displayActivity || searchResults.length > 0) && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -877,7 +765,7 @@ export function SearchTabContent({
           >
             <div className="w-full flex flex-col">
               <AnimatePresence>
-                {loading && (
+                {loading && searchResults.length === 0 && (
                   <motion.div
                     key="loading-indicator"
                     initial={{ opacity: 0, height: 0 }}
@@ -887,14 +775,26 @@ export function SearchTabContent({
                   >
                     <div className="w-12 h-12 rounded-full border-2 border-muted border-t-foreground animate-spin" />
                     <p style={{ whiteSpace: 'pre-line' }} className="text-sm font-bold text-muted-foreground text-center">
-                      {searchResults.length > 0
-                        ? `Discovering... (${searchResults.length} items found)`
-                        : searchMode === "digging"
+                      {searchMode === "digging"
                         ? "Searching..."
                         : searchMode === "ai"
-                        ? "AI is finding your style...\nThis may take 10-15 seconds"
+                        ? "AI가 유저 취향에 맞는 느좋탬들을 디깅하는 중..."
                         : "Analyzing..."}
                     </p>
+                  </motion.div>
+                )}
+
+                {loading && searchResults.length > 0 && (
+                  <motion.div
+                    key="loading-inline"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mb-4 rounded-2xl border border-border/60 bg-muted/70 px-4 py-3 text-sm font-semibold text-muted-foreground"
+                  >
+                    {searchMode === "digging"
+                      ? `계속 불러오는 중... (${searchResults.length}개 검색됨)`
+                      : "AI가 추가 결과를 준비하고 있어요..."}
                   </motion.div>
                 )}
               </AnimatePresence>
