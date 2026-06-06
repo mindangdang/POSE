@@ -180,23 +180,10 @@ async def run_serpapi_lens_search(payload: SearchRequest, request: Request):
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 
-    # 쿼리가 Base64 이미지 데이터인 경우 처리
-    if payload.query.startswith("data:image"):
-        try:
-            # data:image/png;base64,... 에서 실제 인코딩된 데이터 부분만 추출
-            _, encoded = payload.query.split(",", 1)
-            image_data = base64.b64decode(encoded)
-            image = Image.open(BytesIO(image_data))
-            if image.mode in ("RGBA", "P"):
-                image = image.convert("RGB")
-            search_image_url = await upload_generated_image(image)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"이미지 데이터 처리 실패: {e}")
-    elif payload.query.startswith(("http://", "https://", "//")):
+    if payload.query.startswith(("http://", "https://", "//")):
         search_image_url = payload.query if not payload.query.startswith("//") else f"https:{payload.query}"
     else:
-        image = await generate_image_from_query(payload.query)
-        search_image_url = await upload_generated_image(image)
+        raise HTTPException(status_code=400, detail="유효한 이미지 URL이 필요합니다. 이미지를 복사해서 붙여넣어주세요.")
 
     params = {
         "engine": "google_lens",  
