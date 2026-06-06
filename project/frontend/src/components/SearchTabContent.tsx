@@ -301,13 +301,21 @@ export function SearchTabContent({
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf("image") !== -1) {
+        e.preventDefault();
         const file = items[i].getAsFile();
 
         if (file) {
-          setPastedFile(file);
-          setPreviewUrl(URL.createObjectURL(file));
-          setSearchMode("ai");
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64String = event.target?.result as string;
+            setSearchQuery(base64String);
+            setPreviewUrl(base64String);
+            setSearchMode("ai");
+            setPastedFile(null); // 전송 시 query 필드를 사용하도록 file은 비움
+          };
+          reader.readAsDataURL(file);
         }
+        break;
       }
     }
   };
@@ -322,12 +330,6 @@ export function SearchTabContent({
     // loading will be handled inside fetchResults to ensure minimum display time
     let finalQuery = searchQuery;
     let domainMap: Record<string, string> | null = null;
-
-    // 붙여넣은 이미지가 있는 경우 AI 모드에서 이미지 검색 우선 수행
-    if (searchMode === "ai" && pastedFile) {
-      setCurrentPage(1);
-      return await fetchResults(1, false, undefined, null, pastedFile);
-    }
 
     if (searchMode === "digging" && isDetailedSearch) {
       const detailParts = Object.values(detailedSearchQuery).filter(Boolean).join(" ");
@@ -574,6 +576,7 @@ export function SearchTabContent({
                         onClick={() => {
                           setPreviewUrl(null);
                           setPastedFile(null);
+                          setSearchQuery("");
                         }} 
                         className="p-0.5 hover:bg-black/10 rounded-full"
                       >
