@@ -504,9 +504,8 @@ export function SearchTabContent({
         )}
 
         {/* Header Section with Smooth Sticky Transition */}
-        <div className={`${displayActivity ? 'sticky top-0 z-40 bg-background/95 backdrop-blur-xl -mx-4 px-4 py-6 border-b border-border/50 shadow-sm mb-12' : 'relative w-full mb-8'}`}>
+        <div className={`${displayActivity ? 'sticky top-0 z-40 bg-background/95 backdrop-blur-xl -mx-4 px-4 py-6 border-b border-border/50 shadow-sm mb-12' : 'relative w-full mb-0'}`}>
           <motion.div
-            layout
             className="flex w-full flex-col items-center gap-8"
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
@@ -532,7 +531,6 @@ export function SearchTabContent({
 
             <form onSubmit={handleSearch} className="relative group max-w-3xl w-full flex flex-col gap-4 z-50">
               <motion.div
-                layout
                 transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className="relative w-full"
               >
@@ -588,48 +586,64 @@ export function SearchTabContent({
                   </AnimatePresence>
                 </div>
 
-                {searchMode === "digging" && isDetailedSearch && !displayActivity ? (
-                  <motion.div
-                    layout
-                    animate={{ height: 300 }}
-                    className="flex w-full flex-col justify-center border-b-2 border-foreground bg-transparent pl-28 pr-16"
-                  >
-                    {detailFields.map(({ key, placeholder, suggestions }, index) => (
-                      <div key={key} className={`flex min-h-14 items-center gap-3 ${index < detailFields.length - 1 ? "border-b border-border" : ""}`}>
+                <AnimatePresence mode="wait">
+                  {searchMode === "digging" && isDetailedSearch && !displayActivity ? (
+                    <motion.div
+                      key="detail-search-panel"
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      className="overflow-hidden flex w-full flex-col justify-center border-b-2 border-foreground bg-transparent pl-28 pr-16"
+                    >
+                      {detailFields.map(({ key, placeholder, suggestions }, index) => (
+                        <div key={key} className={`flex min-h-14 items-center gap-3 ${index < detailFields.length - 1 ? "border-b border-border" : ""}`}>
+                          <input
+                            type="text"
+                            placeholder={placeholder}
+                            value={detailedSearchQuery[key]}
+                            onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
+                            className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold placeholder:text-muted-foreground focus:outline-none"
+                          />
+                          <div className="flex max-w-[14rem] gap-1.5 flex-wrap justify-end">
+                            {suggestions.map((suggestion) => (
+                              <button
+                                key={suggestion}
+                                type="button"
+                                onClick={() => setDetailedSearchQuery(prev => ({ ...prev, [key]: prev[key] === suggestion ? "" : suggestion }))}
+                                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${detailedSearchQuery[key] === suggestion ? "border-black bg-black text-white" : "border-border text-muted-foreground hover:border-black hover:text-black"}`}
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="search-input-panel"
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="overflow-hidden relative w-full"
+                    >
+                      <div className="relative h-14 w-full border-b-2 border-foreground">
                         <input
                           type="text"
-                          placeholder={placeholder}
-                          value={detailedSearchQuery[key]}
-                          onChange={(e) => setDetailedSearchQuery((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="h-full min-w-0 flex-1 bg-transparent text-sm font-bold placeholder:text-muted-foreground focus:outline-none"
+                          placeholder={searchMode === "digging" ? "스타일을 검색해보세요" : "이미지 검색이 가능합니다"}
+                          value={pastedImage ? "" : searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onPaste={handlePaste}
+                          className={`h-full w-full bg-transparent ${pastedImage ? 'pl-32' : 'pl-28'} pr-24 text-base font-bold placeholder:text-muted-foreground outline-none`}
                         />
-                        <div className="flex max-w-[14rem] gap-1.5 flex-wrap justify-end">
-                          {suggestions.map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              type="button"
-                              onClick={() => setDetailedSearchQuery(prev => ({ ...prev, [key]: prev[key] === suggestion ? "" : suggestion }))}
-                              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${detailedSearchQuery[key] === suggestion ? "border-black bg-black text-white" : "border-border text-muted-foreground hover:border-black hover:text-black"}`}
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
                       </div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <div className="relative h-14 w-full border-b-2 border-foreground">
-                    <input
-                      type="text"
-                      placeholder={searchMode === "digging" ? "스타일을 검색해보세요" : "이미지 검색이 가능합니다"}
-                      value={pastedImage ? "" : searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onPaste={handlePaste}
-                      className={`h-full w-full bg-transparent ${pastedImage ? 'pl-32' : 'pl-28'} pr-24 text-base font-bold placeholder:text-muted-foreground outline-none`}
-                    />
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <button
                   disabled={loading || quotaCountdown !== null}
@@ -639,8 +653,8 @@ export function SearchTabContent({
                 </button>
               </motion.div>
 
-              {/* Selected Shops Badges Inside Form for Layout Stability: always reserve space to avoid jump */}
-              <div className="mt-2 min-h-[2.25rem]">
+              {/* Selected Shops Badges Inside Form for Layout Stability */}
+              <div className={`mt-2 ${selectedShopNames.length > 0 ? 'min-h-[2.25rem]' : 'min-h-0'}`}>
                 <AnimatePresence>
                   {selectedShopNames.length > 0 && (
                     <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="flex flex-wrap gap-2">
@@ -664,9 +678,10 @@ export function SearchTabContent({
         {/* 추천 검색어 영역 */}
         {!displayActivity && !isDetailedSearch && randomSuggestions.length > 0 && (
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="w-full max-w-3xl mx-auto flex flex-wrap gap-x-4 gap-y-2 px-1 mb-12"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-3xl mx-auto flex flex-wrap gap-x-4 gap-y-2 px-1 mb-2"
           >
               {randomSuggestions.map((suggestion) => (
                 <button
