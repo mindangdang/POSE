@@ -4,8 +4,6 @@ import traceback
 import json
 import httpx
 import base64
-from io import BytesIO
-from PIL import Image
 from pathlib import Path
 import re
 
@@ -193,80 +191,46 @@ async def run_serpapi_lens_search(
     if file:
         file_content = await file.read()
         print(f"SerpApi(Google Lens)로 파일 디깅 시작: {file.filename}")
-    elif query and query.startswith(("http://", "https://", "//")):
-        search_image_url = query if not query.startswith("//") else f"https:{query}"
-        print(f"SerpApi(Google Lens)로 URL 디깅 시작: {search_image_url}")
+        search_image_url = await upload_generated_image(file_content)
+    elif query:
+        if query.startswith(("http://", "https://", "//")):
+            search_image_url = query if not query.startswith("//") else f"https:{query}"
+            print(f"SerpApi(Google Lens)로 URL 디깅 시작: {search_image_url}")
+        elif query.startswith("data:image"):
+            # Case 2: 클립보드에서 복사된 Base64 이미지 처리
+            print("SerpApi(Google Lens)로 클립보드 복사 이미지 디깅 시작")
+            base64_str = re.sub(r'^data:image/.+;base64,', '', query)
+            image_data = base64.b64decode(base64_str)
+            search_image_url = await upload_generated_image(image_data)
+        else:
+            # Case 1: 입력 쿼리가 일반 텍스트인 경우 이미지 생성 후 검색
+            print(f"SerpApi(Google Lens)로 검색어 기반 이미지 생성 및 디깅 시작: {query}")
+            generated_image_bytes = await generate_image_from_query(query)
+            search_image_url = await upload_generated_image(generated_image_bytes)
     else:
-        raise HTTPException(status_code=400, detail="유효한 이미지 URL 혹은 파일이 필요합니다.")
+        raise HTTPException(status_code=400, detail="유효한 이미지 URL, 파일 또는 검색어가 필요합니다.")
+
+    if not search_image_url:
+        raise HTTPException(status_code=500, detail="이미지 검색에 사용할 URL을 생성하는 데 실패했습니다.")
 
     try:
+        params = {
+            "engine": "google_lens",
+            "api_key": serp_api_key,
+            "url": search_image_url,
+            "hl": "ko",
+            "gl": "kr"
+        }
         async with httpx.AsyncClient(timeout=60.0) as client:
-            if file_content:
-                # pastedFile 그대로 서버 전송 - SerpApi multipart form 요청
-                form_data = {
-                    "engine": "google_lens",
-                    "api_key": serp_api_key,
-                    "hl": "ko",
-                    "gl": "kr"
-                }
-                files = {
-                    "image": (file.filename, file_content, file.content_type or "image/jpeg")
-                }
-                
-                response = await client.post(
-                    "https://serpapi.com/search",
-                    data=form_data,
-                    files=files
-                )
-                response.raise_for_status()
-                api_response = response.json()
-                items = api_response.get("visual_matches") or []
-                
-                # 파일 기반 결과 처리
-                results = []
-                for item in items:
-                    image_url = item.get("thumbnail", "")
-                    if "original" in item:
-                        image_url = item.get("original") or image_url
-                    
-                    price = item.get("price")
-                    if isinstance(price, dict):
-                        price = price.get("value")
-                    price = price or item.get("snippet") or "가격 미상"
-                    
-                    shop = item.get("source") or "Google Lens"
-
-                    results.append({
-                        "id": str(uuid.uuid4()),
-                        "category": "PRODUCT",
-                        "sub_category": "PRODUCT",
-                        "recommend": f"{shop}에서 발견한 유사 아이템",
-                        "image_url": image_url,
-                        "url": item.get("link", ""),
-                        "facts": {
-                            "title": item.get("title", "상품명 없음"),
-                            "Price": price,
-                            "Shop": shop,
-                        },
-                    })
-            else:
-                # URL 기반 검색
-                params = {
-                    "engine": "google_lens",  
-                    "api_key": serp_api_key,
-                    "url": search_image_url,
-                    "hl": "ko",
-                    "gl": "kr"
-                }
-                results = await fetch_from_single_site(
-                    client=client,
-                    query=search_image_url,
-                    domain="google_lens",
-                    site_name=None,
-                    current_page=1,
-                    serp_api_key=serp_api_key,
-                    params=params
-                )
+            results = await fetch_from_single_site(
+                client=client,
+                query=search_image_url,
+                domain="google_lens",
+                site_name=None,
+                current_page=1,
+                serp_api_key=serp_api_key,
+                params=params
+            )
 
         print(f" 통과한 최종결과 개수: {len(results)}")
         return {"success": True, "results": results}
