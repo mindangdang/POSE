@@ -7,12 +7,12 @@ import random
 import asyncio
 import logging
 import hashlib
-from collections import defaultdict, deque
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any, Type, List, Tuple, Protocol
+from typing import Optional, Dict, Any, Type, List, Tuple
 from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass, field
-
+import asyncio
 from bs4 import BeautifulSoup
 from pydantic import BaseModel,Field
 import curl_cffi.requests as requests
@@ -33,38 +33,13 @@ class AllTiersFailedError(CrawlingError): pass
 # ------------------------------------------------------------------------
 # Layer 1: Observability & Metrics (Prometheus Ready)
 # ------------------------------------------------------------------------
-class JSONLogFormatter(logging.Formatter):
-    def format(self, record):
-        standard_attrs = {
-            'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename', 'funcName', 
-            'levelname', 'levelno', 'lineno', 'message', 'module', 'msecs', 'msg', 'name', 
-            'pathname', 'process', 'processName', 'relativeCreated', 'stack_info', 'thread', 
-            'threadName', 'taskName'
-        }
-        log_record = {
-            "timestamp": self.formatTime(record, self.datefmt),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "module": record.module,
-        }
-        for key, value in record.__dict__.items():
-            if key not in standard_attrs:
-                log_record[key] = value
-        return json.dumps(log_record)
-
 logger = logging.getLogger("crawler")
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(JSONLogFormatter())
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)
 
-# Prometheus-client can be used here to define actual metrics
 @dataclass
 class CrawlerMetrics:
     requests_total: int = 0
     success_total: int = 0
-    cache_hits: int = 0
     waf_blocks_total: int = 0
     retries_total: int = 0
     fallback_llm_total: int = 0
@@ -76,44 +51,38 @@ metrics = CrawlerMetrics()
 # ------------------------------------------------------------------------
 FINGERPRINT_PROFILES = [
     {
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        "platform": '"Windows"',
-        "viewport": {"width": 1920, "height": 1080},
-        "impersonate": "chrome124",
-        "hardwareConcurrency": 8,
-        "deviceMemory": 8,
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "impersonate": "chrome124"
     },
     {
-        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "sec_ch_ua": '"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="8"',
-        "platform": '"macOS"',
-        "viewport": {"width": 1440, "height": 900},
-        "impersonate": "chrome120", # closest fallback in curl_cffi
-        "hardwareConcurrency": 10,
-        "deviceMemory": 16,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        "impersonate": "chrome124"
+    },
+    {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "impersonate": "chrome124"
+    },
+    {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
+        "impersonate": "chrome124"
+    },
+    {
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
+        "impersonate": "safari17_4_1"
+    },
+    {
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+        "impersonate": "safari_18_0"
     }
 ]
 
 def get_random_fingerprint() -> dict:
-    profile = random.choice(FINGERPRINT_PROFILES).copy()
-    profile["locale"] = "ko-KR"
-    profile["timezone_id"] = "Asia/Seoul"
-    return profile
+    return random.choice(FINGERPRINT_PROFILES)
 
 # ------------------------------------------------------------------------
 # Layer 3: Distributed State & Caching Abstraction
 # ------------------------------------------------------------------------
-class DistributedStateBackend(Protocol):
-    async def get(self, key: str) -> Optional[str]: ...
-    async def set(self, key: str, value: str, ttl: int): ...
-    async def hgetall(self, name: str) -> Dict[str, str]: ...
-    async def hset(self, name: str, mapping: Dict[str, Any]): ...
-    async def hincrby(self, name: str, key: str, amount: int): ...
-    async def close(self): ...
-
-class InMemoryBackend(DistributedStateBackend):
-    """For local development and testing without Redis."""
+class CacheManager:
     def __init__(self):
         self._data: Dict[str, Any] = {}
         self._expirations: Dict[str, float] = {}
@@ -126,40 +95,14 @@ class InMemoryBackend(DistributedStateBackend):
             return None
         return self._data.get(key)
 
-    async def set(self, key: str, value: str, ttl: int):
-        self._data[key] = value
-        if ttl > 0: self._expirations[key] = time.time() + ttl
-
-    async def hgetall(self, name: str) -> Dict[str, str]:
-        return self._hashes.get(name, {})
-
-    async def hset(self, name: str, mapping: Dict[str, Any]):
-        self._hashes[name].update(mapping)
-
-    async def hincrby(self, name: str, key: str, amount: int):
-        current = int(self._hashes[name].get(key, "0"))
-        self._hashes[name][key] = str(current + amount)
-
-    async def close(self): pass
-
-class CacheManager:
-    def __init__(self, backend: DistributedStateBackend, prefix: str = "crawler_cache"):
-        self.backend = backend
-        self.prefix = prefix
-
-    async def get(self, key: str) -> Optional[dict]:
-        cache_key = f"{self.prefix}:{hashlib.sha256(key.encode()).hexdigest()}"
-        cached = await self.backend.get(cache_key)
-        if not cached:
-            return None
-        try:
-            return json.loads(cached)
-        except json.JSONDecodeError:
-            return None
-
     async def set(self, key: str, value: dict, ttl: int = 3600):
-        cache_key = f"{self.prefix}:{hashlib.sha256(key.encode()).hexdigest()}"
-        await self.backend.set(cache_key, json.dumps(value), ttl)
+        self._data[key] = json.dumps(value)
+        if ttl > 0: self._expirations[key] = time.time() + ttl
+        
+    async def close(self):
+        self._data.clear()
+
+cache_manager = CacheManager()
 
 # ------------------------------------------------------------------------
 # Layer 4: Proxy & Infrastructure Management
@@ -201,11 +144,9 @@ proxy_manager = ProxyManager([_env_proxy] if _env_proxy else [])
 # Layer 5: Session & Connection Pooling (Fast Path)
 # ------------------------------------------------------------------------
 class CurlSessionPool:
-    """Maintains persistent TLS connections per domain to eliminate handshake overhead."""
-    # 실제 운영에서 전체 verify=False는 위험하므로, 차단이 심한 도메인만 선택적 Bypass 설정
     TLS_BYPASS_DOMAINS = {"bunjang.co.kr", "bjn.co.kr", "musinsa.com"}
 
-    def __init__(self, max_sessions: int = 50):
+    def __init__(self, max_sessions: int = 100):
         self.sessions: Dict[str, requests.AsyncSession] = {}
         self.max_sessions = max_sessions
         self.lock = asyncio.Lock()
@@ -215,7 +156,7 @@ class CurlSessionPool:
             key = f"{domain}_{proxy}_{fingerprint['impersonate']}"
             if key not in self.sessions:
                 if len(self.sessions) >= self.max_sessions:
-                    oldest_key = next(iter(self.sessions))
+                    oldest_key = list(self.sessions.keys())[0]
                     old_client = self.sessions.pop(oldest_key)
                     # Fire and forget cleanup
                     asyncio.create_task(old_client.close())
@@ -242,14 +183,14 @@ curl_pool = CurlSessionPool()
 # Layer 6: Concurrency & Rate Limiting Manager
 # ------------------------------------------------------------------------
 class DomainRateLimiter:
-    def __init__(self, max_concurrent_per_domain: int = 3):
+    def __init__(self, max_concurrent_per_domain: int = 5):
         self._semaphores = defaultdict(lambda: asyncio.Semaphore(max_concurrent_per_domain))
 
     @asynccontextmanager
     async def acquire(self, url: str):
         domain = urlparse(url).netloc
         async with self._semaphores[domain]:
-            await asyncio.sleep(random.uniform(0.2, 0.7)) # Jitter
+            await asyncio.sleep(random.uniform(0.05, 0.2)) 
             yield
 
 rate_limiter = DomainRateLimiter(max_concurrent_per_domain=3)
@@ -260,13 +201,11 @@ rate_limiter = DomainRateLimiter(max_concurrent_per_domain=3)
 @dataclass
 class WarmContext:
     context: Any
-    uses: int = 0
     created_at: float = field(default_factory=time.time)
-    fingerprint: dict = field(default_factory=dict)
-    proxy: Optional[str] = None
+    uses: int = 0
 
 class PlaywrightPoolManager:
-    """Queue-based, self-healing browser pool manager."""
+    """단순하고 효율적인 브라우저 컨텍스트 관리자"""
     _instance = None
     _lock = asyncio.Lock()
 
@@ -301,7 +240,7 @@ class PlaywrightPoolManager:
             self.browser = await self.playwright.chromium.launch(
                 headless=True,
                 args=[
-                    "--no-sandbox", "--disable-dev-shm-usage"
+                    "--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled", "--disable-gpu"
                 ]
             )
             self._browser_id = uuid.uuid4()
@@ -362,30 +301,16 @@ class PlaywrightPoolManager:
         except Exception as e:
             logger.error("Error closing drained browser", extra={"error": str(e)})
 
-    async def _create_context(self, proxy: Optional[str]) -> WarmContext:
-        fp = get_random_fingerprint()
-
-        browser = self.browser
-        if not browser or not browser.is_connected():
+    async def _create_context(self, proxy: Optional[str] = None) -> WarmContext:
+        if not self.browser or not self.browser.is_connected():
             await self.launch_browser()
-            browser = self.browser
-
-        ctx = await browser.new_context(
-            **{k: v for k, v in fp.items() if k in ["user_agent", "viewport", "locale", "timezone_id"]},
-            java_script_enabled=True,
+        ctx = await self.browser.new_context(
+            user_agent=get_random_fingerprint()["user_agent"],
+            locale="ko-KR",
+            timezone_id="Asia/Seoul",
+            viewport={"width": 1920, "height": 1080}
         )
-        platform_val = fp.get('platform', '"Windows"').strip('"')
-        nav_platform = 'Win32' if platform_val == 'Windows' else 'MacIntel'
-        # Advanced fingerprinting
-        await ctx.add_init_script(f"""
-            Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
-            Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {fp['hardwareConcurrency']}}});
-            Object.defineProperty(navigator, 'deviceMemory', {{get: () => {fp['deviceMemory']}}});
-            Object.defineProperty(navigator, 'platform', {{get: () => '{nav_platform}'}});
-            Object.defineProperty(navigator, 'languages', {{get: () => ['ko-KR', 'ko']}});
-            window.chrome = {{runtime: {{}}}};
-        """)
-        return WarmContext(context=ctx, fingerprint=fp, proxy=None)
+        return WarmContext(context=ctx)
 
     @asynccontextmanager
     async def get_context(self, proxy: Optional[str] = None):
@@ -393,21 +318,15 @@ class PlaywrightPoolManager:
             await self.launch_browser()
             
         warm_ctx = await asyncio.wait_for(self.context_queue.get(),timeout=10)
-        # 요청한 Proxy와 Pre-warm된 Proxy 환경이 다르면 새로 교체
         try:
             warm_ctx.uses += 1
             yield warm_ctx.context
         finally:
-            # Recycle logic: Destroy if used > 20 times or older than 10 mins to clear cache/leaks
             if warm_ctx.uses > 20 or (time.time() - warm_ctx.created_at) > 600 or warm_ctx.context.is_closed():
                 if not warm_ctx.context.is_closed():
                     await warm_ctx.context.close()
-                # Refill the queue with a fresh context
                 new_ctx = await self._create_context(proxy)
-                try:
-                    self.context_queue.put_nowait(new_ctx)
-                except asyncio.QueueFull:
-                    await new_ctx.context.close()
+                self.context_queue.put_nowait(new_ctx)
             else:
                 self.context_queue.put_nowait(warm_ctx)
 
@@ -446,14 +365,14 @@ class ProductFallbackSchema(BaseModel):
 class AntiBotAnalyzer:
     @staticmethod
     def is_blocked(html: str, status: int = 200) -> bool:
-        if status in (403, 429): return True
+        if status in (401, 403, 429): return True
         if not html: return False
         
         html_lower = html.lower()
         signatures = [
             "cf-browser-verification", "just a moment...", "challenge-platform",
             "checking if the site connection is secure", "access denied", 
-            "datadome", "robot check", "px-captcha"
+            "datadome", "robot check", "px-captcha", "bot detection", "forbidden"
         ]
         if any(sig in html_lower for sig in signatures): return True
         
@@ -482,24 +401,15 @@ def _minimize_html_for_llm(html: str) -> str:
     for tag in soup(['style', 'svg', 'path', 'nav', 'footer', 'iframe', 'noscript', 'form', 'button', 'header']):
         tag.decompose()
         
-    # 스크립트는 JSON-LD만 남기고 모두 제거
-    for tag in soup('script'):
-        if tag.get('type') != 'application/ld+json':
-            tag.decompose()
-            
-    # LLM이 파싱하는 데 불필요한 속성 제거 (id, class, src, href, property, content만 유지)
-    allowed_attrs = {'id', 'class', 'src', 'href', 'property', 'content', 'itemprop'}
+    # 핵심 속성만 유지하여 토큰 절약
+    allowed_attrs = {'src', 'href', 'property', 'content'}
     for tag in soup.find_all(True):
-        attrs = dict(tag.attrs)
-        for attr in attrs:
-            if attr not in allowed_attrs:
-                del tag[attr]
+        tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
                 
-    # 메인 컨텐츠 영역만 추출 시도
     main_content = soup.find('main') or soup.find('article') or soup.find('body') or soup
     minimized = str(main_content)
-    minimized = re.sub(r'>\s+<', '><', minimized) # 공백 압축
-    return minimized[:20000] # 최후 방어선 (약 5000토큰 이내 제한)
+    minimized = re.sub(r'\s+', ' ', minimized).strip()
+    return minimized[:15000] 
 
 # Gemini Client 싱글톤 관리로 매 요청마다 생성되는 비효율 개선
 _gemini_client_instance = None
@@ -593,18 +503,24 @@ def _extract_meta_content(soup: BeautifulSoup, property_name: str) -> str:
 # ------------------------------------------------------------------------
 async def _fetch_fast(url: str, proxy: str, fp: dict) -> Tuple[str, str, int]:
     domain = urlparse(url).netloc
+    REFERERS = [
+        "https://www.google.com/",
+        "https://search.naver.com/",
+        "https://www.bing.com/",
+        "https://m.search.naver.com/",
+    ]
     client = await curl_pool.get_session(domain, fp, proxy)
     headers = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'accept-language': f'{fp["locale"]},en-US;q=0.9,en;q=0.8',
-        'sec-ch-ua': fp['sec_ch_ua'],
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': fp['platform'],
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'none',
-        'upgrade-insecure-requests': '1',
-        'user-agent': fp["user_agent"],
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "max-age=0",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1",
+        "user-agent": fp["user_agent"],
+        "referer": random.choice(REFERERS),
     }
     response = await client.get(url, headers=headers)
     return response.text, str(response.url), response.status_code
@@ -617,17 +533,20 @@ async def _fetch_browser(url: str, proxy: str) -> Tuple[str, str]:
             stealth = Stealth()
             await stealth.apply_stealth_async(page)
                     
-            # Efficient aggressive resource blocking
-            async def abort_route(route):
-                await route.abort()
-                
-            await page.route("**/*.{png,jpg,jpeg,webp,gif,woff,woff2,mp4}", abort_route)
+            # Optimized resource blocking
+            BLOCKED_TYPES = {"image", "media", "font"}
+            async def route_handler(route):
+                if route.request.resource_type in BLOCKED_TYPES:
+                    await route.abort()
+                else:
+                    await route.continue_()
             
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            await page.route("**/*", route_handler)
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
             
             try:
-                await page.locator("body").wait_for(timeout=10000)
-                await page.wait_for_timeout(2000)
+                await page.locator("body").wait_for(timeout=5000)
+                await page.wait_for_timeout(1000)
             except Exception:
                 pass
             
@@ -639,33 +558,60 @@ async def _fetch_browser(url: str, proxy: str) -> Tuple[str, str]:
 async def _execute_fetch_pipeline(url: str) -> dict:
     """Executes a tiered fallback strategy for maximum success rate."""
     fp = get_random_fingerprint()
-    
-    for attempt in range(1, 3):
-        proxy = await proxy_manager.get_proxy()
+    proxy = await proxy_manager.get_proxy()
+
+    # Tier 1: Fast Path (curl-cffi)
+    try:
+        html, final_url, status = await _fetch_fast(url, proxy, fp)
+        if not AntiBotAnalyzer.is_blocked(html, status):
+            await proxy_manager.report(proxy, True)
+            metrics.success_total += 1
+            return {"html": html, "finalUrl": final_url}
+        
+        metrics.waf_blocks_total += 1
+        await proxy_manager.report(proxy, False)
+        logger.warning(f"Fast path blocked (status {status}), falling back to browser.", extra={"url": url})
+    except Exception as e:
+        metrics.retries_total += 1
+        await proxy_manager.report(proxy, False)
+        logger.warning("Fast path failed, falling back to browser.", extra={"url": url, "error": str(e)})
+
+    # Tier 2: Browser Path (Playwright)
+    proxy = await proxy_manager.get_proxy()
+    try:
+        html, final_url = await _fetch_browser(url, proxy)
+        metrics.success_total += 1
+        return {"html": html, "finalUrl": final_url}
+    except Exception as e:
+        metrics.retries_total += 1
+        await proxy_manager.report(proxy, False)
+        logger.error("Browser tier failed", extra={"url": url, "error": str(e)})
+        raise AllTiersFailedError(f"All network fetch tiers exhausted for {url}")
+
+def _extract_framework_data(soup: BeautifulSoup) -> dict:
+    """Next.js (__NEXT_DATA__) 및 Nuxt.js 전용 데이터 추출"""
+    data = {}
+    next_script = soup.find("script", id="__NEXT_DATA__")
+    if next_script and next_script.string:
         try:
-            if attempt == 1:
-                # Tier 1: Fast Session Pooling HTTP
-                html, final_url, status = await _fetch_fast(url, proxy, fp)
-                if AntiBotAnalyzer.is_blocked(html, status):
-                    metrics.waf_blocks_total += 1
-                    await proxy_manager.report(proxy, False)
-                    await asyncio.sleep(random.uniform(1.0, 2.0))
-                    continue # Trigger next tier
-                await proxy_manager.report(proxy, True)
-                metrics.success_total += 1
-                return {"html": html, "finalUrl": final_url}
-            else:
-                # Tier 2: Browser Fallback
-                html, final_url = await _fetch_browser(url, proxy)
-                metrics.success_total += 1
-                return {"html": html, "finalUrl": final_url}
-        except Exception as e:
-            metrics.retries_total += 1
-            await proxy_manager.report(proxy, False)
-            logger.warning("Fetch tier failed", extra={"url": url, "attempt": attempt, "error": str(e)})
-            await asyncio.sleep(random.uniform(0.5, 1.5))
-            
-    raise Exception("All network fetch tiers exhausted.")
+            payload = json.loads(next_script.string)
+            props = payload.get("props", {}).get("pageProps", {})
+            product = props.get("product") or props.get("item") or props.get("initialState", {}).get("product")
+            if isinstance(product, dict):
+                data["title"] = product.get("name") or product.get("title")
+                data["price"] = product.get("price")
+                data["brand"] = product.get("brand")
+                if "images" in product and product["images"]:
+                    img = product["images"][0]
+                    data["image_url"] = img.get("url") if isinstance(img, dict) else img
+        except: pass
+    ssr_script = soup.find("script", {"data-n-head": "ssr"})
+    if ssr_script and ssr_script.string and "window.__NUXT__" in ssr_script.string:
+        try:
+            title_match = re.search(r'title\s*:\s*["\'](.+?)["\']', ssr_script.string)
+            if title_match: data["title"] = title_match.group(1)
+        except: pass
+    return {k: v for k, v in data.items() if v}
 
 # ------------------------------------------------------------------------
 # Layer 11: Site-Specific Extractor Plugins
@@ -694,18 +640,16 @@ EXTRACTOR_REGISTRY: Dict[str, Type[SiteExtractor]] = {
 # ------------------------------------------------------------------------
 # Layer 12: Distributed-Ready Facade
 # ------------------------------------------------------------------------
-async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None) -> dict:
-    logger.info("Extraction pipeline start", extra={"url": url})
+async def scrape_product_metadata(url: str) -> dict:
     metrics.requests_total += 1
     
-    # Pipeline 통합: Cache Hit 검증
-    if cache:
-        cached_result = await cache.get(url)
-        if cached_result:
-            logger.info("Cache hit", extra={"url": url})
-            metrics.cache_hits += 1
+    cached_result = await cache_manager.get(url)
+    if cached_result:
+        try:
+            cached_result = json.loads(cached_result)
             metrics.success_total += 1
             return {**cached_result, "source": "cache"}
+        except: pass
 
     async with rate_limiter.acquire(url):
         final_url = url
@@ -718,7 +662,8 @@ async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None
             
             soup = BeautifulSoup(html, 'lxml')
             
-            # 1. Base Extraction
+            # 1. Framework & Base Extraction
+            framework_data = _extract_framework_data(soup)
             products = _extract_json_ld_products(soup)
             product = products[0] if products else {}
 
@@ -727,13 +672,13 @@ async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None
             images = product.get("image", [])
             if isinstance(images, str): images = [images]
 
-            price = _clean_text(str(offers.get("price") or _extract_meta_content(soup, "product:price:amount") or _extract_meta_content(soup, "og:price:amount")))
-            currency = _clean_text(str(offers.get("priceCurrency") or _extract_meta_content(soup, "product:price:currency") or _extract_meta_content(soup, "og:price:currency")))
+            price = framework_data.get("price") or _clean_text(str(offers.get("price") or _extract_meta_content(soup, "product:price:amount") or _extract_meta_content(soup, "og:price:amount")))
+            currency = _clean_text(str(offers.get("priceCurrency") or _extract_meta_content(soup, "product:price:currency") or _extract_meta_content(soup, "og:price:currency") or "KRW"))
             availability = _clean_text(str(offers.get("availability") or "")).split("/")[-1]
             
-            title = (_clean_text(product.get("name") or "") or _extract_meta_content(soup, "og:title") or (soup.find("title").get_text(strip=True) if soup.find("title") else ""))
+            title = framework_data.get("title") or (_clean_text(product.get("name") or "") or _extract_meta_content(soup, "og:title") or (soup.find("title").get_text(strip=True) if soup.find("title") else ""))
             
-            image_url = (_clean_text(images[0] if images else "") or _extract_meta_content(soup, "og:image") or _extract_meta_content(soup, "twitter:image") or _extract_meta_content(soup, "image"))
+            image_url = framework_data.get("image_url") or (_clean_text(images[0] if images else "") or _extract_meta_content(soup, "og:image") or _extract_meta_content(soup, "twitter:image") or _extract_meta_content(soup, "image"))
             if not image_url:
                 for selector in ["img[id*='product']", "img[class*='product']", ".product-image img"]:
                     img_tag = soup.select_one(selector)
@@ -742,7 +687,7 @@ async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None
                         break
 
             description = (_clean_text(product.get("description") or "") or _extract_meta_content(soup, "og:description") or _extract_meta_content(soup, "description"))
-            brand = _clean_text(product.get("brand", {}).get("name") if isinstance(product.get("brand"), dict) else str(product.get("brand") or ""))
+            brand = framework_data.get("brand") or _clean_text(product.get("brand", {}).get("name") if isinstance(product.get("brand"), dict) else str(product.get("brand") or ""))
             normalized_image_url = urljoin(final_url, image_url) if image_url else ""
 
             extracted_data = {
@@ -768,19 +713,16 @@ async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None
                 logger.info("Extraction quality low, triggering LLM fallback", extra={"score": quality_score, "url": url})
                 
                 if AntiBotAnalyzer.is_blocked(html):
-                    raise ValueError("WAF block detected, skipping LLM fallback.")
+                    raise BlockedError("WAF block detected")
                 
                 gemini_result = await fallback_with_gemini(url, html) 
                 if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
                     metrics.fallback_llm_total += 1
-                    if cache:
-                        await cache.set(url, gemini_result)
+                    await cache_manager.set(url, gemini_result)
                     return gemini_result
 
-            if cache:
-                await cache.set(url, extracted_data)
+            await cache_manager.set(url, extracted_data)
             return extracted_data
-
         except Exception as e:
             logger.error("Extraction pipeline failed", extra={"url": url, "error": str(e)})
             if html and len(html.strip()) > 100:
@@ -790,10 +732,8 @@ async def scrape_product_metadata(url: str, cache: Optional[CacheManager] = None
                 gemini_result = await fallback_with_gemini(url, html)
                 if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
                     metrics.fallback_llm_total += 1
-                    if cache:
-                        await cache.set(url, gemini_result)
+                    await cache_manager.set(url, gemini_result)
                     return gemini_result
-
             raise ValueError("Extraction failed.")
 
 # ------------------------------------------------------------------------
