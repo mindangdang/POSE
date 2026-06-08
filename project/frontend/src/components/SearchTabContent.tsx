@@ -89,14 +89,18 @@ export function SearchTabContent({
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
   const [selectedShopNames, setSelectedShopNames] = useState<string[]>([]);
   const [activeDomainMap, setActiveDomainMap] = useState<Record<string, string> | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const currentPageRef = useRef(1);  // useRef로 변경: 즉시 업데이트되고 불필요한 리렌더 방지
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
   const fetchTypeRef = useRef<"initial" | "append" | null>(null);
   const appendCountRef = useRef(0);
-  const pendingLoadMoreRef = useRef(false);
+  const loadingRef = useRef(false);
+  const isLoadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const resultsLengthRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   // displayActivity: determines compact layout (results/loading/quota)
   const displayActivity = loading || searchResults.length > 0 || quotaCountdown !== null || searchActive;
   const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
@@ -171,26 +175,43 @@ export function SearchTabContent({
 
               return [...prev, ...uniqueIncoming];
             });
+            
+            // 📌 FIX 3: SEARCH_SUCCESS에서 hasMore 상태 갱신
+            // 서버가 빈 배열을 보낸 경우 즉시 무한 스크롤 종료
+            if (data.is_append && (!data.results || data.results.length === 0)) {
+              setHasMore(false);
+              console.log('[SEARCH_SUCCESS] 결과 없음 - hasMore를 false로 설정');
+            }
           } else if (data.type === "SEARCH_FINISHED" || data.type === "SEARCH_ERROR") {
             const started = loadingStartRef.current || Date.now();
             const elapsed = Date.now() - started;
             const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
             const finishSearch = () => {
-              if (fetchTypeRef.current === "append") {
+              const currentFetchType = fetchTypeRef.current;
+              if (currentFetchType === "append") {
                 setIsLoadingMore(false);
-                if (appendCountRef.current === 0) setHasMore(false);
-                pendingLoadMoreRef.current = false;
+                // 📌 FIX 2: append 요청에서 결과가 0개면 hasMore를 false로 설정
+                if (appendCountRef.current === 0) {
+                  setHasMore(false);
+                  console.log('[SEARCH_FINISHED (append)] 결과 0개 - hasMore를 false로 설정');
+                }
               } else {
                 setLoading(false);
               }
               fetchTypeRef.current = null;
               appendCountRef.current = 0;
+              
+              // 📌 디버그 로그: 무한 스크롤 상태 확인
+              if (data.type === "SEARCH_FINISHED") {
+                console.log('[SEARCH_FINISHED] fetchType:', currentFetchType, 'isLoadingMore:', isLoadingMoreRef.current, 'hasMore:', hasMoreRef.current);
+              }
             };
 
             setTimeout(() => {
               finishSearch();
               if (data.type === "SEARCH_ERROR") {
+                console.error('[SEARCH_ERROR]', data.message);
                 alert(data.message || "검색 중 오류가 발생했습니다.");
               }
             }, remaining);
@@ -220,17 +241,33 @@ export function SearchTabContent({
     if (!currentBottomRef) return;
 
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loading && !isLoadingMore && hasMore && searchResults.length > 0) {
-          handleLoadMore();
-        }
-      },
-      { threshold: 0.1, rootMargin: '1000px' } // 더 일찍 다음 아이템을 가져오도록 임계값 상향
-    );
+        (entries) => {
+          if (entries[0].isIntersecting && !loadingRef.current && !isLoadingMoreRef.current && hasMoreRef.current && resultsLengthRef.current > 0) {
+            handleLoadMore();
+          }
+        },
+        { threshold: 0.1, rootMargin: '500px' }
+      );
 
     observer.observe(currentBottomRef);
-    return () => observer.unobserve(currentBottomRef);
-  }, [loading, isLoadingMore, hasMore, searchResults.length, currentPage]);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  useEffect(() => {
+    isLoadingMoreRef.current = isLoadingMore;
+  }, [isLoadingMore]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    resultsLengthRef.current = searchResults.length;
+  }, [searchResults.length]);
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
@@ -247,7 +284,6 @@ export function SearchTabContent({
 
     if (isAppend) {
       setIsLoadingMore(true);
-      pendingLoadMoreRef.current = true;
       appendCountRef.current = 0;
       fetchTypeRef.current = "append";
     } else {
@@ -292,8 +328,10 @@ export function SearchTabContent({
       
       if (res.status === 429) {
         setQuotaCountdown(60);
-        setLoading(false);
-        return;
+        if (!isAppend) setLoading(false);
+        else setIsLoadingMore(false);
+        fetchTypeRef.current = null;
+        return false;
       }
 
       if (!res.ok) {
@@ -302,24 +340,35 @@ export function SearchTabContent({
       }
 
       const data = await res.json();
-      if (searchMode === "digging" && data.success && !data.results) return;
+      if (searchMode === "digging") {
+        return true;
+      }
 
+      const resultCount = data.results?.length ?? 0;
       if (isAppend) {
         setSearchResults(prev => [...prev, ...(data.results || [])]);
-        if (!data.results?.length) setHasMore(false);
+        if (resultCount === 0) {
+          setHasMore(false);
+          console.log('[fetchResults HTTP] 결과 없음 - hasMore를 false로 설정');
+        }
       } else {
         setSearchResults(data.results || []);
-        // 일반 검색(digging)은 계속해서 다음 페이지를 불러올 수 있도록 true 유지
-        // AI 검색(렌즈)은 API 특성상 단일 페이지 결과만 제공하므로 더 불러오기 방지
-        setHasMore(searchMode === "digging" ? true : false);
-        setGeneratedImage(searchMode === "ai" ? data.generated_vibe_image_url : null);
+        setHasMore(false);
+        setGeneratedImage(data.generated_vibe_image_url || null);
       }
+      return true;
     } catch (error: any) {
-      alert(error.message);
-      setLoading(false);
+      if (error instanceof Error) {
+        alert(error.message);
+      }
+      if (isAppend) {
+        setIsLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
+      fetchTypeRef.current = null;
+      return false;
     } finally {
-      // Digging 모드(PSE)는 결과가 WebSocket으로 비동기 수신되므로, 
-      // HTTP 응답 직후에 로딩을 해제하지 않고 SEARCH_FINISHED 메시지를 기다립니다.
       if (searchMode !== "digging") {
         const elapsed = Date.now() - startedAt;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
@@ -385,7 +434,9 @@ export function SearchTabContent({
       });
     }
 
-    setCurrentPage(1);       // 1페이지로 리셋
+    // 📌 FIX 1: 새로운 검색 시작 시 이전 결과 제거
+    currentPageRef.current = 1;
+    setSearchResults([]);
     setGeneratedImage(null);
     setHasMore(true);        // 무한 스크롤 상태 리셋
     setActiveDomainMap(domainMap);
@@ -394,11 +445,18 @@ export function SearchTabContent({
 
   // 2. '더 보기' 버튼을 눌렀을 때
   const handleLoadMore = async () => {
-    if (loading || isLoadingMore || !hasMore) return;
+    if (loadingRef.current || isLoadingMoreRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
 
-    const nextPage = currentPage + 1;
-    await fetchResults(nextPage, true); // 다음 페이지 데이터 가져와서 이어 붙이기
-    setCurrentPage(nextPage);      // 성공 시 페이지 번호 1 증가
+    const nextPage = currentPageRef.current + 1;
+    loadingMoreRef.current = true;
+    try {
+      const success = await fetchResults(nextPage, true);
+      if (success) {
+        currentPageRef.current = nextPage;
+      }
+    } finally {
+      loadingMoreRef.current = false;
+    }
   };
 
   const handleSecondhandSearch = async (title: string) => {
@@ -412,7 +470,8 @@ export function SearchTabContent({
     setLoading(true);
     setGeneratedImage(null);
     setHasMore(true); // 세컨핸드 검색 시에도 무한 스크롤이 가능하도록 true로 설정
-    setCurrentPage(1);
+    // 📌 FIX 1: currentPageRef로 즉시 업데이트
+    currentPageRef.current = 1;
 
     try {
       const token = localStorage.getItem('access_token');
@@ -899,7 +958,7 @@ export function SearchTabContent({
                 <AnimatePresence>
                   {searchResults.map((item, index) => (
                     <SearchResultCard
-                      key={item.id}
+                      key={item.url || item.id}
                       delay={0.03 * (index % 20)}
                       item={item}
                       onClick={() => setSelectedItem(item)}
