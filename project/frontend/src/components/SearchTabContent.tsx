@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus, ExternalLink } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
@@ -101,6 +101,7 @@ export function SearchTabContent({
   const hasMoreRef = useRef(true);
   const resultsLengthRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   // displayActivity: determines compact layout (results/loading/quota)
   const displayActivity = loading || searchResults.length > 0 || quotaCountdown !== null || searchActive;
   const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
@@ -179,6 +180,7 @@ export function SearchTabContent({
             // 📌 FIX 3: SEARCH_SUCCESS에서 hasMore 상태 갱신
             // 서버가 빈 배열을 보낸 경우 즉시 무한 스크롤 종료
             if (data.is_append && (!data.results || data.results.length === 0)) {
+              hasMoreRef.current = false;
               setHasMore(false);
               console.log('[SEARCH_SUCCESS] 결과 없음 - hasMore를 false로 설정');
             }
@@ -190,13 +192,16 @@ export function SearchTabContent({
             const finishSearch = () => {
               const currentFetchType = fetchTypeRef.current;
               if (currentFetchType === "append") {
+                isLoadingMoreRef.current = false;
                 setIsLoadingMore(false);
                 // 📌 FIX 2: append 요청에서 결과가 0개면 hasMore를 false로 설정
                 if (appendCountRef.current === 0) {
+                  hasMoreRef.current = false;
                   setHasMore(false);
                   console.log('[SEARCH_FINISHED (append)] 결과 0개 - hasMore를 false로 설정');
                 }
               } else {
+                loadingRef.current = false;
                 setLoading(false);
               }
               fetchTypeRef.current = null;
@@ -235,24 +240,6 @@ export function SearchTabContent({
     };
   }, [user]);
 
-  // Infinite Scroll Observer
-  useEffect(() => {
-    const currentBottomRef = bottomRef.current;
-    if (!currentBottomRef) return;
-
-    const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && !loadingRef.current && !isLoadingMoreRef.current && hasMoreRef.current && resultsLengthRef.current > 0) {
-            handleLoadMore();
-          }
-        },
-        { threshold: 0.1, rootMargin: '500px' }
-      );
-
-    observer.observe(currentBottomRef);
-    return () => observer.disconnect();
-  }, []);
-
   useEffect(() => {
     loadingRef.current = loading;
   }, [loading]);
@@ -277,16 +264,18 @@ export function SearchTabContent({
     if (quotaCountdown === 0) setQuotaCountdown(null);
   }, [quotaCountdown]);
 
-  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null, fileOverride?: File | null) => {
+  const fetchResults = useCallback(async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null, fileOverride?: File | null) => {
     const myFetchId = ++fetchCounterRef.current;
     const startedAt = Date.now();
     loadingStartRef.current = startedAt;
 
     if (isAppend) {
+      isLoadingMoreRef.current = true;
       setIsLoadingMore(true);
       appendCountRef.current = 0;
       fetchTypeRef.current = "append";
     } else {
+      loadingRef.current = true;
       setLoading(true);
       fetchTypeRef.current = "initial";
     }
@@ -328,8 +317,13 @@ export function SearchTabContent({
       
       if (res.status === 429) {
         setQuotaCountdown(60);
-        if (!isAppend) setLoading(false);
-        else setIsLoadingMore(false);
+        if (isAppend) {
+          isLoadingMoreRef.current = false;
+          setIsLoadingMore(false);
+        } else {
+          loadingRef.current = false;
+          setLoading(false);
+        }
         fetchTypeRef.current = null;
         return false;
       }
@@ -348,11 +342,13 @@ export function SearchTabContent({
       if (isAppend) {
         setSearchResults(prev => [...prev, ...(data.results || [])]);
         if (resultCount === 0) {
+          hasMoreRef.current = false;
           setHasMore(false);
           console.log('[fetchResults HTTP] 결과 없음 - hasMore를 false로 설정');
         }
       } else {
         setSearchResults(data.results || []);
+        hasMoreRef.current = false;
         setHasMore(false);
         setGeneratedImage(data.generated_vibe_image_url || null);
       }
@@ -362,8 +358,10 @@ export function SearchTabContent({
         alert(error.message);
       }
       if (isAppend) {
+        isLoadingMoreRef.current = false;
         setIsLoadingMore(false);
       } else {
+        loadingRef.current = false;
         setLoading(false);
       }
       fetchTypeRef.current = null;
@@ -375,15 +373,17 @@ export function SearchTabContent({
         setTimeout(() => {
           if (myFetchId === fetchCounterRef.current) {
             if (isAppend) {
+              isLoadingMoreRef.current = false;
               setIsLoadingMore(false);
             } else {
+              loadingRef.current = false;
               setLoading(false);
             }
           }
         }, remaining);
       }
     }
-  };
+  }, [activeDomainMap, pastedFile, searchMode, searchQuery]);
   
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
@@ -436,6 +436,8 @@ export function SearchTabContent({
 
     // 📌 FIX 1: 새로운 검색 시작 시 이전 결과 제거
     currentPageRef.current = 1;
+    resultsLengthRef.current = 0;
+    hasMoreRef.current = true;
     setSearchResults([]);
     setGeneratedImage(null);
     setHasMore(true);        // 무한 스크롤 상태 리셋
@@ -444,11 +446,12 @@ export function SearchTabContent({
   };
 
   // 2. '더 보기' 버튼을 눌렀을 때
-  const handleLoadMore = async () => {
-    if (loadingRef.current || isLoadingMoreRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
+  const handleLoadMore = useCallback(async () => {
+    if (loadingRef.current || isLoadingMoreRef.current || loadingMoreRef.current || !hasMoreRef.current || resultsLengthRef.current === 0) return;
 
     const nextPage = currentPageRef.current + 1;
     loadingMoreRef.current = true;
+    isLoadingMoreRef.current = true;
     try {
       const success = await fetchResults(nextPage, true);
       if (success) {
@@ -457,21 +460,64 @@ export function SearchTabContent({
     } finally {
       loadingMoreRef.current = false;
     }
-  };
+  }, [fetchResults]);
+
+  const setBottomSentinelRef = useCallback((node: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    bottomRef.current = node;
+    if (!node) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void handleLoadMore();
+        }
+      },
+      { threshold: 0.1, rootMargin: '500px' }
+    );
+
+    observerRef.current.observe(node);
+  }, [handleLoadMore]);
+
+  useEffect(() => {
+    return () => observerRef.current?.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (loading || isLoadingMore || !hasMore || searchResults.length === 0 || !bottomRef.current) return;
+
+    const { top } = bottomRef.current.getBoundingClientRect();
+    if (top <= window.innerHeight + 500) {
+      void handleLoadMore();
+    }
+  }, [handleLoadMore, hasMore, isLoadingMore, loading, searchResults.length]);
 
   const handleSecondhandSearch = async (title: string) => {
     setSearchMode("digging");
     setIsDetailedSearch(false);
     setSearchQuery(title);
     setSearchActive(true);
+    resultsLengthRef.current = 0;
     setSearchResults([]);
     const myFetchId = ++fetchCounterRef.current;
     loadingStartRef.current = Date.now();
+    loadingRef.current = true;
     setLoading(true);
     setGeneratedImage(null);
+    hasMoreRef.current = true;
     setHasMore(true); // 세컨핸드 검색 시에도 무한 스크롤이 가능하도록 true로 설정
     // 📌 FIX 1: currentPageRef로 즉시 업데이트
     currentPageRef.current = 1;
+    const secondhandDomainMap = { 
+      "fruitsfamily.com": "후루츠패밀리",
+      "collectiv.kr": "콜랙티브",
+      "m.bunjang.co.kr": "번개장터"
+    };
+    setActiveDomainMap(secondhandDomainMap);
 
     try {
       const token = localStorage.getItem('access_token');
@@ -482,11 +528,7 @@ export function SearchTabContent({
         body: JSON.stringify({ 
           query: title, 
           page: 1,
-          domain_map: { 
-            "fruitsfamily.com": "후루츠패밀리",
-            "collectiv.kr": "콜랙티브",
-            "m.bunjang.co.kr": "번개장터"
-          }
+          domain_map: secondhandDomainMap
         })
       });
       if (!res.ok) throw new Error("Search failed");
@@ -496,7 +538,10 @@ export function SearchTabContent({
       const elapsed = Date.now() - started;
       const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
       setTimeout(() => {
-        if (myFetchId === fetchCounterRef.current) setLoading(false);
+        if (myFetchId === fetchCounterRef.current) {
+          loadingRef.current = false;
+          setLoading(false);
+        }
       }, remaining);
     }
   };
@@ -989,7 +1034,7 @@ export function SearchTabContent({
                 </div>
               )}
 
-              <div ref={bottomRef} className="h-4" />
+              <div ref={setBottomSentinelRef} className="h-4" />
               
               {searchResults.length > 0 && hasMore && (
                 <div className="flex justify-center py-10 w-full">
