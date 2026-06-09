@@ -1,26 +1,23 @@
-import os
-import re
-import json
-import uuid
-import time
-import random
 import asyncio
-import logging
 import hashlib
-from collections import defaultdict
+import json
+import logging
+import os
+import random
+import re
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any, Type, List, Tuple
-from urllib.parse import urljoin, urlparse
 from dataclasses import dataclass, field
-import asyncio
-from bs4 import BeautifulSoup
-from pydantic import BaseModel,Field
+from enum import Enum
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type
+from urllib.parse import parse_qs, urljoin, urlparse
+
 import curl_cffi.requests as requests
-from google import genai
-from google.genai import types
-from playwright.async_api import async_playwright, Browser
-from playwright_stealth import Stealth
-from project.backend.app.core.resilience import with_llm_resilience
+import jmespath
+import orjson
+from browserforge.fingerprints import FingerprintGenerator
+from selectolax.parser import HTMLParser, Node
 
 # ------------------------------------------------------------------------
 # Layer 0: Custom Exceptions
@@ -43,41 +40,74 @@ class CrawlerMetrics:
     waf_blocks_total: int = 0
     retries_total: int = 0
     fallback_llm_total: int = 0
+    api_discovery_total: int = 0
+    hydration_total: int = 0
+    structured_data_total: int = 0
 
 metrics = CrawlerMetrics()
 
 # ------------------------------------------------------------------------
-# Layer 2: Advanced Identity & Fingerprint Profiles
+# Layer 2: BrowserForge Identity & Fetch Replay Profiles
 # ------------------------------------------------------------------------
-FINGERPRINT_PROFILES = [
+FINGERPRINT_GENERATOR = FingerprintGenerator()
+FALLBACK_FINGERPRINT_PROFILES = [
     {
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-        "impersonate": "chrome124"
-    },
-    {
-        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-        "impersonate": "chrome124"
-    },
-    {
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-        "impersonate": "chrome124"
-    },
-    {
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
-        "impersonate": "chrome124"
-    },
-    {
-        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
-        "impersonate": "safari17_4_1"
+        "impersonate": "chrome124",
+        "headers": {},
     },
     {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
-        "impersonate": "safari_18_0"
-    }
+        "impersonate": "safari_18_0",
+        "headers": {},
+    },
 ]
+CURL_IMPERSONATES = ("chrome124", "chrome123", "chrome120", "safari17_4_1", "safari15_5")
+
+
+def _fingerprint_value(obj: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(obj, dict) and name in obj:
+            return obj[name]
+        if hasattr(obj, name):
+            return getattr(obj, name)
+    return None
+
+
+def _fingerprint_headers(fp: Any) -> Dict[str, str]:
+    navigator = _fingerprint_value(fp, "navigator") or {}
+    headers = _fingerprint_value(fp, "headers") or {}
+    user_agent = _fingerprint_value(navigator, "userAgent", "user_agent") or _fingerprint_value(fp, "userAgent", "user_agent")
+    client_hints = _fingerprint_value(navigator, "userAgentData", "user_agent_data") or {}
+
+    result = {str(k): str(v) for k, v in dict(headers).items()} if isinstance(headers, dict) else {}
+    if user_agent:
+        result.setdefault("user-agent", str(user_agent))
+    brands = _fingerprint_value(client_hints, "brands")
+    platform = _fingerprint_value(client_hints, "platform")
+    mobile = _fingerprint_value(client_hints, "mobile")
+    if brands and isinstance(brands, list):
+        result.setdefault("sec-ch-ua", ", ".join(f'"{b.get("brand")}";v="{b.get("version")}"' for b in brands if isinstance(b, dict)))
+    if platform:
+        result.setdefault("sec-ch-ua-platform", f'"{platform}"')
+    if mobile is not None:
+        result.setdefault("sec-ch-ua-mobile", "?1" if mobile else "?0")
+    return result
+
 
 def get_random_fingerprint() -> dict:
-    return random.choice(FINGERPRINT_PROFILES)
+    try:
+        fp = FINGERPRINT_GENERATOR.generate()
+    except Exception as exc:
+        logger.warning("BrowserForge fingerprint generation failed; using static curl-cffi profile", extra={"error": str(exc)})
+        return random.choice(FALLBACK_FINGERPRINT_PROFILES)
+
+    headers = _fingerprint_headers(fp)
+    return {
+        "user_agent": headers.get("user-agent", random.choice(FALLBACK_FINGERPRINT_PROFILES)["user_agent"]),
+        "impersonate": random.choice(CURL_IMPERSONATES),
+        "headers": headers,
+    }
 
 # ------------------------------------------------------------------------
 # Layer 3: Distributed State & Caching Abstraction
@@ -96,9 +126,10 @@ class CacheManager:
         return self._data.get(key)
 
     async def set(self, key: str, value: dict, ttl: int = 3600):
-        self._data[key] = json.dumps(value)
-        if ttl > 0: self._expirations[key] = time.time() + ttl
-        
+        self._data[key] = orjson.dumps(value).decode("utf-8")
+        if ttl > 0:
+            self._expirations[key] = time.time() + ttl
+
     async def close(self):
         self._data.clear()
 
@@ -107,44 +138,93 @@ cache_manager = CacheManager()
 # ------------------------------------------------------------------------
 # Layer 4: Proxy & Infrastructure Management
 # ------------------------------------------------------------------------
-class ProxyManager:
-    """Handles rotation, scoring, and eviction of proxies."""
-    def __init__(self, raw_proxies: List[str]):
-        self.proxies = {p: {"score": 100.0, "uses": 0, "failures": 0} for p in raw_proxies}
-        self.lock = asyncio.Lock()
+class ProxyClass(str, Enum):
+    GENERIC = "generic"
+    CLOUDFLARE = "cloudflare"
+    DATADOME = "datadome"
+    AKAMAI = "akamai"
+    PERIMETERX = "perimeterx"
+    KASADA = "kasada"
+    IMPERVA = "imperva"
+    SHAPE = "shape"
 
-    async def get_proxy(self) -> Optional[str]:
+
+@dataclass
+class ProxyStats:
+    ewma_latency_ms: float = 750.0
+    successes: int = 1
+    failures: int = 1
+    blocks: int = 0
+    uses: int = 0
+    last_seen: float = field(default_factory=time.time)
+
+    @property
+    def success_rate(self) -> float:
+        return self.successes / max(1, self.successes + self.failures)
+
+    @property
+    def block_rate(self) -> float:
+        return self.blocks / max(1, self.uses)
+
+    @property
+    def latency_score(self) -> float:
+        return max(0.0, min(1.0, 1.0 - (self.ewma_latency_ms / 5000.0)))
+
+    @property
+    def score(self) -> float:
+        block_score = 1.0 - self.block_rate
+        return (0.5 * self.success_rate) + (0.3 * self.latency_score) + (0.2 * block_score)
+
+
+class ProxyManager:
+    """EWMA latency, success rate, and WAF-specific block-rate based proxy router."""
+    def __init__(self, raw_proxies: List[str]):
+        self.proxies: Dict[ProxyClass, Dict[str, ProxyStats]] = {klass: {} for klass in ProxyClass}
+        self.lock = asyncio.Lock()
+        for raw in raw_proxies:
+            if raw:
+                self.add_proxy(raw)
+
+    def add_proxy(self, proxy: str, proxy_class: ProxyClass = ProxyClass.GENERIC):
+        self.proxies.setdefault(proxy_class, {})[proxy] = ProxyStats()
+
+    async def get_proxy(self, proxy_class: ProxyClass = ProxyClass.GENERIC) -> Optional[str]:
         async with self.lock:
-            valid_proxies = [p for p, stats in self.proxies.items() if stats["score"] > 30.0]
-            if not valid_proxies:
+            candidates = self.proxies.get(proxy_class, {}) or self.proxies.get(ProxyClass.GENERIC, {})
+            valid = [(proxy, stats) for proxy, stats in candidates.items() if stats.score >= 0.25]
+            if not valid:
                 return None
-            # Weighted random choice based on score
-            weights = [self.proxies[p]["score"] for p in valid_proxies]
-            chosen = random.choices(valid_proxies, weights=weights, k=1)[0]
-            self.proxies[chosen]["uses"] += 1
+            chosen = random.choices([p for p, _ in valid], weights=[s.score for _, s in valid], k=1)[0]
+            candidates[chosen].uses += 1
+            candidates[chosen].last_seen = time.time()
             return chosen
 
-    async def report(self, proxy: str, success: bool):
-        if not proxy or proxy not in self.proxies: return
+    async def report(self, proxy: Optional[str], success: bool, latency_ms: Optional[float] = None, blocked: bool = False, proxy_class: ProxyClass = ProxyClass.GENERIC):
+        if not proxy:
+            return
         async with self.lock:
+            stats = self.proxies.setdefault(proxy_class, {}).get(proxy) or self.proxies.setdefault(ProxyClass.GENERIC, {}).get(proxy)
+            if not stats:
+                return
             if success:
-                self.proxies[proxy]["score"] = min(100.0, self.proxies[proxy]["score"] + 5.0)
+                stats.successes += 1
             else:
-                self.proxies[proxy]["score"] -= 15.0
-                self.proxies[proxy]["failures"] += 1
-                if self.proxies[proxy]["score"] <= 30.0:
-                    # metrics.proxy_evictions_total.inc()
-                    logger.warning("Proxy evicted due to low score", extra={"proxy": proxy})
+                stats.failures += 1
+            if blocked:
+                stats.blocks += 1
+            if latency_ms is not None:
+                stats.ewma_latency_ms = (0.8 * stats.ewma_latency_ms) + (0.2 * latency_ms)
+            if stats.score < 0.25:
+                logger.warning("Proxy score below active threshold", extra={"proxy": proxy, "score": stats.score, "class": proxy_class.value})
 
-# Fallback to single proxy if list not provided
 _env_proxy = os.environ.get("RESIDENTIAL_PROXY_URL")
 proxy_manager = ProxyManager([_env_proxy] if _env_proxy else [])
 
 # ------------------------------------------------------------------------
-# Layer 5: Session & Connection Pooling (Fast Path)
+# Layer 5: Session & Connection Pooling (Fetch Replay Fast Path)
 # ------------------------------------------------------------------------
 class CurlSessionPool:
-    TLS_BYPASS_DOMAINS = {"bunjang.co.kr", "bjn.co.kr", "musinsa.com"}
+    TLS_BYPASS_DOMAINS = {"bunjang.co.kr", "bjn.co.kr", "musinsa.com", "www.musinsa.com"}
 
     def __init__(self, max_sessions: int = 100):
         self.sessions: Dict[str, requests.AsyncSession] = {}
@@ -156,11 +236,10 @@ class CurlSessionPool:
             key = f"{domain}_{proxy}_{fingerprint['impersonate']}"
             if key not in self.sessions:
                 if len(self.sessions) >= self.max_sessions:
-                    oldest_key = list(self.sessions.keys())[0]
+                    oldest_key = next(iter(self.sessions))
                     old_client = self.sessions.pop(oldest_key)
-                    # Fire and forget cleanup
                     asyncio.create_task(old_client.close())
-                
+
                 base_domain = domain.replace("www.", "")
                 verify_tls = base_domain not in self.TLS_BYPASS_DOMAINS
                 self.sessions[key] = requests.AsyncSession(
@@ -168,7 +247,8 @@ class CurlSessionPool:
                     allow_redirects=True,
                     impersonate=fingerprint["impersonate"],
                     proxies={"http": proxy, "https": proxy} if proxy else None,
-                    verify=verify_tls 
+                    verify=verify_tls,
+                    http_version=2,
                 )
             return self.sessions[key]
 
@@ -190,441 +270,397 @@ class DomainRateLimiter:
     async def acquire(self, url: str):
         domain = urlparse(url).netloc
         async with self._semaphores[domain]:
-            await asyncio.sleep(random.uniform(0.05, 0.2)) 
+            await asyncio.sleep(random.uniform(0.05, 0.2))
             yield
 
 rate_limiter = DomainRateLimiter(max_concurrent_per_domain=3)
 
 # ------------------------------------------------------------------------
-# Layer 7: Advanced Browser Pool Manager (Queue-based, Self-healing)
+# Layer 7: WAF Detection & Strategy Routing
 # ------------------------------------------------------------------------
-@dataclass
-class WarmContext:
-    context: Any
-    created_at: float = field(default_factory=time.time)
-    uses: int = 0
+@dataclass(frozen=True)
+class WafDetection:
+    waf: ProxyClass = ProxyClass.GENERIC
+    confidence: float = 0.0
+    signals: Tuple[str, ...] = ()
 
-class PlaywrightPoolManager:
-    """단순하고 효율적인 브라우저 컨텍스트 관리자"""
-    _instance = None
-    _lock = asyncio.Lock()
 
-    def __init__(self, max_contexts: int = 5, browser_max_age_sec: int = 3600):
-        self.playwright = None
-        self.browser: Optional[Browser] = None
-        self.max_contexts = max_contexts
-        self.context_queue: asyncio.Queue[WarmContext] = asyncio.Queue(max_contexts)
-        self._browser_creation_lock = asyncio.Lock()
-        self._health_check_task: Optional[asyncio.Task] = None
-        self._browser_id = uuid.uuid4()
-        self._browser_created_at = time.time()
-        self.browser_max_age_sec = browser_max_age_sec
+class WafDetector:
+    SIGNATURES: Dict[ProxyClass, Tuple[str, ...]] = {
+        ProxyClass.CLOUDFLARE: ("cf-browser-verification", "cf-chl-", "turnstile", "challenge-platform", "checking if the site connection is secure", "cloudflare"),
+        ProxyClass.DATADOME: ("datadome", "dd_cookie", "dd-user-id", "datadome.co"),
+        ProxyClass.PERIMETERX: ("px-captcha", "perimeterx", "_px3", "_pxvid"),
+        ProxyClass.KASADA: ("kasada", "x-kpsdk", "kpsdk", "ips.js"),
+        ProxyClass.AKAMAI: ("akamai", "akamai bot manager", "_abck", "bm_sz"),
+        ProxyClass.IMPERVA: ("imperva", "incapsula", "visid_incap", "reese84"),
+        ProxyClass.SHAPE: ("shape security", "shapesecurity", "_ssg", "f5-"),
+    }
+    BLOCK_STATUSES = {401, 403, 407, 409, 418, 429, 503}
 
     @classmethod
-    async def get_instance(cls):
-        async with cls._lock:
-            if cls._instance is None:
-                cls._instance = cls()
-                await cls._instance.launch_browser()
-            return cls._instance
+    def detect(cls, html: str, status: int = 200, headers: Optional[dict] = None) -> WafDetection:
+        text = " ".join([html or "", " ".join(f"{k}={v}" for k, v in (headers or {}).items())]).lower()
+        best = WafDetection()
+        for waf, signatures in cls.SIGNATURES.items():
+            hits = tuple(sig for sig in signatures if sig in text)
+            if hits and len(hits) > len(best.signals):
+                best = WafDetection(waf=waf, confidence=min(1.0, 0.35 + 0.2 * len(hits)), signals=hits)
+        if best.confidence:
+            return best
+        if status in cls.BLOCK_STATUSES or (len(html or "") < 2000 and "window.location" in text):
+            return WafDetection(waf=ProxyClass.GENERIC, confidence=0.4, signals=(f"status:{status}",))
+        return best
 
-    async def launch_browser(self):
-        async with self._browser_creation_lock:
-            if self.browser and self.browser.is_connected():
-                return
+    @classmethod
+    def is_blocked(cls, html: str, status: int = 200, headers: Optional[dict] = None) -> bool:
+        detection = cls.detect(html, status, headers)
+        return detection.confidence >= 0.35
 
-            logger.info("Launching new browser instance...")
-            if self.playwright is None:
-                self.playwright = await async_playwright().start()
 
-            self.browser = await self.playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled", "--disable-gpu"
-                ]
-            )
-            self._browser_id = uuid.uuid4()
-            self._browser_created_at = time.time()
-            if not getattr(self.browser, "_disconnect_handler_registered", False):
-                self.browser.on("disconnected", self.on_browser_disconnected)
-                setattr(self.browser, "_disconnect_handler_registered", True)
-
-            if self._health_check_task is None:
-                self._health_check_task = asyncio.create_task(self._run_health_checks())
-
-            # Pre-warm contexts (데드락 방지 및 즉시 사용 가능 상태 유지)
-            while not self.context_queue.empty():
-                try:
-                    self.context_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-            
-            contexts = await asyncio.gather(
-                *(self._create_context(None) for _ in range(self.max_contexts))
-            )
-            for ctx in contexts:
-                self.context_queue.put_nowait(ctx)
-
-    def on_browser_disconnected(self):
-        logger.error("Browser disconnected unexpectedly! Triggering relaunch.", extra={"browser_id": str(self._browser_id)})
-        # Clear queue to prevent using contexts from dead browser
-        while not self.context_queue.empty():
-            try:
-                self.context_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-        asyncio.create_task(self.launch_browser())
-
-    async def _run_health_checks(self):
-        while True:
-            await asyncio.sleep(60) # Check every minute
-            if self.browser is None or not self.browser.is_connected():
-                logger.warning("Health check: Browser is not connected. Relaunching.")
-                self.on_browser_disconnected()
-                continue
-
-            if (time.time() - self._browser_created_at) > self.browser_max_age_sec:
-                logger.info("Browser has reached max age. Proactively recycling.", extra={"browser_id": str(self._browser_id)})
-                # Atomic switch: 기존 브라우저는 안전하게 draining 처리 후 백그라운드 교체
-                old_browser = self.browser
-                self.browser = None
-                asyncio.create_task(self._drain_and_close(old_browser))
-                await self.launch_browser()
-
-    async def _drain_and_close(self, old_browser: Optional[Browser]):
-        if not old_browser: return
-        logger.info("Draining old browser...")
-        await asyncio.sleep(10) # 진행 중인 작업이 완료될 수 있도록 유예 시간 제공
-        try:
-            if old_browser.is_connected():
-                await old_browser.close()
-        except Exception as e:
-            logger.error("Error closing drained browser", extra={"error": str(e)})
-
-    async def _create_context(self, proxy: Optional[str] = None) -> WarmContext:
-        if not self.browser or not self.browser.is_connected():
-            await self.launch_browser()
-        ctx = await self.browser.new_context(
-            user_agent=get_random_fingerprint()["user_agent"],
-            locale="ko-KR",
-            timezone_id="Asia/Seoul",
-            viewport={"width": 1920, "height": 1080}
-        )
-        return WarmContext(context=ctx)
-
-    @asynccontextmanager
-    async def get_context(self, proxy: Optional[str] = None):
-        if not self.browser or not self.browser.is_connected():
-            await self.launch_browser()
-            
-        warm_ctx = await asyncio.wait_for(self.context_queue.get(),timeout=10)
-        try:
-            warm_ctx.uses += 1
-            yield warm_ctx.context
-        finally:
-            if warm_ctx.uses > 20 or (time.time() - warm_ctx.created_at) > 600 or warm_ctx.context.is_closed():
-                if not warm_ctx.context.is_closed():
-                    await warm_ctx.context.close()
-                new_ctx = await self._create_context(proxy)
-                self.context_queue.put_nowait(new_ctx)
-            else:
-                self.context_queue.put_nowait(warm_ctx)
-
-    async def shutdown(self, recycle: bool = False):
-        logger.info(f"Shutting down browser pool... (Recycle: {recycle})")
-        if self._health_check_task and not recycle:
-            self._health_check_task.cancel()
-            self._health_check_task = None
-
-        while not self.context_queue.empty():
-            ctx = self.context_queue.get_nowait()
-            await ctx.context.close()
-
-        async with self._browser_creation_lock:
-            if self.browser:
-                await self.browser.close()
-                self.browser = None
-            if self.playwright and not recycle:
-                await self.playwright.stop()
-                self.playwright = None
-
-# ---안전한 데이터 파싱을 위한 Pydantic 스키마 ---
-class ProductFallbackSchema(BaseModel):
-    title: str = Field(description="상품의 정확한 이름")
-    price: str = Field(description="상품의 가격 (숫자 또는 쉼표 포함)")
-    currency: str = Field(description="통화 (예: KRW, USD)")
-    image_url: str = Field(
-        description="페이지 HTML의 'og:image', 'twitter:image' 또는 메인 상품의 고화질 <img> 태그 절대 경로 URL. 상대 경로는 절대 경로로 변환할 것. placeholder 서비스 절대 금지."
-    )
-    brand: str = Field(default="", description="상품의 브랜드 이름")
-    description: str = Field(default="", description="상품의 상세 설명 요약")
-
-# ------------------------------------------------------------------------
-# Layer 8: Anti-Bot & Extraction Quality Validation
-# ------------------------------------------------------------------------
 class AntiBotAnalyzer:
     @staticmethod
     def is_blocked(html: str, status: int = 200) -> bool:
-        if status in (401, 403, 429): return True
-        if not html: return False
-        
-        html_lower = html.lower()
-        signatures = [
-            "cf-browser-verification", "just a moment...", "challenge-platform",
-            "checking if the site connection is secure", "access denied", 
-            "datadome", "robot check", "px-captcha", "bot detection", "forbidden"
-        ]
-        if any(sig in html_lower for sig in signatures): return True
-        
-        # Entropy check: if body is too small but script is huge (JS challenge)
-        if len(html) < 2000 and "window.location=" in html_lower:
-            return True
-            
-        return False
+        return WafDetector.is_blocked(html, status)
+
+# ------------------------------------------------------------------------
+# Layer 8: Base Extractors & JSON Helpers
+# ------------------------------------------------------------------------
+WHITESPACE_PATTERN = re.compile(r"\s+")
+PRODUCT_ID_PATTERN = re.compile(r"(?:productNo|productId|goodsNo|goodsId|itemNo|itemId|styleId|sku)[\"'\s:=_-]+([A-Za-z0-9_-]{4,})", re.IGNORECASE)
+PATH_ID_PATTERN = re.compile(r"/(?:products?|goods|product|item|shop-goods)/(\d{4,})")
+
+
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return WHITESPACE_PATTERN.sub(" ", str(value)).strip()
+
+
+def _json_loads(raw: str | bytes) -> Any:
+    return orjson.loads(raw)
+
+
+def _iter_dicts(value: Any) -> Iterable[dict]:
+    queue = deque([value])
+    while queue:
+        current = queue.popleft()
+        if isinstance(current, dict):
+            yield current
+            queue.extend(current.values())
+        elif isinstance(current, list):
+            queue.extend(current)
+
+
+def _first_jmes(payload: Any, expressions: Iterable[str]) -> Any:
+    for expression in expressions:
+        value = jmespath.search(expression, payload)
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _get_node_text(node: Optional[Node]) -> str:
+    if not node:
+        return ""
+    return node.text(strip=True) or ""
+
+
+def _extract_script_json(tree: HTMLParser, selector: str) -> list[Any]:
+    payloads = []
+    for node in tree.css(selector):
+        raw = node.text(strip=True)
+        if not raw:
+            continue
+        try:
+            payloads.append(_json_loads(re.sub(r"[\x00-\x1f]", "", raw)))
+        except (orjson.JSONDecodeError, TypeError):
+            continue
+    return payloads
+
+
+def _normalize_product_payload(payload: Any, base_url: str, source: str) -> dict:
+    product = _first_jmes(payload, [
+        "data.product", "data.goods", "data.item", "product", "goods", "item", "props.pageProps.product",
+        "props.pageProps.goods", "props.pageProps.item", "props.pageProps.initialState.product",
+        "pageProps.product", "pageProps.goods", "entities.product", "payload.product",
+    ])
+    if not isinstance(product, dict):
+        product = next((candidate for candidate in _iter_dicts(payload) if _looks_like_product(candidate)), {})
+    if not product:
+        return {}
+
+    title = _first_jmes(product, ["name", "title", "productName", "goodsName", "itemName", "displayName", "goodsNm"])
+    price = _first_jmes(product, ["price", "salePrice", "normalPrice", "finalPrice", "discountedPrice", "goodsPrice", "sellPrice", "amount"])
+    brand = _first_jmes(product, ["brand.name", "brandName", "brand", "maker", "manufacturer"])
+    description = _first_jmes(product, ["description", "desc", "summary", "content", "shortDescription"])
+    currency = _first_jmes(product, ["currency", "priceCurrency", "currencyCode"])
+    availability = _first_jmes(product, ["availability", "stockStatus", "status", "saleStatus"])
+    image_url = _first_jmes(product, [
+        "image", "imageUrl", "thumbnail", "thumbnailUrl", "mainImage", "mainImageUrl", "images[0].url",
+        "images[0]", "imageUrls[0]", "media[0].url", "photos[0].url",
+    ])
+    if isinstance(image_url, list):
+        image_url = image_url[0] if image_url else ""
+    if isinstance(brand, dict):
+        brand = brand.get("name") or brand.get("brandName")
+
+    return {
+        "url": base_url,
+        "title": _clean_text(title),
+        "brand": _clean_text(brand),
+        "price": _clean_text(price),
+        "currency": _clean_text(currency) or "KRW",
+        "availability": _clean_text(availability),
+        "image_url": urljoin(base_url, _clean_text(image_url)) if image_url else "",
+        "description": _clean_text(description),
+        "source": source,
+    }
+
+
+def _looks_like_product(candidate: dict) -> bool:
+    keys = {str(key).lower() for key in candidate.keys()}
+    nameish = {"name", "title", "productname", "goodsname", "itemname", "displayname"}
+    priceish = {"price", "saleprice", "normalprice", "finalprice", "discountedprice", "goodsprice"}
+    imageish = {"image", "imageurl", "thumbnail", "thumbnailurl", "mainimage", "images", "imageurls"}
+    return bool(keys & nameish) and (bool(keys & priceish) or bool(keys & imageish))
+
+# ------------------------------------------------------------------------
+# Layer 9: Product API Auto Discovery
+# ------------------------------------------------------------------------
+class ProductApiDiscoverer:
+    DOMAIN_ENDPOINTS: Dict[str, Tuple[str, ...]] = {
+        "musinsa.com": ("/api2/goods/{product_id}", "/app/goods/{product_id}/0"),
+        "29cm.co.kr": ("/api/products/{product_id}", "/api/v4/products/{product_id}"),
+        "a-bly.com": ("/api/v2/goods/{product_id}", "/api/products/{product_id}"),
+        "zara.com": ("/itxrest/1/catalog/store/11719/category/0/product/{product_id}/detail",),
+        "hm.com": ("/hmwebservices/service/product/ko_KR/{product_id}",),
+        "bunjang.co.kr": ("/api/1/product/{product_id}/detail_info.json",),
+    }
+    GENERIC_ENDPOINTS = (
+        "/api/products/{product_id}",
+        "/api/product/{product_id}",
+        "/api/goods/{product_id}",
+        "/api2/goods/{product_id}",
+        "/graphql",
+    )
+
+    async def discover_and_fetch(self, url: str, html: str, final_url: str, fp: dict, proxy: Optional[str]) -> dict:
+        tree = HTMLParser(html)
+        hydration_payloads = HydrationExtractor.extract_payloads(tree)
+        product_ids = self._extract_product_ids(url, html, hydration_payloads)
+        if not product_ids:
+            return {}
+
+        domain = urlparse(final_url).netloc.replace("www.", "")
+        endpoints = self._endpoint_templates(domain)
+        for product_id in product_ids[:5]:
+            for template in endpoints:
+                api_url = urljoin(final_url, template.format(product_id=product_id))
+                payload = await self._fetch_json(api_url, final_url, fp, proxy, product_id)
+                if not payload:
+                    continue
+                data = _normalize_product_payload(payload, final_url, f"product-api:{urlparse(api_url).path}")
+                if QualityValidator.calculate_score(data) >= 0.65:
+                    return data
+        return {}
+
+    def _extract_product_ids(self, url: str, html: str, payloads: list[Any]) -> list[str]:
+        ids = []
+        parsed = urlparse(url)
+        ids.extend(value for values in parse_qs(parsed.query).values() for value in values if value.isdigit())
+        for match in PATH_ID_PATTERN.finditer(parsed.path):
+            ids.append(match.group(1))
+        for payload in payloads:
+            for candidate in _iter_dicts(payload):
+                for key in ("productNo", "productId", "goodsNo", "goodsId", "itemNo", "itemId", "styleId", "sku", "id"):
+                    value = candidate.get(key)
+                    if isinstance(value, (str, int)) and len(str(value)) >= 4:
+                        ids.append(str(value))
+        ids.extend(match.group(1) for match in PRODUCT_ID_PATTERN.finditer(html[:200000]))
+        return list(dict.fromkeys(ids))
+
+    def _endpoint_templates(self, domain: str) -> Tuple[str, ...]:
+        for key, endpoints in self.DOMAIN_ENDPOINTS.items():
+            if key in domain:
+                return endpoints + self.GENERIC_ENDPOINTS
+        return self.GENERIC_ENDPOINTS
+
+    async def _fetch_json(self, api_url: str, referer: str, fp: dict, proxy: Optional[str], product_id: str) -> Any:
+        domain = urlparse(api_url).netloc
+        client = await curl_pool.get_session(domain, fp, proxy)
+        headers = _build_headers(fp, accept="application/json, text/plain, */*", referer=referer)
+        if api_url.endswith("/graphql"):
+            body = {
+                "query": "query Product($id: ID!) { product(id: $id) { id name title price image imageUrl brand { name } description } }",
+                "variables": {"id": product_id},
+            }
+            response = await client.post(api_url, headers={**headers, "content-type": "application/json"}, data=orjson.dumps(body))
+        else:
+            response = await client.get(api_url, headers=headers)
+        if response.status_code >= 400 or not response.text:
+            return None
+        content_type = response.headers.get("content-type", "")
+        if "json" not in content_type and not response.text.lstrip().startswith(("{", "[")):
+            return None
+        try:
+            return _json_loads(response.content)
+        except (orjson.JSONDecodeError, TypeError):
+            return None
+
+product_api_discoverer = ProductApiDiscoverer()
+
+# ------------------------------------------------------------------------
+# Layer 10: Deterministic Extractors
+# ------------------------------------------------------------------------
+class HydrationExtractor:
+    SELECTORS = (
+        'script#__NEXT_DATA__',
+        'script#__NUXT_DATA__',
+        'script[id="__NEXT_DATA__"]',
+        'script[type="application/json"]',
+    )
+    JS_STATE_PATTERNS = (
+        re.compile(r"window\.__NUXT__\s*=\s*(\{.*?\})\s*;", re.DOTALL),
+        re.compile(r"window\.__INITIAL_STATE__\s*=\s*(\{.*?\})\s*;", re.DOTALL),
+        re.compile(r"window\.__APOLLO_STATE__\s*=\s*(\{.*?\})\s*;", re.DOTALL),
+        re.compile(r"window\.__RELAY_STORE__\s*=\s*(\{.*?\})\s*;", re.DOTALL),
+    )
+
+    @classmethod
+    def extract_payloads(cls, tree: HTMLParser) -> list[Any]:
+        payloads = []
+        for selector in cls.SELECTORS:
+            payloads.extend(_extract_script_json(tree, selector))
+        for script in tree.css("script"):
+            raw = script.text(strip=True)
+            if not raw or "__" not in raw:
+                continue
+            for pattern in cls.JS_STATE_PATTERNS:
+                match = pattern.search(raw)
+                if match:
+                    try:
+                        payloads.append(_json_loads(match.group(1)))
+                    except (orjson.JSONDecodeError, TypeError):
+                        continue
+        return payloads
+
+    @classmethod
+    def extract(cls, tree: HTMLParser, base_url: str) -> dict:
+        for payload in cls.extract_payloads(tree):
+            data = _normalize_product_payload(payload, base_url, "hydration-json")
+            if QualityValidator.calculate_score(data) >= 0.55:
+                return data
+        return {}
+
+
+class StructuredDataExtractor:
+    @classmethod
+    def extract(cls, tree: HTMLParser, base_url: str) -> dict:
+        products = cls._json_ld_products(tree)
+        product = products[0] if products else {}
+        offers = product.get("offers", {}) if isinstance(product, dict) else {}
+        if isinstance(offers, list):
+            offers = offers[0] if offers else {}
+        images = product.get("image", []) if isinstance(product, dict) else []
+        if isinstance(images, str):
+            images = [images]
+
+        title_node = tree.css_first("title")
+        data = {
+            "url": base_url,
+            "title": _clean_text(product.get("name") if isinstance(product, dict) else "") or cls._meta(tree, "og:title") or _get_node_text(title_node),
+            "brand": _clean_text(product.get("brand", {}).get("name") if isinstance(product.get("brand"), dict) else product.get("brand") if isinstance(product, dict) else ""),
+            "price": _clean_text(offers.get("price") if isinstance(offers, dict) else "") or cls._meta(tree, "product:price:amount") or cls._meta(tree, "og:price:amount"),
+            "currency": _clean_text(offers.get("priceCurrency") if isinstance(offers, dict) else "") or cls._meta(tree, "product:price:currency") or cls._meta(tree, "og:price:currency") or "KRW",
+            "availability": _clean_text(offers.get("availability") if isinstance(offers, dict) else "").split("/")[-1],
+            "image_url": "",
+            "description": _clean_text(product.get("description") if isinstance(product, dict) else "") or cls._meta(tree, "og:description") or cls._meta(tree, "description"),
+            "source": "structured-data",
+        }
+        image_url = _clean_text(images[0] if images else "") or cls._meta(tree, "og:image") or cls._meta(tree, "twitter:image") or cls._meta(tree, "image")
+        if not image_url:
+            for selector in ('img[id*="product"]', 'img[class*="product"]', ".product-image img"):
+                img = tree.css_first(selector)
+                if img and img.attributes.get("src"):
+                    image_url = img.attributes["src"]
+                    break
+        data["image_url"] = urljoin(base_url, image_url) if image_url else ""
+        return {k: v for k, v in data.items() if v or k in {"url", "source"}}
+
+    @classmethod
+    def _json_ld_products(cls, tree: HTMLParser) -> list[dict]:
+        products = []
+        for payload in _extract_script_json(tree, 'script[type="application/ld+json"]'):
+            for candidate in payload if isinstance(payload, list) else [payload]:
+                if isinstance(candidate, dict) and candidate.get("@type") == "Product":
+                    products.append(candidate)
+                elif isinstance(candidate, dict) and isinstance(candidate.get("@graph"), list):
+                    products.extend(item for item in candidate["@graph"] if isinstance(item, dict) and item.get("@type") == "Product")
+        return products
+
+    @staticmethod
+    def _meta(tree: HTMLParser, property_name: str) -> str:
+        selector = f'meta[property="{property_name}"], meta[name="{property_name}"], meta[itemprop="{property_name}"]'
+        meta = tree.css_first(selector)
+        return _clean_text(meta.attributes.get("content")) if meta else ""
+
+# ------------------------------------------------------------------------
+# Layer 11: Rule Engine & Quality Gate
+# ------------------------------------------------------------------------
+class RuleEngine:
+    @staticmethod
+    def apply(data: dict, final_url: str) -> dict:
+        normalized = {**data}
+        if normalized.get("image_url"):
+            normalized["image_url"] = urljoin(final_url, normalized["image_url"])
+        if "placeholder" in normalized.get("image_url", "").lower():
+            normalized["image_url"] = ""
+        if normalized.get("price"):
+            normalized["price"] = _clean_text(normalized["price"])
+        normalized.setdefault("currency", "KRW")
+        normalized.setdefault("url", final_url)
+        return normalized
+
 
 class QualityValidator:
     @staticmethod
     def calculate_score(data: dict) -> float:
         score = 1.0
-        if not data.get("title") or len(data["title"]) < 3: score -= 0.4
-        if not data.get("price"): score -= 0.2
-        if not data.get("image_url") or "placeholder" in data["image_url"].lower(): score -= 0.4
+        if not data.get("title") or len(str(data["title"])) < 3:
+            score -= 0.4
+        if not data.get("price"):
+            score -= 0.2
+        if not data.get("image_url") or "placeholder" in str(data["image_url"]).lower():
+            score -= 0.4
         return max(0.0, score)
 
 # ------------------------------------------------------------------------
-# Layer 9: DOM Reduction (Gemini Token & Cost Explosion Fix)
-# ------------------------------------------------------------------------
-def _minimize_html_for_llm(html: str) -> str:
-    soup = BeautifulSoup(html, 'lxml') # html.parser보다 빠름
-    
-    # 불필요한 노이즈 태그 완벽 제거
-    for tag in soup(['style', 'svg', 'path', 'nav', 'footer', 'iframe', 'noscript', 'form', 'button', 'header']):
-        tag.decompose()
-        
-    # 핵심 속성만 유지하여 토큰 절약
-    allowed_attrs = {'src', 'href', 'property', 'content'}
-    for tag in soup.find_all(True):
-        tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
-                
-    main_content = soup.find('main') or soup.find('article') or soup.find('body') or soup
-    minimized = str(main_content)
-    minimized = re.sub(r'\s+', ' ', minimized).strip()
-    return minimized[:15000] 
-
-# Gemini Client 싱글톤 관리로 매 요청마다 생성되는 비효율 개선
-_gemini_client_instance = None
-def _get_gemini_client():
-    global _gemini_client_instance
-    if _gemini_client_instance is None:
-        _gemini_client_instance = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
-    return _gemini_client_instance
-
-@with_llm_resilience(fallback_default=None)
-async def fallback_with_gemini(url: str, html_content: str):
-    client = _get_gemini_client()
-    
-    minimized_html = _minimize_html_for_llm(html_content)
-
-    prompt = f"""
-    Extract accurate product information from the provided HTML source of {url}.
-    If a value cannot be found, leave it empty. DO NOT guess.
-    
-    [HTML SOURCE]
-    {minimized_html}
-    """
-    logger.info(f"[{url}] Gemini HTML 기반 폴백 분석 시작 (최적화된 HTML 크기: {len(minimized_html)} chars)")
-    
-    response = await client.aio.models.generate_content(
-        model='gemini-2.5-flash', 
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ProductFallbackSchema, # Pydantic 스키마 강제
-            temperature=0.0 
-        )
-    )
-    data = response.parsed
-    
-    return {
-        "url": url,
-        "title": data.title,
-        "brand": data.brand,
-        "price": data.price,
-        "currency": data.currency,
-        "image_url": data.image_url,
-        "description": data.description,
-        "source": "gemini-html-fallback" 
-    }
-
-# ------------------------------------------------------------------------
-# Layer 10: Base Extractors & Core Functions
-# ------------------------------------------------------------------------
-WHITESPACE_PATTERN = re.compile(r'\s+')
-
-def _clean_text(value: str | None) -> str:
-    if not value:
-        return ""
-    return WHITESPACE_PATTERN.sub(' ', str(value)).strip()
-
-def _extract_json_ld_products(soup: BeautifulSoup) -> list[dict]:
-    products = []
-    scripts = soup.find_all('script', type='application/ld+json')
-    for script in scripts:
-        raw = script.string
-        if not raw: continue
-        try:
-            cleaned_raw = re.sub(r'[\x00-\x1f]', '', raw.strip())
-            payload = json.loads(cleaned_raw, strict=False)
-            candidates = payload if isinstance(payload, list) else [payload]
-            
-            for candidate in candidates:
-                if not isinstance(candidate, dict): continue
-                
-                if candidate.get("@type") == "Product":
-                    products.append(candidate)
-                elif candidate.get("@graph") and isinstance(candidate["@graph"], list):
-                    for item in candidate["@graph"]:
-                        if isinstance(item, dict) and item.get("@type") == "Product":
-                            products.append(item)
-        except (json.JSONDecodeError, TypeError, AttributeError):
-            continue
-            
-    return products
-
-def _extract_meta_content(soup: BeautifulSoup, property_name: str) -> str:
-    selector = f'meta[property="{property_name}"], meta[name="{property_name}"], meta[itemprop="{property_name}"]'
-    meta = soup.select_one(selector)
-    if meta and meta.get('content'):
-        return _clean_text(meta['content'])
-    return ""
-
-# ------------------------------------------------------------------------
-# Layer 10: Layered Retry & Network Pipeline
-# ------------------------------------------------------------------------
-async def _fetch_fast(url: str, proxy: str, fp: dict) -> Tuple[str, str, int]:
-    domain = urlparse(url).netloc
-    REFERERS = [
-        "https://www.google.com/",
-        "https://search.naver.com/",
-        "https://www.bing.com/",
-        "https://m.search.naver.com/",
-    ]
-    client = await curl_pool.get_session(domain, fp, proxy)
-    headers = {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "cache-control": "max-age=0",
-        "sec-fetch-dest": "document",
-        "sec-fetch-mode": "navigate",
-        "sec-fetch-site": "none",
-        "sec-fetch-user": "?1",
-        "upgrade-insecure-requests": "1",
-        "user-agent": fp["user_agent"],
-        "referer": random.choice(REFERERS),
-    }
-    response = await client.get(url, headers=headers)
-    return response.text, str(response.url), response.status_code
-
-async def _fetch_browser(url: str, proxy: str) -> Tuple[str, str]:
-    pool_manager = await PlaywrightPoolManager.get_instance()
-    async with pool_manager.get_context(proxy=proxy) as context:
-        page = await context.new_page()
-        try:
-            stealth = Stealth()
-            await stealth.apply_stealth_async(page)
-                    
-            # Optimized resource blocking
-            BLOCKED_TYPES = {"image", "media", "font"}
-            async def route_handler(route):
-                if route.request.resource_type in BLOCKED_TYPES:
-                    await route.abort()
-                else:
-                    await route.continue_()
-            
-            await page.route("**/*", route_handler)
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            
-            try:
-                await page.locator("body").wait_for(timeout=5000)
-                await page.wait_for_timeout(1000)
-            except Exception:
-                pass
-            
-            html = await page.content()
-            return html, page.url
-        finally:
-            await page.close()
-
-async def _execute_fetch_pipeline(url: str) -> dict:
-    """Executes a tiered fallback strategy for maximum success rate."""
-    fp = get_random_fingerprint()
-    proxy = await proxy_manager.get_proxy()
-
-    # Tier 1: Fast Path (curl-cffi)
-    try:
-        html, final_url, status = await _fetch_fast(url, proxy, fp)
-        if not AntiBotAnalyzer.is_blocked(html, status):
-            await proxy_manager.report(proxy, True)
-            metrics.success_total += 1
-            return {"html": html, "finalUrl": final_url}
-        
-        metrics.waf_blocks_total += 1
-        await proxy_manager.report(proxy, False)
-        logger.warning(f"Fast path blocked (status {status}), falling back to browser.", extra={"url": url})
-    except Exception as e:
-        metrics.retries_total += 1
-        await proxy_manager.report(proxy, False)
-        logger.warning("Fast path failed, falling back to browser.", extra={"url": url, "error": str(e)})
-
-    # Tier 2: Browser Path (Playwright)
-    proxy = await proxy_manager.get_proxy()
-    try:
-        html, final_url = await _fetch_browser(url, proxy)
-        metrics.success_total += 1
-        return {"html": html, "finalUrl": final_url}
-    except Exception as e:
-        metrics.retries_total += 1
-        await proxy_manager.report(proxy, False)
-        logger.error("Browser tier failed", extra={"url": url, "error": str(e)})
-        raise AllTiersFailedError(f"All network fetch tiers exhausted for {url}")
-
-def _extract_framework_data(soup: BeautifulSoup) -> dict:
-    """Next.js (__NEXT_DATA__) 및 Nuxt.js 전용 데이터 추출"""
-    data = {}
-    next_script = soup.find("script", id="__NEXT_DATA__")
-    if next_script and next_script.string:
-        try:
-            payload = json.loads(next_script.string)
-            props = payload.get("props", {}).get("pageProps", {})
-            product = props.get("product") or props.get("item") or props.get("initialState", {}).get("product")
-            if isinstance(product, dict):
-                data["title"] = product.get("name") or product.get("title")
-                data["price"] = product.get("price")
-                data["brand"] = product.get("brand")
-                if "images" in product and product["images"]:
-                    img = product["images"][0]
-                    data["image_url"] = img.get("url") if isinstance(img, dict) else img
-        except: pass
-    ssr_script = soup.find("script", {"data-n-head": "ssr"})
-    if ssr_script and ssr_script.string and "window.__NUXT__" in ssr_script.string:
-        try:
-            title_match = re.search(r'title\s*:\s*["\'](.+?)["\']', ssr_script.string)
-            if title_match: data["title"] = title_match.group(1)
-        except: pass
-    return {k: v for k, v in data.items() if v}
-
-# ------------------------------------------------------------------------
-# Layer 11: Site-Specific Extractor Plugins
+# Layer 12: Site-Specific Extractor Plugins
 # ------------------------------------------------------------------------
 class SiteExtractor:
-    """도메인별 특화 크롤링 훅을 제공하는 베이스 클래스"""
-    def extract(self, url: str, soup: BeautifulSoup, data: dict) -> dict:
+    """도메인별 direct Product API 훅을 제공하는 베이스 클래스"""
+    async def extract(self, url: str, html: str, tree: HTMLParser, data: dict, fp: dict, proxy: Optional[str]) -> dict:
         return data
 
-class BunjangExtractor(SiteExtractor):
-    def extract(self, url: str, soup: BeautifulSoup, data: dict) -> dict:
+
+class ApiFirstExtractor(SiteExtractor):
+    async def extract(self, url: str, html: str, tree: HTMLParser, data: dict, fp: dict, proxy: Optional[str]) -> dict:
+        api_data = await product_api_discoverer.discover_and_fetch(url, html, url, fp, proxy)
+        return api_data or data
+
+
+class MusinsaExtractor(ApiFirstExtractor): pass
+class ZaraExtractor(ApiFirstExtractor): pass
+class AblyExtractor(ApiFirstExtractor): pass
+class HMExtractor(ApiFirstExtractor): pass
+class TwentyNineCMExtractor(ApiFirstExtractor): pass
+
+
+class BunjangExtractor(ApiFirstExtractor):
+    async def extract(self, url: str, html: str, tree: HTMLParser, data: dict, fp: dict, proxy: Optional[str]) -> dict:
+        data = await super().extract(url, html, tree, data, fp, proxy)
         if "번개장터" in data.get("title", "") or data.get("title", "") == "취향을 잇는 거래":
-            data["title"] = "" 
+            data["title"] = ""
         if "중고거래" in data.get("description", "") or "번개장터" in data.get("description", ""):
             data["description"] = ""
         img = data.get("image_url", "").lower()
@@ -632,118 +668,166 @@ class BunjangExtractor(SiteExtractor):
             data["image_url"] = ""
         return data
 
+
 EXTRACTOR_REGISTRY: Dict[str, Type[SiteExtractor]] = {
+    "musinsa.com": MusinsaExtractor,
+    "zara.com": ZaraExtractor,
+    "a-bly.com": AblyExtractor,
+    "ably.team": AblyExtractor,
+    "hm.com": HMExtractor,
+    "29cm.co.kr": TwentyNineCMExtractor,
     "bunjang.co.kr": BunjangExtractor,
     "bjn.co.kr": BunjangExtractor,
 }
 
 # ------------------------------------------------------------------------
-# Layer 12: Distributed-Ready Facade
+# Layer 13: Layered Retry & Network Pipeline
+# ------------------------------------------------------------------------
+def _build_headers(fp: dict, accept: str = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8", referer: Optional[str] = None) -> Dict[str, str]:
+    headers = {
+        "accept": accept,
+        "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "max-age=0",
+        "sec-fetch-dest": "document" if "html" in accept else "empty",
+        "sec-fetch-mode": "navigate" if "html" in accept else "cors",
+        "sec-fetch-site": "none" if not referer else "same-origin",
+        "upgrade-insecure-requests": "1",
+        "user-agent": fp["user_agent"],
+    }
+    headers.update(fp.get("headers") or {})
+    if referer:
+        headers["referer"] = referer
+    else:
+        headers["referer"] = random.choice(["https://www.google.com/", "https://search.naver.com/", "https://www.bing.com/", "https://m.search.naver.com/"])
+    return headers
+
+
+async def _fetch_fast(url: str, proxy: Optional[str], fp: dict) -> Tuple[str, str, int, dict, float]:
+    domain = urlparse(url).netloc
+    client = await curl_pool.get_session(domain, fp, proxy)
+    started_at = time.perf_counter()
+    response = await client.get(url, headers=_build_headers(fp))
+    latency_ms = (time.perf_counter() - started_at) * 1000
+    return response.text, str(response.url), response.status_code, dict(response.headers), latency_ms
+
+
+async def _execute_fetch_pipeline(url: str) -> dict:
+    """curl-cffi fetch replay only: browser rendering is intentionally removed."""
+    fp = get_random_fingerprint()
+    waf_class = ProxyClass.GENERIC
+    proxy = await proxy_manager.get_proxy(waf_class)
+
+    for attempt in range(3):
+        try:
+            html, final_url, status, headers, latency_ms = await _fetch_fast(url, proxy, fp)
+            detection = WafDetector.detect(html, status, headers)
+            if detection.confidence < 0.35:
+                await proxy_manager.report(proxy, True, latency_ms, proxy_class=waf_class)
+                metrics.success_total += 1
+                return {"html": html, "finalUrl": final_url, "fingerprint": fp, "proxy": proxy}
+
+            metrics.waf_blocks_total += 1
+            waf_class = detection.waf
+            await proxy_manager.report(proxy, False, latency_ms, blocked=True, proxy_class=waf_class)
+            logger.warning("Fetch replay blocked; rerouting proxy pool", extra={"url": url, "waf": detection.waf.value, "signals": detection.signals})
+            proxy = await proxy_manager.get_proxy(waf_class)
+            fp = get_random_fingerprint()
+        except Exception as exc:
+            metrics.retries_total += 1
+            await proxy_manager.report(proxy, False, proxy_class=waf_class)
+            logger.warning("Fetch replay failed", extra={"url": url, "attempt": attempt + 1, "error": str(exc)})
+            proxy = await proxy_manager.get_proxy(waf_class)
+            fp = get_random_fingerprint()
+
+    raise AllTiersFailedError(f"All fetch replay attempts exhausted for {url}")
+
+# ------------------------------------------------------------------------
+# Layer 14: Optional LLM Fallback Guardrail
+# ------------------------------------------------------------------------
+async def fallback_with_gemini(url: str, html_content: str):
+    logger.warning("LLM fallback disabled by default; deterministic rule/API extraction did not meet quality gate", extra={"url": url, "html_hash": hashlib.sha256(html_content.encode("utf-8", errors="ignore")).hexdigest()})
+    return None
+
+# ------------------------------------------------------------------------
+# Layer 15: Distributed-Ready Facade
 # ------------------------------------------------------------------------
 async def scrape_product_metadata(url: str) -> dict:
     metrics.requests_total += 1
-    
+
     cached_result = await cache_manager.get(url)
     if cached_result:
         try:
             cached_result = json.loads(cached_result)
             metrics.success_total += 1
             return {**cached_result, "source": "cache"}
-        except: pass
+        except json.JSONDecodeError:
+            pass
 
     async with rate_limiter.acquire(url):
         final_url = url
-        html = "" 
-
+        html = ""
         try:
             page_data = await _execute_fetch_pipeline(url)
             html = page_data["html"]
             final_url = page_data["finalUrl"]
-            
-            soup = BeautifulSoup(html, 'lxml')
-            
-            # 1. Framework & Base Extraction
-            framework_data = _extract_framework_data(soup)
-            products = _extract_json_ld_products(soup)
-            product = products[0] if products else {}
+            fp = page_data["fingerprint"]
+            proxy = page_data["proxy"]
+            tree = HTMLParser(html)
 
-            offers = product.get("offers", {})
-            if isinstance(offers, list): offers = offers[0] if offers else {}
-            images = product.get("image", [])
-            if isinstance(images, str): images = [images]
-
-            price = framework_data.get("price") or _clean_text(str(offers.get("price") or _extract_meta_content(soup, "product:price:amount") or _extract_meta_content(soup, "og:price:amount")))
-            currency = _clean_text(str(offers.get("priceCurrency") or _extract_meta_content(soup, "product:price:currency") or _extract_meta_content(soup, "og:price:currency") or "KRW"))
-            availability = _clean_text(str(offers.get("availability") or "")).split("/")[-1]
-            
-            title = framework_data.get("title") or (_clean_text(product.get("name") or "") or _extract_meta_content(soup, "og:title") or (soup.find("title").get_text(strip=True) if soup.find("title") else ""))
-            
-            image_url = framework_data.get("image_url") or (_clean_text(images[0] if images else "") or _extract_meta_content(soup, "og:image") or _extract_meta_content(soup, "twitter:image") or _extract_meta_content(soup, "image"))
-            if not image_url:
-                for selector in ["img[id*='product']", "img[class*='product']", ".product-image img"]:
-                    img_tag = soup.select_one(selector)
-                    if img_tag and img_tag.get("src"):
-                        image_url = img_tag["src"]
-                        break
-
-            description = (_clean_text(product.get("description") or "") or _extract_meta_content(soup, "og:description") or _extract_meta_content(soup, "description"))
-            brand = framework_data.get("brand") or _clean_text(product.get("brand", {}).get("name") if isinstance(product.get("brand"), dict) else str(product.get("brand") or ""))
-            normalized_image_url = urljoin(final_url, image_url) if image_url else ""
-
-            extracted_data = {
-                "url": final_url,
-                "title": title,
-                "brand": brand,
-                "price": price,
-                "currency": currency,
-                "availability": availability,
-                "image_url": normalized_image_url,
-                "description": description,
-                "source": "json-ld/meta-tags",
-            }
-
-            # 2. Site-Specific Plugin Overrides
             domain = urlparse(final_url).netloc.replace("www.", "")
             extractor_cls = next((ext for key, ext in EXTRACTOR_REGISTRY.items() if key in domain), SiteExtractor)
-            extracted_data = extractor_cls().extract(final_url, soup, extracted_data)
 
-            # 3. Gemini Fallback Check
+            # Tier 1: Site plugin / direct Product API discovery.
+            extracted_data = await extractor_cls().extract(final_url, html, tree, {}, fp, proxy)
+            if QualityValidator.calculate_score(extracted_data) >= 0.7:
+                metrics.api_discovery_total += 1
+                extracted_data = RuleEngine.apply(extracted_data, final_url)
+                await cache_manager.set(url, extracted_data)
+                return extracted_data
+
+            # Tier 2: Hydration JSON extraction.
+            hydration_data = HydrationExtractor.extract(tree, final_url)
+            if QualityValidator.calculate_score(hydration_data) > QualityValidator.calculate_score(extracted_data):
+                extracted_data = hydration_data
+            if QualityValidator.calculate_score(extracted_data) >= 0.7:
+                metrics.hydration_total += 1
+                extracted_data = RuleEngine.apply(extracted_data, final_url)
+                await cache_manager.set(url, extracted_data)
+                return extracted_data
+
+            # Tier 3: JSON-LD / OpenGraph / Twitter Card / Schema.org.
+            structured_data = StructuredDataExtractor.extract(tree, final_url)
+            if QualityValidator.calculate_score(structured_data) > QualityValidator.calculate_score(extracted_data):
+                extracted_data = structured_data
+            extracted_data = RuleEngine.apply(extracted_data, final_url)
+
+            # Tier 4: LLM only for severely low quality after deterministic extraction.
             quality_score = QualityValidator.calculate_score(extracted_data)
-            if quality_score < 0.7:
-                logger.info("Extraction quality low, triggering LLM fallback", extra={"score": quality_score, "url": url})
-                
-                if AntiBotAnalyzer.is_blocked(html):
+            if quality_score < 0.3:
+                if WafDetector.is_blocked(html):
                     raise BlockedError("WAF block detected")
-                
-                gemini_result = await fallback_with_gemini(url, html) 
-                if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
+                gemini_result = await fallback_with_gemini(final_url, html)
+                if gemini_result and QualityValidator.calculate_score(gemini_result) >= 0.7:
                     metrics.fallback_llm_total += 1
                     await cache_manager.set(url, gemini_result)
                     return gemini_result
 
+            metrics.structured_data_total += 1
             await cache_manager.set(url, extracted_data)
             return extracted_data
-        except Exception as e:
-            logger.error("Extraction pipeline failed", extra={"url": url, "error": str(e)})
-            if html and len(html.strip()) > 100:
-                if AntiBotAnalyzer.is_blocked(html):
-                    raise ValueError("Blocked by WAF.")
-                
-                gemini_result = await fallback_with_gemini(url, html)
-                if gemini_result and gemini_result.get("title") and gemini_result.get("image_url"):
+        except Exception as exc:
+            logger.error("Extraction pipeline failed", extra={"url": url, "error": str(exc)})
+            if html and len(html.strip()) > 100 and not WafDetector.is_blocked(html):
+                gemini_result = await fallback_with_gemini(final_url, html)
+                if gemini_result and QualityValidator.calculate_score(gemini_result) >= 0.7:
                     metrics.fallback_llm_total += 1
                     await cache_manager.set(url, gemini_result)
                     return gemini_result
-            raise ValueError("Extraction failed.")
+            raise ValueError("Extraction failed.") from exc
 
 # ------------------------------------------------------------------------
-# Resource Cleanup Hooks (Call these on Fastapi lifespan shutdown)
+# Resource Cleanup Hooks (Call these on FastAPI lifespan shutdown)
 # ------------------------------------------------------------------------
 async def cleanup_crawler_resources():
     logger.info("Cleaning up crawler resources...")
     await curl_pool.close_all()
-    try:
-        pool = await PlaywrightPoolManager.get_instance()
-        await pool.shutdown()
-    except Exception as e:
-        logger.error("Error shutting down browser pool", extra={"error": str(e)})
