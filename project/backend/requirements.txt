@@ -23,4 +23,3 @@ selectolax
 orjson
 jmespath
 msgspec
-browserforge

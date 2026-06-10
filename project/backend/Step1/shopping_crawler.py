@@ -16,7 +16,6 @@ from urllib.parse import parse_qs, urljoin, urlparse
 import curl_cffi.requests as requests
 import jmespath
 import orjson
-from browserforge.fingerprints import FingerprintGenerator
 from selectolax.parser import HTMLParser, Node
 
 # ------------------------------------------------------------------------
@@ -47,67 +46,44 @@ class CrawlerMetrics:
 metrics = CrawlerMetrics()
 
 # ------------------------------------------------------------------------
-# Layer 2: BrowserForge Identity & Fetch Replay Profiles
+# Layer 2: Fetch Replay Identity Profiles
 # ------------------------------------------------------------------------
-FINGERPRINT_GENERATOR = FingerprintGenerator()
-FALLBACK_FINGERPRINT_PROFILES = [
+# curl-cffi can align TLS/HTTP2 fingerprints through ``impersonate``, but it
+# does not execute JavaScript. Keep this layer honest: these profiles provide
+# coherent request headers and cookie continuity only; they are not a substitute
+# for navigator/screen/canvas/WebGL/audio signals on high-friction WAFs.
+FETCH_REPLAY_PROFILES = [
     {
+        "name": "chrome-windows",
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
         "impersonate": "chrome124",
-        "headers": {},
+        "headers": {
+            "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+        },
     },
     {
+        "name": "chrome-macos",
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "impersonate": "chrome124",
+        "headers": {
+            "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"macOS"',
+        },
+    },
+    {
+        "name": "safari-macos",
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
         "impersonate": "safari_18_0",
         "headers": {},
     },
 ]
-CURL_IMPERSONATES = ("chrome124", "chrome123", "chrome120", "safari17_4_1", "safari15_5")
-
-
-def _fingerprint_value(obj: Any, *names: str) -> Any:
-    for name in names:
-        if isinstance(obj, dict) and name in obj:
-            return obj[name]
-        if hasattr(obj, name):
-            return getattr(obj, name)
-    return None
-
-
-def _fingerprint_headers(fp: Any) -> Dict[str, str]:
-    navigator = _fingerprint_value(fp, "navigator") or {}
-    headers = _fingerprint_value(fp, "headers") or {}
-    user_agent = _fingerprint_value(navigator, "userAgent", "user_agent") or _fingerprint_value(fp, "userAgent", "user_agent")
-    client_hints = _fingerprint_value(navigator, "userAgentData", "user_agent_data") or {}
-
-    result = {str(k): str(v) for k, v in dict(headers).items()} if isinstance(headers, dict) else {}
-    if user_agent:
-        result.setdefault("user-agent", str(user_agent))
-    brands = _fingerprint_value(client_hints, "brands")
-    platform = _fingerprint_value(client_hints, "platform")
-    mobile = _fingerprint_value(client_hints, "mobile")
-    if brands and isinstance(brands, list):
-        result.setdefault("sec-ch-ua", ", ".join(f'"{b.get("brand")}";v="{b.get("version")}"' for b in brands if isinstance(b, dict)))
-    if platform:
-        result.setdefault("sec-ch-ua-platform", f'"{platform}"')
-    if mobile is not None:
-        result.setdefault("sec-ch-ua-mobile", "?1" if mobile else "?0")
-    return result
 
 
 def get_random_fingerprint() -> dict:
-    try:
-        fp = FINGERPRINT_GENERATOR.generate()
-    except Exception as exc:
-        logger.warning("BrowserForge fingerprint generation failed; using static curl-cffi profile", extra={"error": str(exc)})
-        return random.choice(FALLBACK_FINGERPRINT_PROFILES)
-
-    headers = _fingerprint_headers(fp)
-    return {
-        "user_agent": headers.get("user-agent", random.choice(FALLBACK_FINGERPRINT_PROFILES)["user_agent"]),
-        "impersonate": random.choice(CURL_IMPERSONATES),
-        "headers": headers,
-    }
+    return random.choice(FETCH_REPLAY_PROFILES).copy()
 
 # ------------------------------------------------------------------------
 # Layer 3: Distributed State & Caching Abstraction
@@ -149,8 +125,16 @@ class ProxyClass(str, Enum):
     SHAPE = "shape"
 
 
+class ProxyNetwork(str, Enum):
+    RESIDENTIAL = "residential"
+    MOBILE = "mobile"
+    DATACENTER = "datacenter"
+
+
 @dataclass
 class ProxyStats:
+    network: ProxyNetwork = ProxyNetwork.RESIDENTIAL
+    reputation_score: float = 0.75
     ewma_latency_ms: float = 750.0
     successes: int = 1
     failures: int = 1
@@ -172,25 +156,41 @@ class ProxyStats:
 
     @property
     def score(self) -> float:
+        # IP reputation and network class are more predictive than raw latency
+        # for Korean shopping domains. Latency remains a tie-breaker only.
         block_score = 1.0 - self.block_rate
-        return (0.5 * self.success_rate) + (0.3 * self.latency_score) + (0.2 * block_score)
+        return (0.4 * self.reputation_score) + (0.3 * self.success_rate) + (0.2 * block_score) + (0.1 * self.latency_score)
 
 
 class ProxyManager:
-    """EWMA latency, success rate, and WAF-specific block-rate based proxy router."""
+    """Routes by network quality first (mobile/residential/datacenter), then WAF pool health."""
     def __init__(self, raw_proxies: List[str]):
-        self.proxies: Dict[ProxyClass, Dict[str, ProxyStats]] = {klass: {} for klass in ProxyClass}
+        self.proxies: Dict[ProxyNetwork, Dict[ProxyClass, Dict[str, ProxyStats]]] = {
+            network: {klass: {} for klass in ProxyClass} for network in ProxyNetwork
+        }
         self.lock = asyncio.Lock()
         for raw in raw_proxies:
             if raw:
-                self.add_proxy(raw)
+                self.add_proxy(raw, ProxyNetwork.RESIDENTIAL)
 
-    def add_proxy(self, proxy: str, proxy_class: ProxyClass = ProxyClass.GENERIC):
-        self.proxies.setdefault(proxy_class, {})[proxy] = ProxyStats()
+    def add_proxy(self, proxy: str, network: ProxyNetwork = ProxyNetwork.RESIDENTIAL, proxy_class: ProxyClass = ProxyClass.GENERIC, reputation_score: Optional[float] = None):
+        if reputation_score is None:
+            reputation_score = {
+                ProxyNetwork.MOBILE: 0.95,
+                ProxyNetwork.RESIDENTIAL: 0.85,
+                ProxyNetwork.DATACENTER: 0.25,
+            }[network]
+        self.proxies.setdefault(network, {}).setdefault(proxy_class, {})[proxy] = ProxyStats(network=network, reputation_score=reputation_score)
 
-    async def get_proxy(self, proxy_class: ProxyClass = ProxyClass.GENERIC) -> Optional[str]:
+    async def get_proxy(self, proxy_class: ProxyClass = ProxyClass.GENERIC, network: ProxyNetwork = ProxyNetwork.RESIDENTIAL) -> Optional[str]:
         async with self.lock:
-            candidates = self.proxies.get(proxy_class, {}) or self.proxies.get(ProxyClass.GENERIC, {})
+            class_pool = self.proxies.get(network, {}).get(proxy_class, {})
+            generic_pool = self.proxies.get(network, {}).get(ProxyClass.GENERIC, {})
+            candidates = class_pool or generic_pool
+
+            # Never silently downgrade high-friction domains to datacenter. If
+            # mobile/residential is empty, return None so caller can fail fast or
+            # choose a browser/API worker instead of burning bad IP reputation.
             valid = [(proxy, stats) for proxy, stats in candidates.items() if stats.score >= 0.25]
             if not valid:
                 return None
@@ -199,26 +199,50 @@ class ProxyManager:
             candidates[chosen].last_seen = time.time()
             return chosen
 
-    async def report(self, proxy: Optional[str], success: bool, latency_ms: Optional[float] = None, blocked: bool = False, proxy_class: ProxyClass = ProxyClass.GENERIC):
+    async def report(
+        self,
+        proxy: Optional[str],
+        success: bool,
+        latency_ms: Optional[float] = None,
+        blocked: bool = False,
+        proxy_class: ProxyClass = ProxyClass.GENERIC,
+        network: ProxyNetwork = ProxyNetwork.RESIDENTIAL,
+    ):
         if not proxy:
             return
         async with self.lock:
-            stats = self.proxies.setdefault(proxy_class, {}).get(proxy) or self.proxies.setdefault(ProxyClass.GENERIC, {}).get(proxy)
+            stats = self.proxies.setdefault(network, {}).setdefault(proxy_class, {}).get(proxy)
+            if not stats:
+                stats = self.proxies.setdefault(network, {}).setdefault(ProxyClass.GENERIC, {}).get(proxy)
             if not stats:
                 return
             if success:
                 stats.successes += 1
+                stats.reputation_score = min(1.0, stats.reputation_score + 0.01)
             else:
                 stats.failures += 1
+                stats.reputation_score = max(0.0, stats.reputation_score - (0.12 if blocked else 0.03))
             if blocked:
                 stats.blocks += 1
             if latency_ms is not None:
                 stats.ewma_latency_ms = (0.8 * stats.ewma_latency_ms) + (0.2 * latency_ms)
             if stats.score < 0.25:
-                logger.warning("Proxy score below active threshold", extra={"proxy": proxy, "score": stats.score, "class": proxy_class.value})
+                logger.warning("Proxy score below active threshold", extra={"proxy": proxy, "score": stats.score, "class": proxy_class.value, "network": network.value})
 
-_env_proxy = os.environ.get("RESIDENTIAL_PROXY_URL")
-proxy_manager = ProxyManager([_env_proxy] if _env_proxy else [])
+
+def _split_proxy_env(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    return [proxy.strip() for proxy in re.split(r"[,\n]", value) if proxy.strip()]
+
+
+proxy_manager = ProxyManager([])
+for _proxy in _split_proxy_env(os.environ.get("RESIDENTIAL_PROXY_URLS") or os.environ.get("RESIDENTIAL_PROXY_URL")):
+    proxy_manager.add_proxy(_proxy, ProxyNetwork.RESIDENTIAL)
+for _proxy in _split_proxy_env(os.environ.get("MOBILE_PROXY_URLS") or os.environ.get("MOBILE_PROXY_URL")):
+    proxy_manager.add_proxy(_proxy, ProxyNetwork.MOBILE)
+for _proxy in _split_proxy_env(os.environ.get("DATACENTER_PROXY_URLS") or os.environ.get("DATACENTER_PROXY_URL")):
+    proxy_manager.add_proxy(_proxy, ProxyNetwork.DATACENTER)
 
 # ------------------------------------------------------------------------
 # Layer 5: Session & Connection Pooling (Fetch Replay Fast Path)
@@ -274,6 +298,120 @@ class DomainRateLimiter:
             yield
 
 rate_limiter = DomainRateLimiter(max_concurrent_per_domain=3)
+
+# ------------------------------------------------------------------------
+# Layer 6.5: Proactive Domain Strategy Routing
+# ------------------------------------------------------------------------
+class TransportMode(str, Enum):
+    CURL_FETCH_REPLAY = "curl_fetch_replay"
+    DIRECT_API = "direct_api"
+    BROWSER_REPLAY_REQUIRED = "browser_replay_required"
+
+
+@dataclass(frozen=True)
+class SiteStrategy:
+    name: str
+    domains: Tuple[str, ...]
+    preferred_network: ProxyNetwork = ProxyNetwork.RESIDENTIAL
+    expected_waf: ProxyClass = ProxyClass.GENERIC
+    transport: TransportMode = TransportMode.CURL_FETCH_REPLAY
+    api_first: bool = False
+    allow_generic_api_guess: bool = False
+    endpoint_templates: Tuple[str, ...] = ()
+    id_path_patterns: Tuple[re.Pattern, ...] = ()
+    needs_cookie_continuity: bool = True
+    notes: str = ""
+
+
+class StrategyRouter:
+    DEFAULT = SiteStrategy(
+        name="default",
+        domains=(),
+        preferred_network=ProxyNetwork.RESIDENTIAL,
+        allow_generic_api_guess=True,
+        id_path_patterns=(re.compile(r"/(?:products?|goods|product|item|shop-goods)/(\d{4,})"),),
+    )
+    PROFILES: Tuple[SiteStrategy, ...] = (
+        SiteStrategy(
+            name="musinsa",
+            domains=("musinsa.com",),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            expected_waf=ProxyClass.AKAMAI,
+            api_first=True,
+            endpoint_templates=("/api2/goods/{product_id}", "/app/goods/{product_id}/0"),
+            id_path_patterns=(re.compile(r"/(?:products?|goods)/(\d{4,})"),),
+        ),
+        SiteStrategy(
+            name="29cm",
+            domains=("29cm.co.kr",),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            api_first=True,
+            endpoint_templates=("/api/products/{product_id}", "/api/v4/products/{product_id}"),
+            id_path_patterns=(re.compile(r"/(?:products?|goods)/(\d{4,})"),),
+        ),
+        SiteStrategy(
+            name="zara",
+            domains=("zara.com",),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            api_first=True,
+            endpoint_templates=("/itxrest/1/catalog/store/11719/category/0/product/{product_id}/detail",),
+            id_path_patterns=(re.compile(r"-p(\d+)\.html"), re.compile(r"/(\d{5,})(?:[/?#]|$)")),
+        ),
+        SiteStrategy(
+            name="hm",
+            domains=("hm.com",),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            api_first=True,
+            endpoint_templates=("/hmwebservices/service/product/ko_KR/{product_id}",),
+            id_path_patterns=(re.compile(r"productpage\.(\d+)\.html"), re.compile(r"/(\d{5,})(?:[/?#]|$)")),
+        ),
+        SiteStrategy(
+            name="ably",
+            domains=("a-bly.com", "ably.team"),
+            preferred_network=ProxyNetwork.MOBILE,
+            expected_waf=ProxyClass.DATADOME,
+            api_first=True,
+            endpoint_templates=("/api/v2/goods/{product_id}", "/api/products/{product_id}"),
+            id_path_patterns=(re.compile(r"/(?:goods|products)/(\d{4,})"),),
+            notes="Mobile/residential identity is more important than latency for Ably.",
+        ),
+        SiteStrategy(
+            name="kream",
+            domains=("kream.co.kr",),
+            preferred_network=ProxyNetwork.MOBILE,
+            expected_waf=ProxyClass.KASADA,
+            transport=TransportMode.BROWSER_REPLAY_REQUIRED,
+            api_first=True,
+            endpoint_templates=("/api/p/products/{product_id}", "/api/products/{product_id}", "/api/p/products/{product_id}/details"),
+            id_path_patterns=(re.compile(r"/products/(\d{4,})"),),
+            notes="Many product pages ship sparse HTML; use reverse-engineered API or a Camoufox/Patchright/Nodriver worker when API replay fails.",
+        ),
+        SiteStrategy(
+            name="wconcept",
+            domains=("wconcept.co.kr",),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            expected_waf=ProxyClass.AKAMAI,
+            api_first=True,
+            endpoint_templates=("/api/product/v1/products/{product_id}", "/api/products/{product_id}"),
+            id_path_patterns=(re.compile(r"/(?:Product|products?)/(\d{4,})", re.IGNORECASE),),
+        ),
+        SiteStrategy(
+            name="bunjang",
+            domains=("bunjang.co.kr", "bjn.co.kr"),
+            preferred_network=ProxyNetwork.RESIDENTIAL,
+            api_first=True,
+            endpoint_templates=("/api/1/product/{product_id}/detail_info.json",),
+            id_path_patterns=(re.compile(r"/products/(\d{4,})"),),
+        ),
+    )
+
+    @classmethod
+    def for_url(cls, url: str) -> SiteStrategy:
+        domain = urlparse(url).netloc.replace("www.", "")
+        for profile in cls.PROFILES:
+            if any(key in domain for key in profile.domains):
+                return profile
+        return cls.DEFAULT
 
 # ------------------------------------------------------------------------
 # Layer 7: WAF Detection & Strategy Routing
@@ -425,17 +563,9 @@ def _looks_like_product(candidate: dict) -> bool:
     return bool(keys & nameish) and (bool(keys & priceish) or bool(keys & imageish))
 
 # ------------------------------------------------------------------------
-# Layer 9: Product API Auto Discovery
+# Layer 9: Product API Discovery / Site API Replay
 # ------------------------------------------------------------------------
 class ProductApiDiscoverer:
-    DOMAIN_ENDPOINTS: Dict[str, Tuple[str, ...]] = {
-        "musinsa.com": ("/api2/goods/{product_id}", "/app/goods/{product_id}/0"),
-        "29cm.co.kr": ("/api/products/{product_id}", "/api/v4/products/{product_id}"),
-        "a-bly.com": ("/api/v2/goods/{product_id}", "/api/products/{product_id}"),
-        "zara.com": ("/itxrest/1/catalog/store/11719/category/0/product/{product_id}/detail",),
-        "hm.com": ("/hmwebservices/service/product/ko_KR/{product_id}",),
-        "bunjang.co.kr": ("/api/1/product/{product_id}/detail_info.json",),
-    }
     GENERIC_ENDPOINTS = (
         "/api/products/{product_id}",
         "/api/product/{product_id}",
@@ -444,46 +574,55 @@ class ProductApiDiscoverer:
         "/graphql",
     )
 
-    async def discover_and_fetch(self, url: str, html: str, final_url: str, fp: dict, proxy: Optional[str]) -> dict:
-        tree = HTMLParser(html)
-        hydration_payloads = HydrationExtractor.extract_payloads(tree)
-        product_ids = self._extract_product_ids(url, html, hydration_payloads)
+    async def discover_and_fetch(self, url: str, html: str, final_url: str, fp: dict, proxy: Optional[str], strategy: Optional[SiteStrategy] = None) -> dict:
+        strategy = strategy or StrategyRouter.for_url(final_url)
+        tree = HTMLParser(html) if html else None
+        hydration_payloads = HydrationExtractor.extract_payloads(tree) if tree else []
+        product_ids = self._extract_product_ids(url, html, hydration_payloads, strategy)
+        return await self.fetch_from_strategy(final_url, fp, proxy, strategy, product_ids)
+
+    async def fetch_from_strategy(self, url: str, fp: dict, proxy: Optional[str], strategy: SiteStrategy, product_ids: Optional[list[str]] = None) -> dict:
+        product_ids = product_ids or self._extract_product_ids(url, "", [], strategy)
         if not product_ids:
             return {}
 
-        domain = urlparse(final_url).netloc.replace("www.", "")
-        endpoints = self._endpoint_templates(domain)
+        endpoints = self._endpoint_templates(strategy)
+        if not endpoints:
+            return {}
+
         for product_id in product_ids[:5]:
             for template in endpoints:
-                api_url = urljoin(final_url, template.format(product_id=product_id))
-                payload = await self._fetch_json(api_url, final_url, fp, proxy, product_id)
+                api_url = urljoin(url, template.format(product_id=product_id))
+                payload = await self._fetch_json(api_url, url, fp, proxy, product_id)
                 if not payload:
                     continue
-                data = _normalize_product_payload(payload, final_url, f"product-api:{urlparse(api_url).path}")
+                data = _normalize_product_payload(payload, url, f"site-api:{strategy.name}:{urlparse(api_url).path}")
                 if QualityValidator.calculate_score(data) >= 0.65:
                     return data
         return {}
 
-    def _extract_product_ids(self, url: str, html: str, payloads: list[Any]) -> list[str]:
+    def _extract_product_ids(self, url: str, html: str, payloads: list[Any], strategy: SiteStrategy) -> list[str]:
         ids = []
         parsed = urlparse(url)
         ids.extend(value for values in parse_qs(parsed.query).values() for value in values if value.isdigit())
-        for match in PATH_ID_PATTERN.finditer(parsed.path):
-            ids.append(match.group(1))
+        for pattern in strategy.id_path_patterns or (PATH_ID_PATTERN,):
+            ids.extend(match.group(1) for match in pattern.finditer(parsed.path))
         for payload in payloads:
             for candidate in _iter_dicts(payload):
                 for key in ("productNo", "productId", "goodsNo", "goodsId", "itemNo", "itemId", "styleId", "sku", "id"):
                     value = candidate.get(key)
                     if isinstance(value, (str, int)) and len(str(value)) >= 4:
                         ids.append(str(value))
-        ids.extend(match.group(1) for match in PRODUCT_ID_PATTERN.finditer(html[:200000]))
+        if html:
+            ids.extend(match.group(1) for match in PRODUCT_ID_PATTERN.finditer(html[:200000]))
         return list(dict.fromkeys(ids))
 
-    def _endpoint_templates(self, domain: str) -> Tuple[str, ...]:
-        for key, endpoints in self.DOMAIN_ENDPOINTS.items():
-            if key in domain:
-                return endpoints + self.GENERIC_ENDPOINTS
-        return self.GENERIC_ENDPOINTS
+    def _endpoint_templates(self, strategy: SiteStrategy) -> Tuple[str, ...]:
+        # Known shopping domains should use maintained, reverse-engineered BFF/API
+        # profiles. Blind generic probing is reserved for unknown domains only.
+        if strategy.endpoint_templates:
+            return strategy.endpoint_templates + (self.GENERIC_ENDPOINTS if strategy.allow_generic_api_guess else ())
+        return self.GENERIC_ENDPOINTS if strategy.allow_generic_api_guess else ()
 
     async def _fetch_json(self, api_url: str, referer: str, fp: dict, proxy: Optional[str], product_id: str) -> Any:
         domain = urlparse(api_url).netloc
@@ -645,7 +784,8 @@ class SiteExtractor:
 
 class ApiFirstExtractor(SiteExtractor):
     async def extract(self, url: str, html: str, tree: HTMLParser, data: dict, fp: dict, proxy: Optional[str]) -> dict:
-        api_data = await product_api_discoverer.discover_and_fetch(url, html, url, fp, proxy)
+        strategy = StrategyRouter.for_url(url)
+        api_data = await product_api_discoverer.discover_and_fetch(url, html, url, fp, proxy, strategy)
         return api_data or data
 
 
@@ -654,6 +794,8 @@ class ZaraExtractor(ApiFirstExtractor): pass
 class AblyExtractor(ApiFirstExtractor): pass
 class HMExtractor(ApiFirstExtractor): pass
 class TwentyNineCMExtractor(ApiFirstExtractor): pass
+class KreamExtractor(ApiFirstExtractor): pass
+class WConceptExtractor(ApiFirstExtractor): pass
 
 
 class BunjangExtractor(ApiFirstExtractor):
@@ -676,6 +818,8 @@ EXTRACTOR_REGISTRY: Dict[str, Type[SiteExtractor]] = {
     "ably.team": AblyExtractor,
     "hm.com": HMExtractor,
     "29cm.co.kr": TwentyNineCMExtractor,
+    "kream.co.kr": KreamExtractor,
+    "wconcept.co.kr": WConceptExtractor,
     "bunjang.co.kr": BunjangExtractor,
     "bjn.co.kr": BunjangExtractor,
 }
@@ -711,34 +855,38 @@ async def _fetch_fast(url: str, proxy: Optional[str], fp: dict) -> Tuple[str, st
     return response.text, str(response.url), response.status_code, dict(response.headers), latency_ms
 
 
-async def _execute_fetch_pipeline(url: str) -> dict:
-    """curl-cffi fetch replay only: browser rendering is intentionally removed."""
+async def _execute_fetch_pipeline(url: str, strategy: Optional[SiteStrategy] = None) -> dict:
+    """curl-cffi fetch replay with proactive site strategy and proxy-network routing."""
+    strategy = strategy or StrategyRouter.for_url(url)
     fp = get_random_fingerprint()
-    waf_class = ProxyClass.GENERIC
-    proxy = await proxy_manager.get_proxy(waf_class)
+    waf_class = strategy.expected_waf
+    network = strategy.preferred_network
+    proxy = await proxy_manager.get_proxy(waf_class, network)
 
     for attempt in range(3):
         try:
             html, final_url, status, headers, latency_ms = await _fetch_fast(url, proxy, fp)
             detection = WafDetector.detect(html, status, headers)
             if detection.confidence < 0.35:
-                await proxy_manager.report(proxy, True, latency_ms, proxy_class=waf_class)
+                await proxy_manager.report(proxy, True, latency_ms, proxy_class=waf_class, network=network)
                 metrics.success_total += 1
                 return {"html": html, "finalUrl": final_url, "fingerprint": fp, "proxy": proxy}
 
             metrics.waf_blocks_total += 1
             waf_class = detection.waf
-            await proxy_manager.report(proxy, False, latency_ms, blocked=True, proxy_class=waf_class)
-            logger.warning("Fetch replay blocked; rerouting proxy pool", extra={"url": url, "waf": detection.waf.value, "signals": detection.signals})
-            proxy = await proxy_manager.get_proxy(waf_class)
+            await proxy_manager.report(proxy, False, latency_ms, blocked=True, proxy_class=waf_class, network=network)
+            logger.warning("Fetch replay blocked; rerouting within preselected network pool", extra={"url": url, "site": strategy.name, "network": network.value, "waf": detection.waf.value, "signals": detection.signals})
+            proxy = await proxy_manager.get_proxy(waf_class, network)
             fp = get_random_fingerprint()
         except Exception as exc:
             metrics.retries_total += 1
-            await proxy_manager.report(proxy, False, proxy_class=waf_class)
-            logger.warning("Fetch replay failed", extra={"url": url, "attempt": attempt + 1, "error": str(exc)})
-            proxy = await proxy_manager.get_proxy(waf_class)
+            await proxy_manager.report(proxy, False, proxy_class=waf_class, network=network)
+            logger.warning("Fetch replay failed", extra={"url": url, "site": strategy.name, "network": network.value, "attempt": attempt + 1, "error": str(exc)})
+            proxy = await proxy_manager.get_proxy(waf_class, network)
             fp = get_random_fingerprint()
 
+    if strategy.transport == TransportMode.BROWSER_REPLAY_REQUIRED:
+        raise AllTiersFailedError(f"{strategy.name} requires direct API replay or an external Camoufox/Patchright/Nodriver worker after curl replay failed: {url}")
     raise AllTiersFailedError(f"All fetch replay attempts exhausted for {url}")
 
 # ------------------------------------------------------------------------
@@ -764,10 +912,23 @@ async def scrape_product_metadata(url: str) -> dict:
             pass
 
     async with rate_limiter.acquire(url):
+        strategy = StrategyRouter.for_url(url)
         final_url = url
         html = ""
+        fp = get_random_fingerprint()
+        proxy = await proxy_manager.get_proxy(strategy.expected_waf, strategy.preferred_network)
         try:
-            page_data = await _execute_fetch_pipeline(url)
+            # Tier 0: known-domain API replay before fetching HTML. This avoids
+            # sparse/empty SSR pages such as KREAM and reduces WAF exposure.
+            if strategy.api_first:
+                api_data = await product_api_discoverer.fetch_from_strategy(url, fp, proxy, strategy)
+                if QualityValidator.calculate_score(api_data) >= 0.7:
+                    metrics.api_discovery_total += 1
+                    api_data = RuleEngine.apply(api_data, final_url)
+                    await cache_manager.set(url, api_data)
+                    return api_data
+
+            page_data = await _execute_fetch_pipeline(url, strategy)
             html = page_data["html"]
             final_url = page_data["finalUrl"]
             fp = page_data["fingerprint"]
