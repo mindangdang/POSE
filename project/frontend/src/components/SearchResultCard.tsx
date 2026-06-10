@@ -66,8 +66,10 @@ export function SearchResultCard({
               const localUrl = facts?.local_image_url as string | undefined;
               if (localUrl && !target.src.includes(localUrl)) {
                 target.src = `/api/images/${localUrl}`;
+              } else if (!target.src.includes('placehold.co')) {
+                target.src = 'https://placehold.co/400x600?text=No+Image';
               } else {
-                target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+                target.src = ''; // 더 이상 시도하지 않음
               }
             }}
           />
