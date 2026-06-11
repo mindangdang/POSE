@@ -79,35 +79,31 @@ export function SearchTabContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [isDetailedSearch, setIsDetailedSearch] = useState(false);
   const [detailedSearchQuery, setDetailedSearchQuery] = useState({ mood: "", color: "", fit: "", category: "" , brand: "" });
-  const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searchActive, setSearchActive] = useState(false);
-  const MIN_LOADING_MS = 700; // 최소 로딩 표시 시간
-  const fetchCounterRef = useRef(0);
-  const loadingStartRef = useRef<number | null>(null);
-  const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
+
+  // --- 리팩토링된 핵심 상태 ---
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
-  const [selectedShopNames, setSelectedShopNames] = useState<string[]>([]);
-  const [activeDomainMap, setActiveDomainMap] = useState<Record<string, string> | null>(null);
-  const currentPageRef = useRef(1);  // useRef로 변경: 즉시 업데이트되고 불필요한 리렌더 방지
-  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [quotaCountdown, setQuotaCountdown] = useState<number | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
+  const [selectedShopNames, setSelectedShopNames] = useState<string[]>([]);
+
+  const [randomSuggestions, setRandomSuggestions] = useState<string[]>([]);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
-  const fetchTypeRef = useRef<"initial" | "append" | null>(null);
-  const appendCountRef = useRef(0);
-  const loadingRef = useRef(false);
-  const isLoadingMoreRef = useRef(false);
-  const hasMoreRef = useRef(true);
-  const resultsLengthRef = useRef(0);
-  const loadingMoreRef = useRef(false);
+
   // displayActivity: determines compact layout (results/loading/quota)
   const displayActivity = loading || searchResults.length > 0 || quotaCountdown !== null || searchActive;
+  
   const [isAddShopModalOpen, setIsAddShopModalOpen] = useState(false);
   const [newShopData, setNewShopData] = useState({ name: "", url: "", desc: "" });
-  // 모달 제어 상태
+
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fetchCounterRef = useRef(0);
+
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
     { value: "ai", label: "이미지 검색 모드", icon: BrainCircuit, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
@@ -145,7 +141,7 @@ export function SearchTabContent({
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
-    let ws: WebSocket;
+    let ws: WebSocket | null = null; // Initialize to null
 
    try {
       ws = new WebSocket(wsUrl);
@@ -155,82 +151,44 @@ export function SearchTabContent({
           const data = JSON.parse(event.data);
           
           if (data.type === "SEARCH_SUCCESS") {
-            const incoming: SavedItem[] = (data.results || []).map((rawItem: any) => {
-              const item: any = rawItem.result || rawItem;
-              return {
-                ...item,
-                id: item.id || `ws-${Math.random().toString(36).slice(2, 11)}`
-              } as SavedItem;
-            });
-
             setSearchResults(prev => {
-              if (!data.is_append) return incoming;
-
-              const existingIds = new Set(prev.map(i => i.id));
-              const existingUrls = new Set(prev.map(i => i.url));
-              const uniqueIncoming = incoming.filter((i: SavedItem) => !existingIds.has(i.id) && !existingUrls.has(i.url));
-              if (uniqueIncoming.length > 0) {
-                appendCountRef.current += uniqueIncoming.length;
+              const incoming = data.results || [];
+              if (data.is_append) {
+                // 중복 제거 후 추가
+                const existingUrls = new Set(prev.map(i => i.url));
+                const uniqueIncoming = incoming.filter((i: SavedItem) => !existingUrls.has(i.url));
+                return [...prev, ...uniqueIncoming];
               }
-
-              return [...prev, ...uniqueIncoming];
+              return incoming;
             });
-            
-            // 📌 FIX 3: SEARCH_SUCCESS에서 hasMore 상태 갱신
-            // 서버가 빈 배열을 보낸 경우 즉시 무한 스크롤 종료
-            if (data.is_append && (!data.results || data.results.length === 0)) {
+
+            if (data.results && data.results.length === 0 && data.is_append) {
               setHasMore(false);
-              console.log('[SEARCH_SUCCESS] 결과 없음 - hasMore를 false로 설정');
             }
+            setLoading(false);
+            setIsLoadingMore(false);
           } else if (data.type === "SEARCH_FINISHED" || data.type === "SEARCH_ERROR") {
-            const started = loadingStartRef.current || Date.now();
-            const elapsed = Date.now() - started;
-            const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-
-            const finishSearch = () => {
-              const currentFetchType = fetchTypeRef.current;
-              if (currentFetchType === "append") {
-                setIsLoadingMore(false);
-                // 📌 FIX 2: append 요청에서 결과가 0개면 hasMore를 false로 설정
-                if (appendCountRef.current === 0) {
-                  setHasMore(false);
-                  console.log('[SEARCH_FINISHED (append)] 결과 0개 - hasMore를 false로 설정');
-                }
-              } else {
-                setLoading(false);
-              }
-              fetchTypeRef.current = null;
-              appendCountRef.current = 0;
-              
-              // 📌 디버그 로그: 무한 스크롤 상태 확인
-              if (data.type === "SEARCH_FINISHED") {
-                console.log('[SEARCH_FINISHED] fetchType:', currentFetchType, 'isLoadingMore:', isLoadingMoreRef.current, 'hasMore:', hasMoreRef.current);
-              }
-            };
-
-            setTimeout(() => {
-              finishSearch();
-              if (data.type === "SEARCH_ERROR") {
-                console.error('[SEARCH_ERROR]', data.message);
-                alert(data.message || "검색 중 오류가 발생했습니다.");
-              }
-            }, remaining);
+            if (data.type === "SEARCH_ERROR") {
+              alert(data.message || "검색 중 오류가 발생했습니다.");
+            }
+            setLoading(false);
+            setIsLoadingMore(false);
           }
         } catch (err) {
-          // JSON 파싱 에러 등 처리
+          console.error("웹소켓 메시지 파싱 오류:", err);
         }
       };
+      ws.onerror = (event) => {
+        console.error("웹소켓 연결 오류:", event);
+        // 필요하다면 웹소켓 연결 오류에 대한 UI 피드백을 추가할 수 있습니다.
+      };
     } catch (err) {
-      // 연결 실패 처리
+      console.error("웹소켓 연결 설정 오류:", err);
     }
 
     return () => {
-      if (ws) {
-        if (ws.readyState === WebSocket.CONNECTING) {
-          ws.addEventListener('open', () => ws.close());
-        } else {
-          ws.close();
-        }
+      if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+        ws.close();
       }
     };
   }, [user]);
@@ -240,148 +198,88 @@ export function SearchTabContent({
     const currentBottomRef = bottomRef.current;
     if (!currentBottomRef) return;
 
-    const observer = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && !loadingRef.current && !isLoadingMoreRef.current && hasMoreRef.current && resultsLengthRef.current > 0) {
-            handleLoadMore();
-          }
-        },
-        { threshold: 0.1, rootMargin: '500px' }
-      );
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !loading && !isLoadingMore && hasMore && searchResults.length > 0) {
+        void handleLoadMore();
+      }
+    }, { threshold: 0.1, rootMargin: '400px' });
 
     observer.observe(currentBottomRef);
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
-
-  useEffect(() => {
-    isLoadingMoreRef.current = isLoadingMore;
-  }, [isLoadingMore]);
-
-  useEffect(() => {
-    hasMoreRef.current = hasMore;
-  }, [hasMore]);
-
-  useEffect(() => {
-    resultsLengthRef.current = searchResults.length;
-  }, [searchResults.length]);
+  }, [loading, isLoadingMore, hasMore, searchResults.length]);
 
   useEffect(() => {
     if (quotaCountdown !== null && quotaCountdown > 0) {
       const timer = setTimeout(() => setQuotaCountdown(quotaCountdown - 1), 1000);
       return () => clearTimeout(timer);
     }
-    if (quotaCountdown === 0) setQuotaCountdown(null);
+    if (quotaCountdown === 0) {
+      setQuotaCountdown(null);
+    }
   }, [quotaCountdown]);
 
-  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string, domainMapOverride?: Record<string, string> | null, fileOverride?: File | null) => {
-    const myFetchId = ++fetchCounterRef.current;
-    const startedAt = Date.now();
-    loadingStartRef.current = startedAt;
-
-    if (isAppend) {
-      setIsLoadingMore(true);
-      appendCountRef.current = 0;
-      fetchTypeRef.current = "append";
-    } else {
-      setLoading(true);
-      fetchTypeRef.current = "initial";
-    }
+  const fetchResults = async (page: number, isAppend: boolean, queryOverride?: string) => {
+    if (isAppend) setIsLoadingMore(true);
+    else setLoading(true);
 
     try {
       const currentQuery = queryOverride ?? searchQuery;
       const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const endpoint = searchMode === "digging" ? '/api/pse' : '/api/lens';
       
-      const currentFile = fileOverride ?? pastedFile;
       let res: Response;
 
       if (searchMode === "ai") {
         const formData = new FormData();
-        if (currentFile) formData.append('file', currentFile);
+        if (pastedFile) formData.append('file', pastedFile);
         if (currentQuery) formData.append('query', currentQuery);
-
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: formData
-        });
+        // AI 모드에선 Content-Type을 수동으로 잡지 않음 (브라우저가 boundary와 함께 설정)
+        const aiHeaders: Record<string, string> = {};
+        if (token) {
+          aiHeaders['Authorization'] = `Bearer ${token}`;
+        }
+        res = await fetch(endpoint, { method: 'POST', headers: aiHeaders, body: formData });
       } else {
         const body: any = { query: currentQuery, page };
-        const currentDomainMap = domainMapOverride ?? activeDomainMap;
-        if (currentDomainMap) body.domain_map = currentDomainMap;
-
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify(body)
-        });
+        if (selectedShopNames.length > 0) {
+          body.domain_map = Object.fromEntries(
+            selectedShopNames.map(name => [getDomain(shops.find(s => s.name === name)?.url || ""), name])
+          );
+        }
+        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
       }
       
       if (res.status === 429) {
         setQuotaCountdown(60);
-        if (!isAppend) setLoading(false);
-        else setIsLoadingMore(false);
-        fetchTypeRef.current = null;
-        return false;
+        setLoading(false);
+        setIsLoadingMore(false);
+        return;
       }
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Search failed");
-      }
+      if (!res.ok) throw new Error((await res.json()).detail || "Search failed");
 
       const data = await res.json();
-      if (searchMode === "digging") {
-        return true;
-      }
 
-      const resultCount = data.results?.length ?? 0;
+      // Digging 모드이고 백그라운드 작업으로 전환된 경우 (results 없음) 로딩 유지하며 WebSocket 대기
+      if (searchMode === "digging" && data.success && !data.results) return;
+
       if (isAppend) {
         setSearchResults(prev => [...prev, ...(data.results || [])]);
-        if (resultCount === 0) {
-          setHasMore(false);
-          console.log('[fetchResults HTTP] 결과 없음 - hasMore를 false로 설정');
-        }
+        if (!data.results || data.results.length === 0) setHasMore(false);
       } else {
         setSearchResults(data.results || []);
-        setHasMore(false);
-        setGeneratedImage(data.generated_vibe_image_url || null);
+        setHasMore(true);
+        setGeneratedImage(searchMode === "ai" ? data.generated_vibe_image_url : null);
       }
-      return true;
+      setLoading(false);
+      setIsLoadingMore(false);
     } catch (error: any) {
-      if (error instanceof Error) {
-        alert(error.message);
-      }
-      if (isAppend) {
-        setIsLoadingMore(false);
-      } else {
-        setLoading(false);
-      }
-      fetchTypeRef.current = null;
-      return false;
-    } finally {
-      if (searchMode !== "digging") {
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => {
-          if (myFetchId === fetchCounterRef.current) {
-            if (isAppend) {
-              setIsLoadingMore(false);
-            } else {
-              setLoading(false);
-            }
-          }
-        }, remaining);
-      }
+      alert(error.message);
+      setLoading(false);
+      setIsLoadingMore(false);
     }
   };
   
@@ -408,97 +306,39 @@ export function SearchTabContent({
     }
   };
 
-  // 1. 엔터 쳐서 '새롭게 검색'할 때
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
 
-    setSearchActive(true);
-
-    // loading will be handled inside fetchResults to ensure minimum display time
     let finalQuery = searchQuery;
-    let domainMap: Record<string, string> | null = null;
-
     if (searchMode === "digging" && isDetailedSearch) {
-      const detailParts = Object.values(detailedSearchQuery).filter(Boolean).join(" ");
-      finalQuery = detailParts || searchQuery;
+      finalQuery = Object.values(detailedSearchQuery).filter(Boolean).join(" ");
       if (!finalQuery.trim()) return;
       setSearchQuery(finalQuery); 
-    } else if (!searchQuery.trim()) return;
-
-    if (searchMode === "digging" && selectedShopNames.length > 0) {
-      domainMap = {};
-      selectedShopNames.forEach(name => {
-        const shop = shops.find(s => s.name === name);
-        if (shop) domainMap![getDomain(shop.url)] = shop.name;
-      });
+    } else {
+      if (!searchQuery.trim() && !pastedFile) return;
     }
 
-    // 📌 FIX 1: 새로운 검색 시작 시 이전 결과 제거
-    currentPageRef.current = 1;
+    setSearchActive(true);
+    setCurrentPage(1);
     setSearchResults([]);
     setGeneratedImage(null);
-    setHasMore(true);        // 무한 스크롤 상태 리셋
-    setActiveDomainMap(domainMap);
-    await fetchResults(1, false, finalQuery, domainMap); // 1페이지 데이터 가져와서 덮어쓰기
+    setHasMore(true);
+    await fetchResults(1, false, finalQuery);
   };
 
-  // 2. '더 보기' 버튼을 눌렀을 때
   const handleLoadMore = async () => {
-    if (loadingRef.current || isLoadingMoreRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
-
-    const nextPage = currentPageRef.current + 1;
-    loadingMoreRef.current = true;
-    try {
-      const success = await fetchResults(nextPage, true);
-      if (success) {
-        currentPageRef.current = nextPage;
-      }
-    } finally {
-      loadingMoreRef.current = false;
-    }
+    if (loading || isLoadingMore || !hasMore) return;
+    const nextPage = currentPage + 1;
+    setCurrentPage(nextPage);
+    await fetchResults(nextPage, true);
   };
 
   const handleSecondhandSearch = async (title: string) => {
     setSearchMode("digging");
     setIsDetailedSearch(false);
     setSearchQuery(title);
-    setSearchActive(true);
-    setSearchResults([]);
-    const myFetchId = ++fetchCounterRef.current;
-    loadingStartRef.current = Date.now();
-    setLoading(true);
-    setGeneratedImage(null);
-    setHasMore(true); // 세컨핸드 검색 시에도 무한 스크롤이 가능하도록 true로 설정
-    // 📌 FIX 1: currentPageRef로 즉시 업데이트
-    currentPageRef.current = 1;
-
-    try {
-      const token = localStorage.getItem('access_token');
-      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch('/api/pse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ 
-          query: title, 
-          page: 1,
-          domain_map: { 
-            "fruitsfamily.com": "후루츠패밀리",
-            "collectiv.kr": "콜랙티브",
-            "m.bunjang.co.kr": "번개장터"
-          }
-        })
-      });
-      if (!res.ok) throw new Error("Search failed");
-      // 결과는 WebSocket(SEARCH_SUCCESS)을 통해 수신됩니다.
-    } catch (err) {
-      const started = loadingStartRef.current || Date.now();
-      const elapsed = Date.now() - started;
-      const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-      setTimeout(() => {
-        if (myFetchId === fetchCounterRef.current) setLoading(false);
-      }, remaining);
-    }
+    void fetchResults(1, false, title);
   };
 
   useEffect(() => {
