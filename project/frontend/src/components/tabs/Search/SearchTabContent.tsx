@@ -1,20 +1,20 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 
-import type { SavedItem } from '../types/item';
-import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { useSearch } from '../hooks/useSearch';
-import { useQuotaCountdown } from '../hooks/useQuotaCountdown';
-import { usePasteImage } from '../hooks/usePasteImage';
-import { SearchState } from '../hooks/searchUtils';
-import { useAuth } from '../hooks/useAuth';
-import { ItemDetailDialog } from './ItemDetailDialog';
-import { useWebSocketSearch } from '../hooks/useWebSocketSearch'; // Assuming this is a missing import
+import type { SavedItem } from '../../../types/item';
+import { useInfiniteScroll } from '../../../hooks/useInfiniteScroll';
+import { useSearch } from '../../../hooks/useSearch';
+import { useQuotaCountdown } from '../../../hooks/useQuotaCountdown';
+import { usePasteImage } from '../../../hooks/usePasteImage';
+import { SearchState } from '../../../hooks/searchUtils';
+import { useAuth } from '../../../hooks/useAuth';
+import { ItemDetailDialog } from '../../common';
+import { useWebSocketSearch } from '../../../hooks/useWebSocketSearch';
 import { AddShopModal } from './AddShopModal';
 import { ShopSelector } from './ShopSelector';
 import { SearchHeader } from './SearchHeader';
 import { SearchResults } from './SearchResults';
-import { saveItemToFeed } from '../hooks/itemService';
+import { saveItemToFeed } from '../../../hooks/itemService';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;

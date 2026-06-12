@@ -3,9 +3,9 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
-import { apiFetch } from '../lib/api';
-import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
-import type { SavedItem } from '../types/item';
+import { apiFetch } from '../../lib/api';
+import { getItemTitle, parseItemFacts } from '../../lib/itemFacts';
+import type { SavedItem } from '../../types/item';
 
 type ItemDetailDialogProps = {
   item: SavedItem | null;

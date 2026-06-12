@@ -3,10 +3,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
-import { apiFetch, apiJson } from '../lib/api';
-import { parseItemFacts } from '../lib/itemFacts';
-import type { SavedItem } from '../types/item';
-import { useAuth } from '../hooks/useAuth';
+import { apiFetch, apiJson } from '../../../lib/api';
+import { parseItemFacts } from '../../../lib/itemFacts';
+import type { SavedItem } from '../../../types/item';
+import { useAuth } from '../../../hooks/useAuth';
 import { FeedItemCard } from './FeedItemCard';
 
 type FeedTabContentProps = {

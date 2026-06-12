@@ -1,0 +1,2 @@
+export { FeedTabContent } from './FeedTabContent';
+

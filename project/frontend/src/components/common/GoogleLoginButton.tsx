@@ -1,6 +1,6 @@
 import { GoogleLogin } from '@react-oauth/google';
-import { apiJson } from '../lib/api';
-import type { AuthResponse } from '../types/auth';
+import { apiJson } from '../../lib/api';
+import type { AuthResponse } from '../../types/auth';
 
 type GoogleLoginButtonProps = {
   onSuccess: (session: AuthResponse) => void;

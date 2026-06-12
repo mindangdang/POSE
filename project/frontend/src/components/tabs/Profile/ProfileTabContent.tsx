@@ -2,9 +2,9 @@ import { motion } from 'framer-motion';
 import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 
-import { apiJson } from '../lib/api';
-import type { SavedItem } from '../types/item';
-import { useAuth } from '../hooks/useAuth';
+import { apiJson } from '../../../lib/api';
+import type { SavedItem } from '../../../types/item';
+import { useAuth } from '../../../hooks/useAuth';
 
 type TasteProfileSection = {
   title: string;

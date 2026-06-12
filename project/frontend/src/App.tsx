@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GoogleLoginButton } from './components/GoogleLoginButton';
-import { Header } from './components/Header';
-import { FeedTabContent } from './components/FeedTabContent';
-import { ItemDetailDialog } from './components/ItemDetailDialog';
-import { SearchTabContent } from './components/SearchTabContent';
-import { ProfileTabContent } from './components/ProfileTabContent';
+import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
+import { FeedTabContent } from './components/tabs/Feed';
+import { ProfileTabContent } from './components/tabs/Profile';
+import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
 import { useAuth } from './hooks/useAuth';
