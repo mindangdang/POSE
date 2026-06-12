@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 
+import { apiJson } from '../lib/api';
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
 
@@ -480,18 +481,12 @@ export function ProfileTabContent({
     setIsGeneratingTaste(true);
     onTasteChange('');
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('/api/generate-taste', {
+      const data = await apiJson<{ success?: boolean; summary?: string; message?: string }>('/api/generate-taste', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       });
-      const data = await res.json();
 
       if (data.success) {
-        onTasteChange(data.summary);
+        onTasteChange(data.summary ?? '');
       } else {
         alert(data.message || '취향 분석에 실패했습니다.');
       }

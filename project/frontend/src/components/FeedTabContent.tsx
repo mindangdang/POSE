@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
+import { apiFetch, apiJson } from '../lib/api';
 import { parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 import type { AppUser } from '../types/user';
@@ -143,24 +144,14 @@ export function FeedTabContent({
 
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('/api/extract-url', {
+      const data = await apiJson<any>('/api/extract-url', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.detail || "Failed to analyze URL");
-      }
-
       return {
         nextUrl,
-        data: await res.json(),
+        data,
       };
     },
     onSuccess: ({ data }) => {
@@ -178,10 +169,8 @@ export function FeedTabContent({
 
   const deleteItemMutation = useMutation({
     mutationFn: async ({ id, userId }: { id: number; userId: string | number }) => {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`/api/items/${id}?user_id=${userId}`, { 
+      const res = await apiFetch(`/api/items/${id}?user_id=${userId}`, { 
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!res.ok) {

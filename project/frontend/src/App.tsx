@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton } from './components/GoogleLoginButton';
 import { Header } from './components/Header';
@@ -8,6 +8,7 @@ import { SearchTabContent } from './components/SearchTabContent';
 import { ProfileTabContent } from './components/ProfileTabContent';
 import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
+import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
 import type { AppUser } from './types/user';
 
@@ -51,7 +52,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   const { taste, setTaste, refreshTaste } = useTaste(user);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
     setIsLogoutModalOpen(false);
     onLogout();
   };
@@ -268,55 +268,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setIsInitializing(false);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/auth/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-        } else {
-          localStorage.removeItem('access_token');
-        }
-      } catch (error) {
-        console.error('Auto login failed:', error);
-        localStorage.removeItem('access_token');
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+  const { user, isInitializing, login, loginAsGuest, logout } = useAuth();
 
   const handleGuestLogin = async () => {
     try {
-      const res = await fetch('/api/auth/guest', {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        throw new Error('게스트 로그인에 실패했습니다.');
-      }
-
-      const data = await res.json();
-      localStorage.setItem('access_token', data.access_token);
-      setUser(data.user);
+      await loginAsGuest();
     } catch (error: any) {
       console.error('Guest Login Error:', error);
       alert(error.message || '게스트 로그인 중 오류가 발생했습니다.');
@@ -361,7 +318,7 @@ export default function App() {
                 {/* Login Buttons */}
                 <div className="mt-8 sm:mt-10 lg:mt-14 flex flex-col gap-2 items-start">
                   <GoogleLoginButton
-                    onSuccess={(userData) => setUser(userData)}
+                    onSuccess={login}
                     onError={(msg) => alert(msg)}
                   />
                   <button
@@ -436,5 +393,5 @@ export default function App() {
     );
   }
 
-  return <MainApp user={user} onLogout={() => setUser(null)} />;
+  return <MainApp user={user} onLogout={logout} />;
 }

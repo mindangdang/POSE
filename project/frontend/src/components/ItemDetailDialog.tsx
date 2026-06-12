@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
+import { apiFetch } from '../lib/api';
 import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
 
@@ -35,7 +36,6 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
         scrollRef.current.scrollTop = 0;
       }
       
-      const token = localStorage.getItem('access_token');
       const fetchSimilarItems = async () => {
         try {
           let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//') 
@@ -58,11 +58,8 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
           const formData = new FormData();
           formData.append('query', absoluteUrl || modalTitle);
 
-          const res = await fetch('/api/lens', {
+          const res = await apiFetch('/api/lens', {
             method: 'POST',
-            headers: { 
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
             body: formData,
           });
           const data = await res.json();
