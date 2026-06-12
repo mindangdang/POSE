@@ -1,9 +1,8 @@
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { useState } from 'react';
-import type { AppUser } from '../types/user';
+import { useAuth } from '../hooks/useAuth';
 
 type HeaderProps = {
-  user: AppUser | null;
   onLogout: () => void;
   currentTab: string;
   onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
@@ -19,7 +18,6 @@ const categories = [
 ];
 
 export function Header({
-  user,
   onLogout,
   currentTab,
   onTabChange,
@@ -27,6 +25,7 @@ export function Header({
   ambientColor,
   isAmbientActive,
 }: HeaderProps) {
+  const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // 조명 모드 시 텍스트에 적용할 미세한 색상 변조 스타일

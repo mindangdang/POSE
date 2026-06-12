@@ -1,20 +1,20 @@
 import { useEffect } from 'react';
-import type { AppUser } from '../types/user';
 import type { SavedItem } from '../types/item';
+import { useAuth } from './useAuth';
 
 type UseWebSocketSearchProps = {
-  user: AppUser | null;
   onSearchSuccess: (newResults: SavedItem[], isAppend: boolean) => void;
   onSearchFinished: () => void;
   onSearchError: (message: string) => void;
 };
 
 export function useWebSocketSearch({
-  user,
   onSearchSuccess,
   onSearchFinished,
   onSearchError,
 }: UseWebSocketSearchProps) {
+  const { user } = useAuth();
+
   useEffect(() => {
     if (!user) return;
 

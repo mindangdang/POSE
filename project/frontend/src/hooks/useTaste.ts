@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import type { AppUser } from '../types/user';
+import { useAuth } from './useAuth';
 
-export function useTaste(user: AppUser | null) {
+export function useTaste() {
+  const { user } = useAuth();
   const [taste, setTaste] = useState('');
 
   const refreshTaste = useCallback(async () => {

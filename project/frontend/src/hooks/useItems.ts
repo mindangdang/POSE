@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from '../lib/api';
 import type { SavedItem } from '../types/item';
-import type { AppUser } from '../types/user';
+import { useAuth } from './useAuth';
 
-export function useItems(user: AppUser | null) {
+export function useItems() {
+  const { user } = useAuth();
   const [items, setItems] = useState<SavedItem[]>([]);
 
   const refreshItems = useCallback(async () => {

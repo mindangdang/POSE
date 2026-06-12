@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { apiFetch, apiJson } from '../lib/api';
 import { parseItemFacts } from '../lib/itemFacts';
 import type { SavedItem } from '../types/item';
-import type { AppUser } from '../types/user';
+import { useAuth } from '../hooks/useAuth';
 import { FeedItemCard } from './FeedItemCard';
 
 type FeedTabContentProps = {
@@ -16,7 +16,6 @@ type FeedTabContentProps = {
   onSearchSecondhand?: (title: string) => void;
   refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
-  user: AppUser | null;
 };
 
 export function FeedTabContent({
@@ -26,8 +25,8 @@ export function FeedTabContent({
   onSearchSecondhand,
   refreshItems,
   refreshTaste,
-  user,
 }: FeedTabContentProps) {
+  const { user } = useAuth();
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');

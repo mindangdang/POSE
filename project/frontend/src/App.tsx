@@ -10,7 +10,6 @@ import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
 import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
-import type { AppUser } from './types/user';
 
 // Add Logo Font
 const fontStyles = `
@@ -31,7 +30,8 @@ const fontStyles = `
   }
 `;
 
-function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
+function MainApp() {
+  const { logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
@@ -48,12 +48,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
     ? '#F5F5DC' 
     : ambientColor;
 
-  const { items, setItems, refreshItems } = useItems(user);
-  const { taste, setTaste, refreshTaste } = useTaste(user);
+  const { items, setItems, refreshItems } = useItems();
+  const { taste, setTaste, refreshTaste } = useTaste();
 
   const handleLogout = () => {
     setIsLogoutModalOpen(false);
-    onLogout();
+    logout();
   };
 
   const handleLogoutClick = () => {
@@ -69,7 +69,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-background font-sans">
       <Header
-        user={user}
         onLogout={handleLogoutClick}
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -124,7 +123,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onItemsChange={setItems}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
                 searchSecondhandQuery={searchSecondhandQuery}
                 searchSecondhandTrigger={searchSecondhandTrigger}
               />
@@ -147,7 +145,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
               />
             </motion.div>
           )}
@@ -167,7 +164,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSelectItem={setSelectedItem}
                 onTasteChange={setTaste}
                 taste={taste}
-                user={user}
                 ambientColor={ambientColor}
                 onAmbientColorChange={setAmbientColor}
                 isAmbientActive={isAmbientActive}
@@ -269,7 +265,7 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
 
 export default function App() {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const { user, isInitializing, login, loginAsGuest, logout } = useAuth();
+  const { user, isInitializing, login, loginAsGuest } = useAuth();
 
   const handleGuestLogin = async () => {
     try {
@@ -393,5 +389,5 @@ export default function App() {
     );
   }
 
-  return <MainApp user={user} onLogout={logout} />;
+  return <MainApp />;
 }

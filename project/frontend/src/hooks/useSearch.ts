@@ -1,11 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import type { SavedItem } from '../types/item';
-import type { AppUser } from '../types/user';
 import { searchService } from '../hooks/searchService';
 import { SearchState, mergeUniqueResults } from '../hooks/searchUtils';
+import { useAuth } from './useAuth';
 
 type UseSearchProps = {
-  user: AppUser | null;
   searchMode: "digging" | "ai";
   selectedShopNames: Set<string>;
   shops: any[]; // Define a more specific type if possible
@@ -14,13 +13,13 @@ type UseSearchProps = {
 };
 
 export function useSearch({
-  user,
   searchMode,
   selectedShopNames,
   shops,
   pastedFile,
   startQuotaCountdown,
 }: UseSearchProps) {
+  const { user } = useAuth();
   const [searchResults, setSearchResults] = useState<SavedItem[]>([]);
   const [status, setStatus] = useState<SearchState>(SearchState.IDLE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

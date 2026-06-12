@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { apiJson } from '../lib/api';
 import type { SavedItem } from '../types/item';
-import type { AppUser } from '../types/user';
+import { useAuth } from '../hooks/useAuth';
 
 type TasteProfileSection = {
   title: string;
@@ -23,19 +23,10 @@ type ProfileTabContentProps = {
   onSelectItem: (item: SavedItem) => void;
   onTasteChange: React.Dispatch<React.SetStateAction<string>>;
   taste: string;
-  user: AppUser | null;
   ambientColor: string;
   onAmbientColorChange: (color: string) => void;
   isAmbientActive: boolean;
   onAmbientToggle: () => void;
-};
-
-type ProfileHeaderProps = {
-  user: AppUser | null;
-};
-
-type TasteAnalysisHeaderProps = {
-  user: AppUser | null;
 };
 
 type TasteSectionCardProps = {
@@ -48,7 +39,6 @@ type TasteSummaryCardProps = {
   onGenerateTaste: () => Promise<void>;
   onShareProfile: () => Promise<void>;
   tasteSections: TasteProfileSection[];
-  user: AppUser | null;
 };
 
 type EmptyTasteStateProps = {
@@ -229,7 +219,9 @@ function buildTasteProfileSections(taste: string): TasteProfileSection[] {
     : [{ title: 'Taste Profile', body: [trimmed], accent: tasteSectionAccents[0] }];
 }
 
-function ProfileHeader({ user }: ProfileHeaderProps) {
+function ProfileHeader() {
+  const { user } = useAuth();
+
   return (
     <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 pb-10">
       <div className="space-y-2">
@@ -295,8 +287,9 @@ function TasteSummaryCard({
   onGenerateTaste,
   onShareProfile,
   tasteSections,
-  user,
 }: TasteSummaryCardProps) {
+  const { user } = useAuth();
+
   return (
     <div className="relative overflow-hidden rounded-3xl border border-border bg-background">
       <div className="p-8 md:p-10 space-y-8">
@@ -467,12 +460,12 @@ export function ProfileTabContent({
   onSelectItem,
   onTasteChange,
   taste,
-  user,
   ambientColor,
   onAmbientColorChange,
   isAmbientActive,
   onAmbientToggle,
 }: ProfileTabContentProps) {
+  const { user } = useAuth();
   const tasteSections = buildTasteProfileSections(taste);
   const [isGeneratingTaste, setIsGeneratingTaste] = useState(false);
   const [isSharingProfile, setIsSharingProfile] = useState(false);
@@ -561,7 +554,7 @@ export function ProfileTabContent({
       exit={{ opacity: 0, y: -20 }}
       className="max-w-4xl mx-auto space-y-10 pb-40"
     >
-      <ProfileHeader user={user} />
+      <ProfileHeader />
 
       {/* Ambient Color Switcher Section */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 py-6 border-b border-border">
@@ -606,7 +599,6 @@ export function ProfileTabContent({
                 onGenerateTaste={handleGenerateTaste}
                 onShareProfile={handleShareProfile}
                 tasteSections={tasteSections}
-                user={user}
               />
             )
             : (

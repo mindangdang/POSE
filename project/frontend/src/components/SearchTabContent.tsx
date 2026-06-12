@@ -2,12 +2,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 
 import type { SavedItem } from '../types/item';
-import type { AppUser } from '../types/user';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { useSearch } from '../hooks/useSearch';
 import { useQuotaCountdown } from '../hooks/useQuotaCountdown';
 import { usePasteImage } from '../hooks/usePasteImage';
 import { SearchState } from '../hooks/searchUtils';
+import { useAuth } from '../hooks/useAuth';
 import { ItemDetailDialog } from './ItemDetailDialog';
 import { useWebSocketSearch } from '../hooks/useWebSocketSearch'; // Assuming this is a missing import
 import { AddShopModal } from './AddShopModal';
@@ -20,7 +20,6 @@ type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
   refreshItems: () => Promise<void>;
   refreshTaste: () => Promise<void>;
-  user: AppUser | null;
   searchSecondhandQuery?: string;
   searchSecondhandTrigger?: number;
 };
@@ -77,10 +76,10 @@ export function SearchTabContent({ // Renamed to avoid conflict with `generatedI
   onItemsChange,
   refreshItems,
   refreshTaste,
-  user,
   searchSecondhandQuery,
   searchSecondhandTrigger,
 }: SearchTabContentProps) {
+  const { user } = useAuth();
   const [shops, setShops] = useState<Shop[]>(SELECT_SHOPS);
 
   useEffect(() => {
@@ -105,7 +104,6 @@ export function SearchTabContent({ // Renamed to avoid conflict with `generatedI
   });
 
   const searchState = useSearch({
-    user,
     searchMode,
     selectedShopNames,
     shops,
@@ -136,7 +134,6 @@ export function SearchTabContent({ // Renamed to avoid conflict with `generatedI
 
   // WebSocket hook
   useWebSocketSearch({ // This hook is assumed to be defined elsewhere or needs to be implemented.
-    user,
     onSearchSuccess: handleWebSocketSearchSuccess,
     onSearchFinished: handleWebSocketSearchFinished,
     onSearchError: handleWebSocketSearchError,
@@ -219,7 +216,6 @@ export function SearchTabContent({ // Renamed to avoid conflict with `generatedI
         )}
 
         <SearchHeader
-          user={user}
           searchMode={searchMode}
           setSearchMode={setSearchMode}
           searchQuery={searchQuery}
