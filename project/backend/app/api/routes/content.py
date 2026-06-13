@@ -123,7 +123,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
                         payload = {
                             "type": "SEARCH_SUCCESS",
                             "results": [item],
-                            "is_append": True, # 무한 스크롤이므로 항상 추가 모드
+                            "is_append": True,
                             "page": current_page
                         }
                         await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
@@ -139,8 +139,8 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
                 exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
                 final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
                 site_items = await fetch_from_single_site(client, final_query, domain, name, current_page, serp_api_key)
-                
-                print(f"[DEBUG] 쇼핑몰 '{name}' ({domain}) {current_page}페이지 결과 수: {len(site_items)}")
+                ijn_val = (current_page - 1) // 3
+                print(f"[DEBUG] '{name}' ({domain}) UI Page:{current_page} -> API ijn:{ijn_val} 결과:{len(site_items)}개")
                 tasks = [asyncio.create_task(process_single_item(item)) for item in (site_items or [])]
                 await asyncio.gather(*tasks, return_exceptions=True)
                     

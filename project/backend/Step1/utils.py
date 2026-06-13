@@ -116,11 +116,10 @@ async def fetch_from_single_site(
 ) -> list[dict]:
     if params is None:
         params = {
-            "engine": "google",
+            "engine": "google_images",
             "q": query,
             "api_key": serp_api_key,
-            "tbm": "isch",
-            "ijn": current_page - 1, # Google Images는 'start' 대신 'ijn'(0-based index) 사용
+            "ijn": (current_page - 1) // 3, # 100개 단위 배칭 (UI 1~3p -> ijn 0, 4~6p -> ijn 1)
             "gl": "kr",
             "hl": "ko"
         }
