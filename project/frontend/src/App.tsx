@@ -332,7 +332,7 @@ export default function App() {
                 {/* Placeholder for the PoSe logo photo */}
                 <div className="w-full max-w-md aspect-square rounded-3xl bg-background shadow-2xl flex items-center justify-center relative group">
                   <span className="font-logo text-[120px] sm:text-[160px] text-foreground/5 group-hover:text-primary/10 transition-colors duration-500">
-                    PoSe
+                    RoomShow
                   </span>
                   <div className="absolute inset-0 border-2 border-foreground/5 rounded-3xl m-4" />
                 </div>

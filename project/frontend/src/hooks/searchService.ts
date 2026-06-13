@@ -11,6 +11,7 @@ const getDomain = (url: string) => {
 
 export const searchService = {
   searchDigging: async (query: string, page: number, selectedShopNames: string[], shops: any[]) => {
+    console.log(`[DEBUG] searchDigging 요청: query='${query}', page=${page}`);
     const body: any = { query, page };
     if (selectedShopNames.length > 0) {
       body.domain_map = Object.fromEntries(

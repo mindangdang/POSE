@@ -100,6 +100,8 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
             await manager.broadcast_to_user(user_id, json.dumps(payload))
         return
 
+    print(f"[DEBUG] background_pse_search 시작: user_id={user_id}, query='{query}', page={page}")
+
     try:
         # page 파라미터 타입 안정성 및 기본값 처리
         current_page = 1
@@ -121,11 +123,12 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
                         payload = {
                             "type": "SEARCH_SUCCESS",
                             "results": [item],
-                            "is_append": True
+                            "is_append": True, # 무한 스크롤이므로 항상 추가 모드
+                            "page": current_page
                         }
                         await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
                         item_title = item.get('facts', {}).get('title', 'Unknown')
-                        print(f"[{item_title}] 프론트로 전송 완료.")
+                        print(f"[DEBUG] [{item_title}] (Page: {current_page}) 프론트로 전송 완료.")
 
             except Exception as e:
                 print(f"개별 아이템 전송 에러: {e}")
@@ -136,7 +139,9 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
                 exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
                 final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
                 site_items = await fetch_from_single_site(client, final_query, domain, name, current_page, serp_api_key)
-                tasks = [asyncio.create_task(process_single_item(item)) for item in site_items]
+                
+                print(f"[DEBUG] 쇼핑몰 '{name}' ({domain}) {current_page}페이지 결과 수: {len(site_items)}")
+                tasks = [asyncio.create_task(process_single_item(item)) for item in (site_items or [])]
                 await asyncio.gather(*tasks, return_exceptions=True)
                     
             except Exception as e:

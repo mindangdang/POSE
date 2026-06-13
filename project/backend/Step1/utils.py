@@ -119,14 +119,14 @@ async def fetch_from_single_site(
             "engine": "google",
             "q": query,
             "api_key": serp_api_key,
-            "num": 5, 
             "tbm": "isch",
-            "start": (current_page - 1) * 5,
+            "ijn": current_page - 1, # Google Images는 'start' 대신 'ijn'(0-based index) 사용
             "gl": "kr",
             "hl": "ko"
         }
-    
+
     try:
+        print(f"[{site_name or 'SerpApi'}] API 요청 파라미터: q='{query}', ijn={params.get('ijn')}")
         response = await client.get("https://serpapi.com/search", params=params)
         response.raise_for_status()
         data = response.json()
