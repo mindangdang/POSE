@@ -1,8 +1,9 @@
 import { GoogleLogin } from '@react-oauth/google';
-import type { AppUser } from '../types/user';
+import { apiJson } from '../../lib/api';
+import type { AuthResponse } from '../../types/auth';
 
 type GoogleLoginButtonProps = {
-  onSuccess: (user: AppUser) => void;
+  onSuccess: (session: AuthResponse) => void;
   onError: (errorMsg: string) => void;
 };
 
@@ -10,24 +11,12 @@ export function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps
   const handleSuccess = async (credentialResponse: any) => {
     try {
       // Send the JWT credential to backend for verification
-      const res = await fetch('/api/auth/google', {
+      const data = await apiJson<AuthResponse>('/api/auth/google', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ access_token: credentialResponse.credential }),
       });
-      
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || '서버 인증에 실패했습니다.');
-      }
-      
-      const data = await res.json();
-      
-      // 브라우저 로컬 스토리지에 백엔드 자체 토큰 저장 (이후 API 호출 시 헤더에 포함)
-      localStorage.setItem('access_token', data.access_token);
-      
-      // 부모 컴포넌트(App 등)의 User 상태 업데이트
-      onSuccess(data.user);
+
+      onSuccess(data);
     } catch (error: any) {
       console.error("Login Error:", error);
       onError(error.message || '로그인 중 오류가 발생했습니다.');

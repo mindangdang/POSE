@@ -1,0 +1,2 @@
+export { SearchTabContent } from './SearchTabContent';
+

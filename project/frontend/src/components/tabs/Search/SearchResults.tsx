@@ -2,8 +2,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Sparkles } from 'lucide-react';
 import React from 'react';
 
-import type { SavedItem } from '../types/item';
-import { SearchState } from '../hooks/searchUtils';
+import type { SavedItem } from '../../../types/item';
+import { SearchState } from '../../../hooks/searchUtils';
 import { SearchResultCard } from './SearchResultCard';
 
 type SearchResultsProps = {

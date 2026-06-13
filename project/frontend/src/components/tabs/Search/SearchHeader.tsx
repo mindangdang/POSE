@@ -2,13 +2,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus } from 'lucide-react';
 import React, { useEffect, useState, useCallback } from 'react';
 
-import type { AppUser } from '../types/user';
-import { SearchState } from '../hooks/searchUtils';
+import { SearchState } from '../../../hooks/searchUtils';
 
 type ModeOptionValue = "digging" | "ai";
 
 type SearchHeaderProps = {
-  user: AppUser | null;
   searchMode: ModeOptionValue;
   setSearchMode: React.Dispatch<React.SetStateAction<ModeOptionValue>>;
   searchQuery: string;
@@ -40,7 +38,6 @@ const SUGGESTION_POOL = [
 
 
 export function SearchHeader({
-  user,
   searchMode,
   setSearchMode,
   searchQuery,

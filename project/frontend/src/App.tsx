@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GoogleLoginButton } from './components/GoogleLoginButton';
-import { Header } from './components/Header';
-import { FeedTabContent } from './components/FeedTabContent';
-import { ItemDetailDialog } from './components/ItemDetailDialog';
-import { SearchTabContent } from './components/SearchTabContent';
-import { ProfileTabContent } from './components/ProfileTabContent';
+import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
+import { FeedTabContent } from './components/tabs/Feed';
+import { ProfileTabContent } from './components/tabs/Profile';
+import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
+import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
-import type { AppUser } from './types/user';
 
 // Add Logo Font
 const fontStyles = `
@@ -30,7 +28,8 @@ const fontStyles = `
   }
 `;
 
-function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
+function MainApp() {
+  const { logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
@@ -47,13 +46,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
     ? '#F5F5DC' 
     : ambientColor;
 
-  const { items, setItems, refreshItems } = useItems(user);
-  const { taste, setTaste, refreshTaste } = useTaste(user);
+  const { items, setItems, refreshItems } = useItems();
+  const { taste, setTaste, refreshTaste } = useTaste();
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
     setIsLogoutModalOpen(false);
-    onLogout();
+    logout();
   };
 
   const handleLogoutClick = () => {
@@ -69,7 +67,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-background font-sans">
       <Header
-        user={user}
         onLogout={handleLogoutClick}
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -124,7 +121,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onItemsChange={setItems}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
                 searchSecondhandQuery={searchSecondhandQuery}
                 searchSecondhandTrigger={searchSecondhandTrigger}
               />
@@ -147,7 +143,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
               />
             </motion.div>
           )}
@@ -167,7 +162,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSelectItem={setSelectedItem}
                 onTasteChange={setTaste}
                 taste={taste}
-                user={user}
                 ambientColor={ambientColor}
                 onAmbientColorChange={setAmbientColor}
                 isAmbientActive={isAmbientActive}
@@ -268,55 +262,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setIsInitializing(false);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/auth/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-        } else {
-          localStorage.removeItem('access_token');
-        }
-      } catch (error) {
-        console.error('Auto login failed:', error);
-        localStorage.removeItem('access_token');
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+  const { user, isInitializing, login, loginAsGuest } = useAuth();
 
   const handleGuestLogin = async () => {
     try {
-      const res = await fetch('/api/auth/guest', {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        throw new Error('게스트 로그인에 실패했습니다.');
-      }
-
-      const data = await res.json();
-      localStorage.setItem('access_token', data.access_token);
-      setUser(data.user);
+      await loginAsGuest();
     } catch (error: any) {
       console.error('Guest Login Error:', error);
       alert(error.message || '게스트 로그인 중 오류가 발생했습니다.');
@@ -361,7 +312,7 @@ export default function App() {
                 {/* Login Buttons */}
                 <div className="mt-8 sm:mt-10 lg:mt-14 flex flex-col gap-2 items-start">
                   <GoogleLoginButton
-                    onSuccess={(userData) => setUser(userData)}
+                    onSuccess={login}
                     onError={(msg) => alert(msg)}
                   />
                   <button
@@ -436,5 +387,5 @@ export default function App() {
     );
   }
 
-  return <MainApp user={user} onLogout={() => setUser(null)} />;
+  return <MainApp />;
 }

@@ -1,0 +1,2 @@
+export { ProfileTabContent } from './ProfileTabContent';
+

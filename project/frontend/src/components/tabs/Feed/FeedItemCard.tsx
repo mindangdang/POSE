@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { Instagram, Sparkles, Trash2, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useState } from 'react';
 
-import { getItemTitle, parseItemFacts } from '../lib/itemFacts';
-import type { SavedItem } from '../types/item';
+import { getItemTitle, parseItemFacts } from '../../../lib/itemFacts';
+import type { SavedItem } from '../../../types/item';
 
 type FeedItemCardProps = {
   item: SavedItem;
