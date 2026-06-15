@@ -1,6 +1,6 @@
 import os
 from psycopg.types.json import Json
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.utils.settings import load_backend_env
 import httpx
 
 # 환경변수 세팅

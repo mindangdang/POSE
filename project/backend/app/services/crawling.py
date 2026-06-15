@@ -12,8 +12,8 @@ from project.backend.crawlers.instagram_crawler import crawl_instagram_post, dow
 from project.backend.crawlers.shopping_crawler import scrape_product_metadata
 from project.backend.crawlers.utils import analyze_description_with_gemini
 from project.backend.api_service.image_ocr_llm import extract_fact_and_vibe
-from project.backend.api_service.insert_DB import insert_items_to_db
-from project.backend.app.core.settings import IMAGE_DIR
+from project.backend.app.db.insert_DB import insert_items_to_db
+from project.backend.app.utils.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
 from project.backend.crawlers.apify_functions import apify_insta_crawler
 

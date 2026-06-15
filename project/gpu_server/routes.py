@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter
 from project.gpu_server.embedding_reranking import FashionSiglipReRankingPipeline
 from project.gpu_server.schemas import EmbedRequest, TasteVectorRequest, EncodeTextRequest
-from project.backend.app.core.settings import IMAGE_DIR
+from project.backend.app.utils.settings import IMAGE_DIR
     
 router = APIRouter()
 

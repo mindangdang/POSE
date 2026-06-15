@@ -22,16 +22,16 @@ from fastapi import (
 )
 import uuid
 from fastapi.responses import FileResponse
-from project.backend.app.core.database import get_repos
+from project.backend.app.utils.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.utils.settings import load_backend_env
 from project.backend.api_service.image_generate_search import generate_image_from_query,upload_generated_image
 from project.backend.crawlers.utils import *
 from project.backend.crawlers.instagram_crawler import download_images
-from project.backend.app.core.settings import IMAGE_DIR
-from project.backend.api_service.insert_DB import _extract_vector_sync
+from project.backend.app.utils.settings import IMAGE_DIR
+from project.backend.app.db.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
 load_backend_env()

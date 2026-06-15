@@ -27,3 +27,6 @@ class ManualItemCreate(BaseModel):
     facts: dict
     url: str
     image_url: Optional[str] = ""
+
+class GoogleAuthRequest(BaseModel):
+    access_token: str

@@ -2,7 +2,7 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from project.backend.app.core.database import get_repos
+from project.backend.app.utils.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.services.taste import build_current_profile, build_summary_text
 from project.backend.api_service.preferance_llm import analyze_vibe

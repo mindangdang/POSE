@@ -1,13 +1,13 @@
 import os
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from project.backend.app.core.settings import load_backend_env
-from project.backend.app.core.resilience import with_llm_resilience
+from project.backend.app.schemas.response import ProductAnalysisResult
+from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.utils.resilience import with_llm_resilience
 from fastapi import WebSocket
 import httpx
 import uuid
+from typing import Optional
 
 class ConnectionManager:
     def __init__(self):
@@ -39,11 +39,6 @@ class ConnectionManager:
                     dead_sockets.append(ws)
             for dead_ws in dead_sockets:
                 self.disconnect(dead_ws, user_id)
-
-class ProductAnalysisResult(BaseModel):
-    recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
-    key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Shoes", default=None)
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")

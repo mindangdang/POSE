@@ -1,5 +1,5 @@
 import os
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.utils.settings import load_backend_env
 from apify_client import ApifyClient
 
 load_backend_env()

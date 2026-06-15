@@ -1,19 +1,12 @@
 import os
-from typing import List, Optional
+from typing import List
 from PIL import Image
 import asyncio
-from pydantic import BaseModel, Field
-from project.backend.app.core.settings import load_backend_env
-
-# 제미나이 SDK
+from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.schemas.response import InstaAnalysisResult
 from google import genai
 from google.genai import types
-from project.backend.app.core.resilience import with_llm_resilience
-
-
-# ---------------------------------------------------------
-# 1. 환경변수 및 API, AI 모델 설정
-# ---------------------------------------------------------
+from project.backend.app.utils.resilience import with_llm_resilience
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -27,31 +20,6 @@ client = genai.Client(
         base_url=my_proxy_url
     )
 )
-
-# ---------------------------------------------------------
-# 2. Schema에 대한 Pydantic 정의
-# ---------------------------------------------------------
-
-class Facts(BaseModel):
-    title: Optional[str] = Field(description="상품명, 브랜드명, 작품명, 상호명 또는 주제, 제목", default=None)
-    price_info: Optional[str] = Field(description="상품가격, 메뉴 가격대 등 비용 관련 텍스트", default=None)
-    location_text: Optional[str] = Field(description="위치, 주소 텍스트", default=None)
-    time_info: Optional[str] = Field(description="시간/기간 텍스트", default=None)
-    key_details: Optional[List[str]] = Field(description="핵심 특징 1, 2, 3", default=None)
-
-class ExtractedItem(BaseModel):
-    image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
-    category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
-    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Shoes", default=None)
-    recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
-    facts: Facts
-
-class InstaAnalysisResult(BaseModel):
-    extracted_items: List[ExtractedItem]
-
-# ---------------------------------------------------------
-# 3. Gemini 분석 엔진 & 멀티모달 파이프라인
-# ---------------------------------------------------------
 
 @with_llm_resilience(fallback_default={"extracted_items": []})
 async def extract_fact_and_vibe(image_paths: List[str], caption: str, hashtags: list):

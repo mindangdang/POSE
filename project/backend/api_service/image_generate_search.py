@@ -3,11 +3,10 @@ import uuid
 import asyncio
 from google import genai
 from google.genai import types
-from pydantic import BaseModel,Field
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.utils.settings import load_backend_env
 from fastapi import HTTPException
 from supabase import create_client, Client
-from project.backend.app.core.resilience import with_llm_resilience
+from project.backend.app.utils.resilience import with_llm_resilience
 
 load_backend_env()
 
@@ -30,9 +29,6 @@ client = genai.Client(
         base_url=my_proxy_url
     )
 )
-
-class VibeGenerateRequest(BaseModel):
-    prompt: str = Field(..., description="유저가 원하는 패션 아이템 (예: '연청 워시드 크롭 데님 자켓')")
 
 @with_llm_resilience(fallback_default=HTTPException(status_code=500, detail="이미지 생성에 실패했습니다."))
 async def generate_image_from_query(user_query: str) -> bytes:
@@ -72,7 +68,6 @@ async def upload_generated_image(image_bytes: bytes) -> str:
 
     file_name = f"generated/{uuid.uuid4().hex}.jpg"
 
-    # Supabase SDK는 동기식 방식이 섞여 있으므로 안전하게 스레드에서 실행
     def _upload():
         try:
             # 1. 스토리지에 파일 업로드 (Content-Type 지정으로 브라우저에서 바로 보이게 함)

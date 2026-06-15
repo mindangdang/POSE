@@ -3,17 +3,13 @@ import asyncio
 import httpx
 import psycopg 
 from psycopg.rows import dict_row 
-from pydantic import BaseModel, Field 
 from google import genai
 from google.genai import types
 from pathlib import Path
+from project.backend.app.schemas.response import TasteProfileResult 
+from project.backend.app.utils.settings import IMAGE_DIR, load_backend_env
+from project.backend.app.utils.resilience import with_llm_resilience
 
-from project.backend.app.core.settings import IMAGE_DIR, load_backend_env
-from project.backend.app.core.resilience import with_llm_resilience
-
-# ==========================================
-# 1. 환경 변수 및 설정
-# ==========================================
 load_backend_env()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -28,17 +24,6 @@ client = genai.Client(
 
 LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
-# ==========================================
-# 2. Pydantic 스키마 
-# ==========================================
-class TasteProfileResult(BaseModel):
-    persona: str = Field(description="유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀")
-    unconscious_taste: str = Field(description="유저의 무의식적인 취향을 분석하는 텍스트 (2~3문장)")
-    recommendation: str = Field(description="유저의 취향에 정합하는 새로운 키워드 제시 및 실존하는 장소/물건 추천")
-
-# ==========================================
-# 3. 시스템 프롬프트 (토큰 다이어트 적용)
-# ==========================================
 SYSTEM_PROMPT = """
 [System]
 
@@ -182,9 +167,6 @@ Previous Aesthetic Profile:
 {current_profile}
 """
 
-# ==========================================
-# 4. 데이터 로드 및 포맷팅 (비동기화 및 통합)
-# ==========================================
 async def fetch_user_data_from_neon(user_id: str):
     try:
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
@@ -281,7 +263,7 @@ async def analyze_vibe(user_id: str, current_profile: dict):
             system_instruction=SYSTEM_PROMPT,
             temperature=0.4, 
             response_mime_type="application/json",
-            response_schema=TasteProfileResult # 
+            response_schema=TasteProfileResult 
         ),
     )
 

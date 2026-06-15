@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import os
 import json
 import psycopg
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.utils.settings import load_backend_env
 
 load_backend_env()
 neon_url = os.environ.get("NEON_DB_URL")
