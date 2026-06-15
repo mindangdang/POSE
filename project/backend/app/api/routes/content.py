@@ -27,11 +27,11 @@ from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.core.settings import load_backend_env
-from project.backend.Step3.image_generate_search import generate_image_from_query,upload_generated_image
-from project.backend.Step1.utils import *
-from project.backend.Step1.instagram_crawler import download_images
+from project.backend.api_service.image_generate_search import generate_image_from_query,upload_generated_image
+from project.backend.crawlers.utils import *
+from project.backend.crawlers.instagram_crawler import download_images
 from project.backend.app.core.settings import IMAGE_DIR
-from project.backend.Step2.insert_DB import _extract_vector_sync
+from project.backend.api_service.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 
 load_backend_env()

@@ -8,14 +8,14 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
-from project.backend.Step1.shopping_crawler import scrape_product_metadata
-from project.backend.Step1.utils import analyze_description_with_gemini
-from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
-from project.backend.Step2.insert_DB import insert_items_to_db
+from project.backend.crawlers.instagram_crawler import crawl_instagram_post, download_images
+from project.backend.crawlers.shopping_crawler import scrape_product_metadata
+from project.backend.crawlers.utils import analyze_description_with_gemini
+from project.backend.api_service.image_ocr_llm import extract_fact_and_vibe
+from project.backend.api_service.insert_DB import insert_items_to_db
 from project.backend.app.core.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
-from project.backend.Step1.apify_functions import apify_insta_crawler
+from project.backend.crawlers.apify_functions import apify_insta_crawler
 
 
 
