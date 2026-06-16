@@ -1,14 +1,12 @@
 import os
 import asyncio
-import httpx
-import psycopg 
-from psycopg.rows import dict_row 
 from google import genai
 from google.genai import types
 from pathlib import Path
 from project.backend.app.schemas.response import TasteProfileResult 
-from project.backend.app.utils.settings import IMAGE_DIR, load_backend_env
-from project.backend.app.utils.resilience import with_llm_resilience
+from project.backend.app.manage.settings import IMAGE_DIR, load_backend_env
+from project.backend.app.manage.resilience import with_llm_resilience
+from project.backend.basic_functions.ai_service.utils import *
 
 load_backend_env()
 NEON_DB_URL = os.environ.get("NEON_DB_URL")
@@ -167,67 +165,6 @@ Previous Aesthetic Profile:
 {current_profile}
 """
 
-async def fetch_user_data_from_neon(user_id: str):
-    try:
-        async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                query = """
-                    SELECT facts, recommend, category, sub_category, title, image_url,image_vector
-                    FROM saved_posts
-                    WHERE user_id = %s
-                    ORDER BY created_at DESC
-                    LIMIT 10;
-                """
-                await cur.execute(query, (user_id,))
-                return await cur.fetchall()
-    except Exception as e:
-        print(f"DB 조회 실패: {e}")
-        return []
-
-async def get_image_bytes(url_or_filename: str) -> bytes | None:
-    if not url_or_filename:
-        return None
-
-    # Case 1: 외부 URL (다운로드 실패해서 원본 URL만 남은 경우 등)
-    if url_or_filename.startswith(('http://', 'https://')):
-        try:
-            async with httpx.AsyncClient(http2=True) as client:
-                resp = await client.get(url_or_filename, timeout=5.0)
-                if resp.status_code == 200:
-                    return resp.content
-        except Exception as e:
-            print(f"외부 이미지 로드 실패 ({url_or_filename}): {e}")
-        return None
-    
-    # Case 2: 로컬 파일 (디스크 I/O를 논블로킹으로 처리)
-    def read_local():
-        try:
-            candidate = Path(url_or_filename)
-            if not candidate.is_absolute():
-                candidate = LOCAL_IMAGE_DIR / candidate.name
-            if candidate.exists() and candidate.is_file():
-                return candidate.read_bytes()
-        except Exception as e:
-            print(f"로컬 이미지 로드 실패 ({url_or_filename}): {e}")
-        return None
-
-    return await asyncio.to_thread(read_local)
-
-def format_data_for_prompt(item: dict) -> str:
-    facts = item.get("facts") or {}
-    title = facts.get("title", "알 수 없음")
-    location = facts.get("location_text", "위치 정보 없음")
-    key_details = facts.get("key_details", [])
-
-    return f"""[Item {title}]
-    - Category: {item.get('category', 'UNKNOWN')}
-    - Location: {location}
-    - Recommend: {item.get('recommend', '')}
-    - Key Details: {key_details} """
-
-# ==========================================
-# 5. LLM 분석 실행 함수
-# ==========================================
 @with_llm_resilience(fallback_default=None)
 async def analyze_vibe(user_id: str, current_profile: dict):
     raw_items = await fetch_user_data_from_neon(user_id)

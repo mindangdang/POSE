@@ -20,7 +20,7 @@ from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright, Browser
 from playwright_stealth import Stealth
-from project.backend.app.utils.resilience import with_llm_resilience
+from project.backend.app.manage.resilience import with_llm_resilience
 
 # ------------------------------------------------------------------------
 # Layer 0: Custom Exceptions

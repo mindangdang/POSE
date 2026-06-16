@@ -127,45 +127,5 @@ async def crawl_instagram_post(page, post_url: str, max_slides: int = 10) -> Dic
 
     return result
 
-FAKE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Referer": "https://www.instagram.com/",
-    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-}
 
-# 단일 이미지 다운로드용 헬퍼 함수 (Non-blocking 파일 저장)
-async def _download_single_image(client: httpx.AsyncClient, url: str, save_dir: str) -> str:
-    try:
-        response = await client.get(url, timeout=15.0, follow_redirects=True)
-        response.raise_for_status()
 
-        # 고유한 UUID 파일명 생성 (여러 요청이 겹쳐도 덮어쓰기 방지)
-        file_name = f"{uuid.uuid4().hex}.jpg"
-        file_path = os.path.join(save_dir, file_name)
-
-        # 파일 저장은 디스크 I/O이므로 서버 멈춤을 막기 위해 스레드 풀에서 실행
-        def save_file():
-            with open(file_path, "wb") as f:
-                f.write(response.content)
-                
-        await asyncio.to_thread(save_file)
-        return file_path
-    except Exception as e:
-        print(f"이미지 다운로드 실패 ({url[:30]}...): {e}")
-        return None
-
-# httpx와 asyncio.gather를 이용한 초고속 병렬 다운로드
-async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> list:
-    if not image_urls:
-        return []
-
-    # exist_ok=True를 주면 이미 폴더가 있어도 에러가 나지 않습니다.
-    os.makedirs(save_dir, exist_ok=True)
-
-    # 모든 이미지를 동시에 병렬 다운로드
-    async with httpx.AsyncClient(headers=FAKE_HEADERS, http2=True) as client:
-        tasks = [_download_single_image(client, url, save_dir) for url in image_urls]
-        results = await asyncio.gather(*tasks)
-
-    # 실패한(None) 다운로드를 걸러내고 성공한 경로만 반환
-    return [path for path in results if path is not None]

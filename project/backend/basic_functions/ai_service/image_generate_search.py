@@ -1,12 +1,10 @@
 import os
-import uuid
-import asyncio
 from google import genai
 from google.genai import types
-from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.manage.settings import load_backend_env
 from fastapi import HTTPException
 from supabase import create_client, Client
-from project.backend.app.utils.resilience import with_llm_resilience
+from project.backend.app.manage.resilience import with_llm_resilience
 
 load_backend_env()
 
@@ -64,28 +62,3 @@ async def generate_image_from_query(user_query: str) -> bytes:
         
     raise ValueError("생성된 이미지 데이터를 찾을 수 없습니다.")
 
-async def upload_generated_image(image_bytes: bytes) -> str:
-
-    file_name = f"generated/{uuid.uuid4().hex}.jpg"
-
-    def _upload():
-        try:
-            # 1. 스토리지에 파일 업로드 (Content-Type 지정으로 브라우저에서 바로 보이게 함)
-            supabase.storage.from_(BUCKET_NAME).upload(
-                path=file_name,
-                file=image_bytes,
-                file_options={"content-type": "image/jpeg"}
-            )
-            
-            # 2. 방금 올린 파일의 퍼블릭 URL 가져오기
-            return supabase.storage.from_(BUCKET_NAME).get_public_url(file_name)
-            
-        except Exception as e:
-            print(f"Supabase 업로드 에러: {e}")
-            raise Exception("클라우드 이미지 저장에 실패했습니다.")
-
-    print("Supabase로 이미지 업로드 중...")
-    public_url = await asyncio.to_thread(_upload)
-    
-    print(f"업로드 완료! 퍼블릭 URL: {public_url}")
-    return public_url

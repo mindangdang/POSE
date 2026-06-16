@@ -2,11 +2,11 @@ import os
 from typing import List
 from PIL import Image
 import asyncio
-from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.manage.settings import load_backend_env
 from project.backend.app.schemas.response import InstaAnalysisResult
 from google import genai
 from google.genai import types
-from project.backend.app.utils.resilience import with_llm_resilience
+from project.backend.app.manage.resilience import with_llm_resilience
 
 load_backend_env()
 api_key = os.environ.get("GOOGLE_API_KEY")

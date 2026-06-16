@@ -8,16 +8,14 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.crawlers.instagram_crawler import crawl_instagram_post, download_images
-from project.backend.crawlers.shopping_crawler import scrape_product_metadata
-from project.backend.crawlers.utils import analyze_description_with_gemini
-from project.backend.api_service.image_ocr_llm import extract_fact_and_vibe
+from project.backend.basic_functions.crawlers.instagram_crawler import crawl_instagram_post, download_images
+from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
+from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini,_mark_feed_add_items
+from project.backend.basic_functions.ai_service.image_ocr_llm import extract_fact_and_vibe
 from project.backend.app.db.insert_DB import insert_items_to_db
-from project.backend.app.utils.settings import IMAGE_DIR
+from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
-from project.backend.crawlers.apify_functions import apify_insta_crawler
-
-
+from project.backend.basic_functions.crawlers.apify_functions import apify_insta_crawler
 
 async def background_crawl_and_save(
     app: FastAPI,
@@ -38,8 +36,8 @@ async def background_crawl_and_save(
             if not crawl_result or crawl_result.get("error"):
                 error_message = crawl_result.get("error") if crawl_result else "크롤링 결과 없음"
                 raise RuntimeError(f"인스타그램 크롤링 실패: {error_message}")
-
             extracted_items = await _extract_instagram_items(crawl_result)
+
         else:
             extracted_items = await _extract_product_items(post_url)
 
@@ -73,12 +71,14 @@ async def background_crawl_and_save(
     except Exception as exc:
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
         # 에러 발생 시, 임시로 생성된 아이템을 DB에서 삭제
+
         try:
             async with app.state.db_pool.connection() as conn:
                 repos = get_repositories(conn)
                 await repos.saved_posts.delete_by_id(item_id,user_id)
                 await conn.commit()
                 print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
+
         except Exception as db_exc:
             print(f"[백그라운드] 임시 아이템({item_id}) 삭제 실패: {db_exc}")
 
@@ -90,15 +90,7 @@ async def background_crawl_and_save(
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
 
-
-def _mark_feed_add_items(items: list[dict]) -> None:
-    for item in items:
-        facts = item.get("facts")
-        if not isinstance(facts, dict):
-            facts = {}
-            item["facts"] = facts
-        facts["_source"] = "feed_add"
-
+###################################################################################################
 
 async def _crawl_instagram_post(
     post_url: str,

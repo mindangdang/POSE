@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 from fastapi import Depends, FastAPI, Request
 from psycopg_pool import AsyncConnectionPool
 
-from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.manage.settings import load_backend_env
 from project.backend.app.db.session import (
     create_db_pool,
     get_db_connection as get_pooled_db_connection,

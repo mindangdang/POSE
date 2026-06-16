@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from project.backend.app.api.router import api_router
-from project.backend.app.utils.database import lifespan
+from project.backend.app.manage.database import lifespan
 from project.backend.app.api.routes.web import router as web_router
-from project.backend.app.utils.settings import FRONTEND_DIST_DIR, IMAGE_DIR, load_backend_env
+from project.backend.app.manage.settings import FRONTEND_DIST_DIR, IMAGE_DIR, load_backend_env
 
 
 def create_app() -> FastAPI:

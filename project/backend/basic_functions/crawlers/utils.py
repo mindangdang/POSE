@@ -2,12 +2,20 @@ import os
 from google import genai
 from google.genai import types
 from project.backend.app.schemas.response import ProductAnalysisResult
-from project.backend.app.utils.settings import load_backend_env
-from project.backend.app.utils.resilience import with_llm_resilience
+from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.resilience import with_llm_resilience
 from fastapi import WebSocket
 import httpx
 import uuid
-from typing import Optional
+import asyncio
+import httpx
+
+
+FAKE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Referer": "https://www.instagram.com/",
+    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+}
 
 class ConnectionManager:
     def __init__(self):
@@ -92,73 +100,47 @@ async def analyze_description_with_gemini(description: str) -> dict:
         "price": data.price
     }
 
-domain_map = {
-        "musinsa.com": "무신사",
-        "m.bunjang.co.kr" : "번개장터",
-        "fruitsfamily.com": "후루츠패밀리",
-        "zara.com": "자라",
-        "instagram.com": "인스타그램"
-    }
+def _mark_feed_add_items(items: list[dict]) -> None:
+    for item in items:
+        facts = item.get("facts")
+        if not isinstance(facts, dict):
+            facts = {}
+            item["facts"] = facts
+        facts["_source"] = "feed_add"
 
-async def fetch_from_single_site(
-    client: httpx.AsyncClient, 
-    query: str, 
-    domain: str, 
-    site_name: str, 
-    current_page: int, 
-    serp_api_key: str, 
-    params: Optional[dict] = None
-) -> list[dict]:
-    if params is None:
-        params = {
-            "engine": "google_images",
-            "q": query,
-            "api_key": serp_api_key,
-            "ijn": (current_page - 1) // 3, # 100개 단위 배칭 (UI 1~3p -> ijn 0, 4~6p -> ijn 1)
-            "gl": "kr",
-            "hl": "ko"
-        }
-
+# 단일 이미지 다운로드용 헬퍼 함수 (Non-blocking 파일 저장)
+async def _download_single_image(client: httpx.AsyncClient, url: str, save_dir: str) -> str:
     try:
-        print(f"[{site_name or 'SerpApi'}] API 요청 파라미터: q='{query}', ijn={params.get('ijn')}")
-        response = await client.get("https://serpapi.com/search", params=params)
+        response = await client.get(url, timeout=15.0, follow_redirects=True)
         response.raise_for_status()
-        data = response.json()
-        
-        # Google Images는 'images_results', Google Lens는 'visual_matches'를 사용함
-        items = data.get("images_results") or data.get("visual_matches") or []
-        print(f"[{site_name or 'SerpApi'}] 검색 성공: {len(items)}개")
-        
-        results = []
-        for item in items:
-            # 이미지 URL 추출 로직 통합
-            image_url = item.get("thumbnail", "")
-            if "original" in item and "instagram" not in domain:
-                image_url = item.get("original") or image_url
-            
-            # 가격 정보 추출 (Lens는 dict 형태일 수 있음)
-            price = item.get("price")
-            if isinstance(price, dict):
-                price = price.get("value")
-            price = price or item.get("snippet") or "가격 미상"
-            
-            shop = item.get("source") or site_name or "알 수 없는 샵"
 
-            results.append({
-                "id": str(uuid.uuid4()),
-                "category": "PRODUCT",
-                "sub_category": query if not query.startswith("http") else "PRODUCT",
-                "recommend": f"{shop}에서 발견한 아이템",
-                "image_url": image_url,
-                "url": item.get("link", ""),
-                "facts": {
-                    "title": item.get("title", "상품명 없음"),
-                    "Price": price,
-                    "Shop": shop,
-                },
-            })
-        return results
+        # 고유한 UUID 파일명 생성 (여러 요청이 겹쳐도 덮어쓰기 방지)
+        file_name = f"{uuid.uuid4().hex}.jpg"
+        file_path = os.path.join(save_dir, file_name)
 
+        # 파일 저장은 디스크 I/O이므로 서버 멈춤을 막기 위해 스레드 풀에서 실행
+        def save_file():
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+                
+        await asyncio.to_thread(save_file)
+        return file_path
     except Exception as e:
-        print(f"[{domain}] 검색 실패: {e}")
+        print(f"이미지 다운로드 실패 ({url[:30]}...): {e}")
+        return None
+
+# httpx와 asyncio.gather를 이용한 초고속 병렬 다운로드
+async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> list:
+    if not image_urls:
         return []
+
+    # exist_ok=True를 주면 이미 폴더가 있어도 에러가 나지 않습니다.
+    os.makedirs(save_dir, exist_ok=True)
+
+    # 모든 이미지를 동시에 병렬 다운로드
+    async with httpx.AsyncClient(headers=FAKE_HEADERS, http2=True) as client:
+        tasks = [_download_single_image(client, url, save_dir) for url in image_urls]
+        results = await asyncio.gather(*tasks)
+
+    # 실패한(None) 다운로드를 걸러내고 성공한 경로만 반환
+    return [path for path in results if path is not None]

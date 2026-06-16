@@ -7,8 +7,8 @@ from google.auth.transport import requests
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 from psycopg.rows import dict_row
-from project.backend.app.utils.database import get_db_connection
-from project.backend.app.utils.settings import load_backend_env
+from project.backend.app.manage.database import get_db_connection
+from project.backend.app.manage.settings import load_backend_env
 
 router = APIRouter()
 

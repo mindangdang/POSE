@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from project.backend.app.utils.settings import FRONTEND_DIST_DIR
+from project.backend.app.manage.settings import FRONTEND_DIST_DIR
 
 
 router = APIRouter()

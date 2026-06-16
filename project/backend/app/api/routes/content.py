@@ -22,17 +22,19 @@ from fastapi import (
 )
 import uuid
 from fastapi.responses import FileResponse
-from project.backend.app.utils.database import get_repos
+from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
-from project.backend.app.utils.settings import load_backend_env
-from project.backend.api_service.image_generate_search import generate_image_from_query,upload_generated_image
-from project.backend.crawlers.utils import *
-from project.backend.crawlers.instagram_crawler import download_images
-from project.backend.app.utils.settings import IMAGE_DIR
+from project.backend.app.manage.settings import load_backend_env
+from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query,upload_generated_image
+from project.backend.basic_functions.crawlers.utils import *
+from project.backend.basic_functions.searching.utils import *
+from project.backend.basic_functions.crawlers.instagram_crawler import download_images
+from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.db.insert_DB import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
+from project.backend.app.services.searching import *
 
 load_backend_env()
 FAIL_IMAGE_DIR = Path("project/backend/fail_images")
@@ -90,7 +92,6 @@ async def extract_and_save_url(
 ######################################################################################
 
 async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Optional[int], custom_domain_map: Optional[dict] = None):
-    # 전역 매니저 객체를 직접 참조하거나 app.state에서 안전하게 가져옵니다.
     manager = getattr(app.state, "websocket_manager", websocket_manager_instance)
     serp_api_key = os.environ.get("SERP_API_KEY")
     
@@ -103,7 +104,6 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
     print(f"[DEBUG] background_pse_search 시작: user_id={user_id}, query='{query}', page={page}")
 
     try:
-        # page 파라미터 타입 안정성 및 기본값 처리
         current_page = 1
         if page is not None:
             try:
@@ -112,47 +112,14 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
                 current_page = 1
 
         model_semaphore = asyncio.Semaphore(4)
-        async def process_single_item(item: dict):
-            try:
-                target_url = item.get("image_url")
-                if not target_url:
-                    return
-                    
-                async with model_semaphore:
-                    if manager:
-                        payload = {
-                            "type": "SEARCH_SUCCESS",
-                            "results": [item],
-                            "is_append": True,
-                            "page": current_page
-                        }
-                        await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                        item_title = item.get('facts', {}).get('title', 'Unknown')
-                        print(f"[DEBUG] [{item_title}] (Page: {current_page}) 프론트로 전송 완료.")
-
-            except Exception as e:
-                print(f"개별 아이템 전송 에러: {e}")
-
-        async def process_site(domain: str, name: str, client: httpx.AsyncClient):
-            try:
-                product_hierarchy_query = "(> products)"
-                exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
-                final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
-                site_items = await fetch_from_single_site(client, final_query, domain, name, current_page, serp_api_key)
-                ijn_val = (current_page - 1) // 3
-                print(f"[DEBUG] '{name}' ({domain}) UI Page:{current_page} -> API ijn:{ijn_val} 결과:{len(site_items)}개")
-                tasks = [asyncio.create_task(process_single_item(item)) for item in (site_items or [])]
-                await asyncio.gather(*tasks, return_exceptions=True)
-                    
-            except Exception as e:
-                print(f"쇼핑몰 검색 스트리밍 처리 에러 ({domain}): {e}")
 
         print("여러 쇼핑몰 병렬 검색 및 실시간 전송 시작...")
         target_domains = custom_domain_map if custom_domain_map is not None else domain_map
         
         async with httpx.AsyncClient(timeout=60.0) as client:
-            site_tasks = [asyncio.create_task(process_site(domain, name, client)) for domain, name in target_domains.items()]
+            site_tasks = [asyncio.create_task(process_site(user_id, manager, model_semaphore, serp_api_key, current_page, query, domain, name, client)) for domain, name in target_domains.items()]
             await asyncio.gather(*site_tasks, return_exceptions=True)
+
         print("모든 쇼핑몰 검색 및 스트리밍 완료.")
 
     except Exception as exc:
@@ -160,6 +127,7 @@ async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Op
         if manager:
             payload = {"type": "SEARCH_ERROR", "message": f"쇼핑 검색 중 오류: {str(exc)}"}
             await manager.broadcast_to_user(user_id, json.dumps(payload))
+
     finally:
         if manager:
             await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
@@ -362,5 +330,3 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
 
-
-######################################################################################
