@@ -8,9 +8,9 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.basic_functions.crawlers.instagram_crawler import crawl_instagram_post, download_images
+from project.backend.basic_functions.crawlers.instagram_crawler import crawl_instagram_post
 from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
-from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini,_mark_feed_add_items
+from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini,_mark_feed_add_items,download_images
 from project.backend.basic_functions.ai_service.image_ocr_llm import extract_fact_and_vibe
 from project.backend.app.db.insert_DB import insert_items_to_db
 from project.backend.app.manage.settings import IMAGE_DIR
