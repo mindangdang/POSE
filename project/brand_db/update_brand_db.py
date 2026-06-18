@@ -4,7 +4,7 @@ import json
 import httpx
 import psycopg
 from tqdm.asyncio import tqdm
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.manage.settings import load_backend_env
 
 # Load environment variables
 load_backend_env()

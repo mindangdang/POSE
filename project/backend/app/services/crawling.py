@@ -8,16 +8,14 @@ from typing import Optional
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
-from project.backend.Step1.instagram_crawler import crawl_instagram_post, download_images
-from project.backend.Step1.shopping_crawler import scrape_product_metadata
-from project.backend.Step1.utils import analyze_description_with_gemini
-from project.backend.Step2.image_ocr_llm import extract_fact_and_vibe
-from project.backend.Step2.insert_DB import insert_items_to_db
-from project.backend.app.core.settings import IMAGE_DIR
+from project.backend.basic_functions.crawlers.instagram_crawler import crawl_instagram_post
+from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
+from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini,_mark_feed_add_items,download_images
+from project.backend.basic_functions.ai_service.image_ocr_llm import extract_fact_and_vibe
+from project.backend.app.db.insert_DB import insert_items_to_db
+from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
-from project.backend.Step1.apify_functions import apify_insta_crawler
-
-
+from project.backend.basic_functions.crawlers.apify_functions import apify_insta_crawler
 
 async def background_crawl_and_save(
     app: FastAPI,
@@ -38,8 +36,8 @@ async def background_crawl_and_save(
             if not crawl_result or crawl_result.get("error"):
                 error_message = crawl_result.get("error") if crawl_result else "크롤링 결과 없음"
                 raise RuntimeError(f"인스타그램 크롤링 실패: {error_message}")
-
             extracted_items = await _extract_instagram_items(crawl_result)
+
         else:
             extracted_items = await _extract_product_items(post_url)
 
@@ -73,12 +71,14 @@ async def background_crawl_and_save(
     except Exception as exc:
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
         # 에러 발생 시, 임시로 생성된 아이템을 DB에서 삭제
+
         try:
             async with app.state.db_pool.connection() as conn:
                 repos = get_repositories(conn)
                 await repos.saved_posts.delete_by_id(item_id,user_id)
                 await conn.commit()
                 print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
+
         except Exception as db_exc:
             print(f"[백그라운드] 임시 아이템({item_id}) 삭제 실패: {db_exc}")
 
@@ -90,15 +90,7 @@ async def background_crawl_and_save(
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
 
-
-def _mark_feed_add_items(items: list[dict]) -> None:
-    for item in items:
-        facts = item.get("facts")
-        if not isinstance(facts, dict):
-            facts = {}
-            item["facts"] = facts
-        facts["_source"] = "feed_add"
-
+###################################################################################################
 
 async def _crawl_instagram_post(
     post_url: str,
@@ -199,7 +191,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         desc = data.get("description", "").strip()
         analysis_text = "\n".join(part for part in [title, desc] if part and part.lower() != "no description available")
         if len(analysis_text) < 3:
-            return {"recommend": "", "key_details": "", "sub_category": "미분류"}
+            return {"title": "", "recommend": "", "price": "", "key_details": "", "sub_category": "미분류"}
             
         return await analyze_description_with_gemini(analysis_text)
 
@@ -211,6 +203,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     ai_parsed_data = ai_parsed_data or {}
 
     brand_info = data.get("brand", "")
+    clean_title = ai_parsed_data.get("title", "")
     final_key_details = ai_parsed_data.get("key_details", "")
     if brand_info:
         final_key_details = f"[{brand_info}] {final_key_details}".strip()
@@ -219,12 +212,12 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     return [
         {
             "category": "PRODUCT",
-            "title": data.get("title", "Unknown"),
+            "title": clean_title or data.get("title", "Unknown"),
             "recommend": ai_parsed_data.get("recommend", ""),
             "sub_category": sub_category,
             "image_url": normalized_image_url,
             "facts": {
-                "title": data.get("title", ""),
+                "title": clean_title,
                 "price_info": f"{data.get('price', '')} {data.get('currency', '')}".strip(),
                 "location_text": data.get("source", ""),
                 "key_details": final_key_details,

@@ -22,3 +22,4 @@ PyJWT
 curl_cffi
 lxml
 apify-client
+nodriver

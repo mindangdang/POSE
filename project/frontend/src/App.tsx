@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GoogleLoginButton } from './components/GoogleLoginButton';
-import { Header } from './components/Header';
-import { FeedTabContent } from './components/FeedTabContent';
-import { ItemDetailDialog } from './components/ItemDetailDialog';
-import { SearchTabContent } from './components/SearchTabContent';
-import { ProfileTabContent } from './components/ProfileTabContent';
+import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
+import { FeedTabContent } from './components/tabs/Feed';
+import { ProfileTabContent } from './components/tabs/Profile';
+import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
+import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
-import type { AppUser } from './types/user';
 
 // Add Logo Font
 const fontStyles = `
@@ -20,8 +18,8 @@ const fontStyles = `
     font-weight: 400;
     font-style: normal;
   }
-  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
+  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
+  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
   body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
   .leather-header {
     background-color: #080808;
@@ -30,7 +28,8 @@ const fontStyles = `
   }
 `;
 
-function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
+function MainApp() {
+  const { logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
@@ -47,13 +46,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
     ? '#F5F5DC' 
     : ambientColor;
 
-  const { items, setItems, refreshItems } = useItems(user);
-  const { taste, setTaste, refreshTaste } = useTaste(user);
+  const { items, setItems, refreshItems } = useItems();
+  const { taste, setTaste, refreshTaste } = useTaste();
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
     setIsLogoutModalOpen(false);
-    onLogout();
+    logout();
   };
 
   const handleLogoutClick = () => {
@@ -69,7 +67,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-background font-sans">
       <Header
-        user={user}
         onLogout={handleLogoutClick}
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -124,7 +121,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onItemsChange={setItems}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
                 searchSecondhandQuery={searchSecondhandQuery}
                 searchSecondhandTrigger={searchSecondhandTrigger}
               />
@@ -147,7 +143,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
                 refreshTaste={refreshTaste}
-                user={user}
               />
             </motion.div>
           )}
@@ -167,7 +162,6 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
                 onSelectItem={setSelectedItem}
                 onTasteChange={setTaste}
                 taste={taste}
-                user={user}
                 ambientColor={ambientColor}
                 onAmbientColorChange={setAmbientColor}
                 isAmbientActive={isAmbientActive}
@@ -268,55 +262,12 @@ function MainApp({ user, onLogout }: { user: AppUser; onLogout: () => void }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setIsInitializing(false);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/auth/me', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-        } else {
-          localStorage.removeItem('access_token');
-        }
-      } catch (error) {
-        console.error('Auto login failed:', error);
-        localStorage.removeItem('access_token');
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+  const { user, isInitializing, login, loginAsGuest } = useAuth();
 
   const handleGuestLogin = async () => {
     try {
-      const res = await fetch('/api/auth/guest', {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        throw new Error('게스트 로그인에 실패했습니다.');
-      }
-
-      const data = await res.json();
-      localStorage.setItem('access_token', data.access_token);
-      setUser(data.user);
+      await loginAsGuest();
     } catch (error: any) {
       console.error('Guest Login Error:', error);
       alert(error.message || '게스트 로그인 중 오류가 발생했습니다.');
@@ -338,7 +289,7 @@ export default function App() {
 
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-black border-b border-white/10">
-          <span className="text-2xl font-logo tracking-tight text-white">RoomShow</span>
+          <span className="text-2xl font-logo tracking-wide text-white">RoomShow</span>
           <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-white/60">
             <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-white transition-colors uppercase tracking-widest">ABOUT</span>
           </nav>
@@ -351,7 +302,7 @@ export default function App() {
             {/* Left - Typography */}
             <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-12 pt-20 sm:pt-24 lg:pt-0 pb-8 lg:pb-0">
               <div className="max-w-2xl">
-                <h1 className="font-logo text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] text-foreground tracking-[-0.07em] leading-[0.8] transition-all">
+                <h1 className="font-logo text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] text-foreground tracking-tight leading-[0.8] transition-all">
                 <br />
                 Digg yourself 
                 <br />
@@ -361,7 +312,7 @@ export default function App() {
                 {/* Login Buttons */}
                 <div className="mt-8 sm:mt-10 lg:mt-14 flex flex-col gap-2 items-start">
                   <GoogleLoginButton
-                    onSuccess={(userData) => setUser(userData)}
+                    onSuccess={login}
                     onError={(msg) => alert(msg)}
                   />
                   <button
@@ -381,7 +332,7 @@ export default function App() {
                 {/* Placeholder for the PoSe logo photo */}
                 <div className="w-full max-w-md aspect-square rounded-3xl bg-background shadow-2xl flex items-center justify-center relative group">
                   <span className="font-logo text-[120px] sm:text-[160px] text-foreground/5 group-hover:text-primary/10 transition-colors duration-500">
-                    PoSe
+                    RoomShow
                   </span>
                   <div className="absolute inset-0 border-2 border-foreground/5 rounded-3xl m-4" />
                 </div>
@@ -436,5 +387,5 @@ export default function App() {
     );
   }
 
-  return <MainApp user={user} onLogout={() => setUser(null)} />;
+  return <MainApp />;
 }

@@ -1,14 +1,14 @@
 import os
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from project.backend.app.schemas.requests import GoogleAuthRequest
 from google.oauth2 import id_token
 from google.auth.transport import requests
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 from psycopg.rows import dict_row
-from project.backend.app.core.database import get_db_connection
-from project.backend.app.core.settings import load_backend_env
+from project.backend.app.manage.database import get_db_connection
+from project.backend.app.manage.settings import load_backend_env
 
 router = APIRouter()
 
@@ -19,9 +19,6 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 
 # FastAPI의 OAuth2 표준에 따라 Authorization 헤더에서 Bearer 토큰을 추출합니다.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/google")
-
-class GoogleAuthRequest(BaseModel):
-    access_token: str
 
 @router.post("/auth/google")
 async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection)):

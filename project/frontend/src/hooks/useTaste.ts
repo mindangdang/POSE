@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AppUser } from '../types/user';
+import { apiFetch } from '../lib/api';
+import { useAuth } from './useAuth';
 
-export function useTaste(user: AppUser | null) {
+export function useTaste() {
+  const { user } = useAuth();
   const [taste, setTaste] = useState('');
 
   const refreshTaste = useCallback(async () => {
@@ -11,10 +13,8 @@ export function useTaste(user: AppUser | null) {
     }
 
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(`/api/taste?user_id=${user.id}`, { 
+      const res = await apiFetch(`/api/taste?user_id=${user.id}`, { 
         cache: 'no-store',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!res.ok) {
