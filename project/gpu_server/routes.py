@@ -25,14 +25,15 @@ async def embed_image(request: EmbedRequest):
                 resp = await client.get(image_url, timeout=12.0, follow_redirects=True)
                 resp.raise_for_status()
                 with Image.open(io.BytesIO(resp.content)) as img:
-                    vec = pipeline.get_image_vector(img, request.category)
+                    vec = pipeline.get_image_vector(img)
                     return {"vector": vec}
         else:
             local_path = os.path.join(str(IMAGE_DIR), os.path.basename(image_url))
             if os.path.exists(local_path):
                 with Image.open(local_path) as img:
-                    vec = pipeline.get_image_vector(img, request.category)
+                    vec = pipeline.get_image_vector(img)
                     return {"vector": vec}
+                
     except Exception as e:
         print(f"벡터 추출 에러: {e}")
     return {"vector": None}

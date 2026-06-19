@@ -44,7 +44,7 @@ export function FeedTabContent({
     };
   }, []);
 
-  const factKeysToShow = ['title', 'price_info', 'time_info', 'key_details'];
+  const factKeysToShow = ['title', 'price'];
   const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
   const categories = useMemo(() => {

@@ -3,19 +3,11 @@ from google import genai
 from google.genai import types
 from project.backend.app.schemas.response import ProductAnalysisResult
 from project.backend.app.manage.settings import load_backend_env
-from project.backend.app.manage.resilience import with_llm_resilience
 from fastapi import WebSocket
 import httpx
 import uuid
 import asyncio
 import httpx
-
-
-FAKE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Referer": "https://www.instagram.com/",
-    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-}
 
 class ConnectionManager:
     def __init__(self):
@@ -48,57 +40,6 @@ class ConnectionManager:
             for dead_ws in dead_sockets:
                 self.disconnect(dead_ws, user_id)
 
-load_backend_env()
-api_key = os.environ.get("GOOGLE_API_KEY")
-if not api_key:
-    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
-
-my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(
-        base_url=my_proxy_url
-    )
-)
-
-GPU_SERVER_URL = os.environ.get("GPU_SERVER_URL")
-if not GPU_SERVER_URL:
-    raise ValueError(".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다.")
-
-@with_llm_resilience(fallback_default=lambda description: {
-    "recommend": "", 
-    "key_details": description[:100].strip() + "..." if len(description) > 100 else description,
-    "sub_category": "미분류",
-})
-async def analyze_description_with_gemini(description: str) -> dict:
-    if not description or description == "No description available":
-        return {"title": "", "recommend": "", "price": "", "key_details": "", "sub_category": "미분류"}
-
-    prompt = f"""
-    다음 상품정보를 분석하여 'title', 'recommend', 'price' 'key_details', 'sub_category'로 분리해.
-    *참고: 아우터는 패딩,코트 같은 종류고, 자켓은 블루종,가죽자켓 같은 종류야.
-
-    [상품 정보]
-    {description} """
-
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt, 
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ProductAnalysisResult, 
-            temperature=0.1 
-        )
-    )
-    data = response.parsed
-    
-    return {
-        "recommend": data.recommend,
-        "key_details": data.key_details,
-        "sub_category": data.sub_category,
-        "title": data.title,
-        "price": data.price
-    }
 
 def _mark_feed_add_items(items: list[dict]) -> None:
     for item in items:
@@ -144,3 +85,20 @@ async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> li
 
     # 실패한(None) 다운로드를 걸러내고 성공한 경로만 반환
     return [path for path in results if path is not None]
+
+async def fetch_image_task(normalized_image_url,IMAGE_DIR) -> str:
+    if normalized_image_url.startswith(("http://", "https://")):
+        files = await download_images([normalized_image_url], str(IMAGE_DIR))
+        if files:
+            local_name = os.path.basename(files[0])
+            print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_name}")
+            return local_name
+        print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {normalized_image_url[:120]}")
+    return ""
+    
+async def fetch_image_task(payload,IMAGE_DIR) -> str:
+    if payload.image_url and payload.image_url.startswith(("http://", "https://")):
+        files = await download_images([payload.image_url], str(IMAGE_DIR))
+        if files:
+            return os.path.basename(files[0])
+    return payload.image_url or ""

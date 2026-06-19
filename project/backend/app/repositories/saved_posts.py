@@ -18,8 +18,21 @@ class SavedPostsRepository:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts)
-                VALUES (%s, %s, 'PROCESSING ', 'PROCESSING ', '분석 중...', 'AI가 열심히 바이브를 추출하고 있어요', '', '{}')
+                INSERT INTO saved_posts (
+                    user_id,
+                    source_url,
+                    category,
+                    sub_category,
+                    title,
+                    price,
+                    brand,
+                    is_available,
+                    recommend,
+                    image_url,
+                    facts,
+                    shop
+                )
+                VALUES (%s, %s, 'PROCESSING', 'PROCESSING', '분석 중...', NULL, NULL, NULL, 'AI가 열심히 바이브를 추출하고 있어요', '', '{}', NULL)
                 RETURNING id
                 """,
                 (user_id, post_url),
@@ -44,12 +57,30 @@ class SavedPostsRepository:
         facts: dict,
         image_url: str = "",
         image_vector: str | None = None,
+        price: str | None = None,
+        brand: str | None = None,
+        is_available: str | None = None,
+        shop: str | None = None,
     ) -> None:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts, image_vector)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO saved_posts (
+                    user_id,
+                    source_url,
+                    category,
+                    sub_category,
+                    title,
+                    price,
+                    brand,
+                    is_available,
+                    recommend,
+                    image_url,
+                    facts,
+                    image_vector,
+                    shop
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
@@ -57,10 +88,14 @@ class SavedPostsRepository:
                     category,
                     sub_category,
                     facts.get("title", "Manual Item"),
+                    price,
+                    brand,
+                    is_available,
                     recommend,
                     image_url,
                     json.dumps(facts),
                     image_vector,
+                    shop,
                 ),
             )
             await self.conn.commit()
@@ -76,6 +111,10 @@ class SavedPostsRepository:
         title: str = "",
         image_url: str = "",
         image_vector: str | None = None,
+        price: str | None = None,
+        brand: str | None = None,
+        is_available: str | None = None,
+        shop: str | None = None,
     ) -> int:
         """
         상품 아이템을 생성하고 ID를 반환합니다.
@@ -83,20 +122,32 @@ class SavedPostsRepository:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, source_url, category, sub_category, title, recommend, image_url, facts, image_vector)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO saved_posts (
+                    user_id,
+                    source_url,
+                    category,
+                    title,
+                    price,
+                    brand,
+                    is_available,
+                    image_url,
+                    image_vector,
+                    shop
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
                     user_id,
                     url,
                     category,
-                    sub_category,
                     title or facts.get("title", "Item"),
-                    recommend,
+                    price,
+                    brand,
+                    is_available,
                     image_url,
-                    json.dumps(facts),
                     image_vector,
+                    shop,
                 ),
             )
             item_id = (await cursor.fetchone())[0]
@@ -109,11 +160,14 @@ class SavedPostsRepository:
                 SELECT
                     id,
                     source_url as url,
+                    title,
+                    price,
+                    brand,
                     category,
-                    sub_category,
-                    facts,
-                    recommend,
+                    is_available,
                     image_url,
+                    image_vector,
+                    shop,
                     created_at
                 FROM saved_posts
                 WHERE user_id = %s
@@ -122,4 +176,9 @@ class SavedPostsRepository:
                 (user_id,),
             )
             items = await cursor.fetchall()
-            return jsonable_encoder(items)
+            normalized_items = []
+            for item in items:
+                if item.get("image_vector") is not None:
+                    item["image_vector"] = str(item["image_vector"])
+                normalized_items.append(item)
+            return jsonable_encoder(normalized_items)

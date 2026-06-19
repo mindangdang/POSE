@@ -106,27 +106,19 @@ class FashionSiglipReRankingPipeline:
         return white_canvas.convert("RGB")
 
     @torch.no_grad()
-    def get_image_vector(self, img: Image.Image, category: str) -> list[float]:
+    def get_image_vector(self, img: Image.Image) -> list[float]:
         """단일 이미지와 카테고리를 받아 Image Vector를 반환합니다. (DB 저장용)"""
         clean_img = self.preprocess_image(img)
         
         image_input = self.preprocess(clean_img).unsqueeze(0).to(self.device)
         if self.device == "cuda":
             image_input = image_input.to(torch.bfloat16)
-        text_input = self.tokenizer([category]).to(self.device)
+ 
         
         image_features = self.model.encode_image(image_input)
-        text_features = self.model.encode_text(text_input)
-        
-        text_vec = F.normalize(text_features, p=2, dim=1)
         img_vec = F.normalize(image_features, p=2, dim=1)
         
-        dot_product = torch.sum(img_vec * text_vec, dim=1, keepdim=True)
-        projection = dot_product * text_vec
-        pure_vibe = img_vec - projection
-        image_vector = F.normalize(pure_vibe, p=2, dim=1)
-        
-        return image_vector[0].tolist()
+        return img_vec[0].tolist()
 
     
     def encode_text(self, text: str) -> torch.Tensor:

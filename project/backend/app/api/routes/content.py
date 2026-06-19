@@ -20,7 +20,6 @@ from fastapi import (
     File,
     Form,
 )
-import uuid
 from fastapi.responses import FileResponse
 from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
@@ -79,12 +78,15 @@ async def extract_and_save_url(
         "data": [
             {
                 "id": new_item_id,
-                "url": post_url,
+                "title": None,
+                "price": None,
+                "brand": None,
                 "category": "PROCESSING",
-                "sub_category": "PROCESSING",
-                "recommend": "AI가 열심히 바이브를 추출하고 있어요",
-                "facts": {"title": "분석 중..."},
+                "is_available": None,
                 "image_url": "",
+                "image_vector": None,
+                "shop": None,
+                "url": post_url,
             }
         ],
     }
@@ -214,43 +216,27 @@ async def run_serpapi_lens_search(
 
 ######################################################################################
 
-@router.post("/items/manual")
+@router.post("/items/manual") 
 async def save_manual_item(
     payload: ManualItemCreate,
     repos: Repositories = Depends(get_repos),
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        async def fetch_image_task() -> str:
-            if payload.image_url and payload.image_url.startswith(("http://", "https://")):
-                files = await download_images([payload.image_url], str(IMAGE_DIR))
-                if files:
-                    return os.path.basename(files[0])
-            return payload.image_url or ""
-
-        async def parse_description_task() -> dict:
-            title = payload.facts.get("title", "") if isinstance(payload.facts, dict) else ""
-            if title:
-                return await analyze_description_with_gemini(title)
-            return {}
-
-        # 1 & 2. 이미지 다운로드와 Gemini 분석을 비동기로 동시 실행하여 속도 최적화
-        local_image_url, ai_parsed_data = await asyncio.gather(
+        local_image_url, data = await asyncio.gather(
             fetch_image_task(),
             parse_description_task()
         )
         ai_parsed_data = ai_parsed_data or {}
 
-        # 3. 분석된 데이터를 기반으로 facts 키 표준화 및 업데이트
         facts = payload.facts.copy() if isinstance(payload.facts, dict) else {}
         if ai_parsed_data.get("key_details"):
             facts["key_details"] = ai_parsed_data["key_details"]
 
         category = payload.category
-        sub_category = ai_parsed_data.get("sub_category") or payload.sub_category
 
         # 4. 임베딩 벡터 추출
-        vector_list = await _extract_vector_sync(local_image_url, sub_category or category)
+        vector_list = await _extract_vector_sync(local_image_url)
         vector_str = str(vector_list) if vector_list else None
 
         user_id = current_user.get("sub")
@@ -259,13 +245,15 @@ async def save_manual_item(
             user_id=str(user_id),
             url=payload.url,
             category=category,
-            sub_category=sub_category,
-            recommend=ai_parsed_data.get("recommend") or payload.recommend,
-            facts=facts,
             image_url=local_image_url,
             image_vector=vector_str,
+            price=ai_parsed_data.get("price") or payload.facts.get("price") if isinstance(payload.facts, dict) else None,
+            brand=ai_parsed_data.get("brand") or payload.facts.get("brand") if isinstance(payload.facts, dict) else None,
+            is_available=ai_parsed_data.get("is_available") or payload.facts.get("is_available") if isinstance(payload.facts, dict) else None,
+            shop=ai_parsed_data.get("shop") or payload.facts.get("shop") if isinstance(payload.facts, dict) else None,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
+    
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc

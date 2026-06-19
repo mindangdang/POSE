@@ -31,12 +31,13 @@ def initialize_database():
             user_id VARCHAR(50) NOT NULL,
             source_url TEXT,
             title TEXT,
+            price TEXT,
+            brand TEXT,
             category VARCHAR(20),
-            sub_category VARCHAR(50),
+            is_available TEXT,
             image_url TEXT,
-            recommend TEXT,
             image_vector VECTOR(768), 
-            facts JSONB,
+            shop TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(source_url, title)
         );

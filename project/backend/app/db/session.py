@@ -17,12 +17,13 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                         user_id TEXT,
                         source_url TEXT,
                         title TEXT,
+                        price TEXT,
+                        brand TEXT,
                         category TEXT,
-                        sub_category TEXT,
+                        is_available TEXT,
                         image_url TEXT,
-                        recommend TEXT,
                         image_vector vector(768),
-                        facts JSONB,
+                        shop TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(source_url, title)
                     );
