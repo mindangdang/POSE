@@ -44,10 +44,6 @@ def initialize_database():
         """
         cursor.execute(create_table_query)
 
-        # 3. 사실 정보(위치, 가격 등) 고속 검색을 위한 GIN 인덱스 생성
-        print(" facts 데이터 고속 검색 인덱스(GIN) 생성 중...")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_facts_gin ON saved_posts USING GIN (facts);")
-
         # 작업 확정
         conn.commit()
         print("데이터베이스 스키마 세팅이 완벽하게 완료되었습니다!")

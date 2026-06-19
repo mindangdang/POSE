@@ -225,13 +225,7 @@ async def save_manual_item(
     try:
         local_image_url, data = await asyncio.gather(
             fetch_image_task(),
-            parse_description_task()
         )
-        ai_parsed_data = ai_parsed_data or {}
-
-        facts = payload.facts.copy() if isinstance(payload.facts, dict) else {}
-        if ai_parsed_data.get("key_details"):
-            facts["key_details"] = ai_parsed_data["key_details"]
 
         category = payload.category
 
@@ -247,10 +241,10 @@ async def save_manual_item(
             category=category,
             image_url=local_image_url,
             image_vector=vector_str,
-            price=ai_parsed_data.get("price") or payload.facts.get("price") if isinstance(payload.facts, dict) else None,
-            brand=ai_parsed_data.get("brand") or payload.facts.get("brand") if isinstance(payload.facts, dict) else None,
-            is_available=ai_parsed_data.get("is_available") or payload.facts.get("is_available") if isinstance(payload.facts, dict) else None,
-            shop=ai_parsed_data.get("shop") or payload.facts.get("shop") if isinstance(payload.facts, dict) else None,
+            price=
+            brand=
+            is_available=
+            shop=
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     
