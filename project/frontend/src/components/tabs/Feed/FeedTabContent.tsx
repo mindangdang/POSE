@@ -29,7 +29,7 @@ export function FeedTabContent({
   const { user } = useAuth();
   const [newUrl, setNewUrl] = useState("");
   const [sessionId, setSessionId] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
+  const [selectedCategory, setSelectedCategory] = useState<string>('FOLDER');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
@@ -44,17 +44,18 @@ export function FeedTabContent({
     };
   }, []);
 
-  const factKeysToShow = ['title', 'price'];
   const isFeedAddItem = (item: SavedItem) => parseItemInforms(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
+
   const categories = useMemo(() => {
     const dynamicCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[];
-    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'PRODUCT' && c.toUpperCase() !== 'ALL');
-    return ['PRODUCT', 'All', ...others];
+    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'FOLDER' && c.toUpperCase() !== 'ALL');
+    return ['FOLDER', 'All', ...others];
   }, [menuItems]);
+
   const filteredItems = useMemo(
     () => (
-      selectedCategory === 'All'
+      selectedCategory === 'All' || selectedCategory === 'FOLDER'
         ? items
         : items.filter((item) => item.category === selectedCategory)
     ),
@@ -70,13 +71,17 @@ export function FeedTabContent({
   }, [filteredItems]);
 
   const itemsToDisplay = useMemo(() => {
-    let baseItems = [];
+    let baseItems: SavedItem[] = [];
     if (selectedCategory === 'All') {
       baseItems = filteredItems;
-    } else if (currentFolder) {
-      baseItems = filteredItems.filter((item) => item.category === currentFolder);
+    } else if (selectedCategory === 'FOLDER') {
+      if (currentFolder) {
+        baseItems = filteredItems.filter((item) => item.category === currentFolder);
+      } else {
+        baseItems = [];
+      }
     } else {
-      baseItems = filteredItems.filter((item) => !item.category);
+      baseItems = filteredItems.filter((item) => item.category === selectedCategory);
     }
 
     if (searchQuery.trim()) {
@@ -95,7 +100,7 @@ export function FeedTabContent({
 
   useEffect(() => {
     if (!categories.includes(selectedCategory) && categories.length > 0) {
-      setSelectedCategory('PRODUCT');
+      setSelectedCategory('FOLDER');
       setCurrentFolder(null);
     }
   }, [categories, selectedCategory]);
