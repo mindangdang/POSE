@@ -18,7 +18,7 @@ async def process_single_item(user_id, current_page, manager, model_semaphore, i
                     "page": current_page
                 }
                 await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
-                item_title = 
+                item_title = item.get("title")
                 print(f"[DEBUG] [{item_title}] (Page: {current_page}) 프론트로 전송 완료.")
 
     except Exception as e:
