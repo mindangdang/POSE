@@ -1,10 +1,8 @@
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-
 from fastapi import Depends, FastAPI, Request
 from psycopg_pool import AsyncConnectionPool
-
 from project.backend.app.manage.settings import load_backend_env
 from project.backend.app.db.session import (
     create_db_pool,
@@ -13,16 +11,13 @@ from project.backend.app.db.session import (
 )
 from project.backend.app.repositories import Repositories, get_repositories
 
-
 load_backend_env()
-
 
 def get_neon_db_url() -> str:
     db_url = os.environ.get("NEON_DB_URL")
     if not db_url:
         raise RuntimeError("NEON_DB_URL environment variable is not set.")
     return db_url
-
 
 async def rebuild_db_pool(app: FastAPI) -> AsyncConnectionPool:
     old_pool = getattr(app.state, "db_pool", None)
@@ -38,7 +33,6 @@ async def rebuild_db_pool(app: FastAPI) -> AsyncConnectionPool:
     print("DB 커넥션 풀 재생성 완료")
     return new_pool
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db_pool = await rebuild_db_pool(app)
@@ -50,7 +44,6 @@ async def lifespan(app: FastAPI):
     if getattr(app.state, "db_pool", None) is not None:
         await app.state.db_pool.close()
         print("DB 커넥션 풀 안전하게 종료됨")
-
 
 async def get_db_connection(request: Request) -> AsyncGenerator[object, None]:
     async for conn in get_pooled_db_connection(
