@@ -52,6 +52,7 @@ def _normalize_availability(availability_value):
         return False
     return True
 
+############################################# html crawling function ##################################################
 
 def get_html_from_url(url: str, proxy=None):
     parsed_url = urlparse(url)

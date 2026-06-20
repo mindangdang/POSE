@@ -30,3 +30,23 @@ async def _extract_vector_sync(image_url: str):
         return
 
 
+async def _extract_text_vector_sync(text: str):
+    payload = {"text": text}
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{GPU_SERVER_URL}/encode_text", json=payload, timeout=15.0)
+        if response.status_code != 200:
+            print(f"GPU 서버 연산 에러: {response.text}")
+            return
+        text_vector = response.json().get("vector")
+        if not text_vector:
+            return
+        return text_vector
+    
+    except Exception as e:
+        print(f"GPU 서버 통신 에러: {e}")
+        return
+
+
+
+
