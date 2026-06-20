@@ -2,6 +2,7 @@ import html
 import json
 from fastapi import FastAPI
 from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
+from project.backend.basic_functions.crawlers.product_crawler import product_crawler
 from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task
 from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
@@ -69,7 +70,8 @@ async def background_crawl_and_save(
 ###################################################################################################
 
 async def _extract_product_items(post_url: str) -> list[dict]:
-    data = await scrape_product_metadata(post_url) # TODO: product.py 코드로 교체
+    #data = await scrape_product_metadata(post_url) # TODO: product.py 코드로 교체
+    data = product_crawler(post_url)
     if not data or data.get("title") == "추출 실패":
         print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
         return []

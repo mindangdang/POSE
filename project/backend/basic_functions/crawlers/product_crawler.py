@@ -332,12 +332,12 @@ def parse_musinsa_html(html_content):
             "category": json_data.get("baseCategoryFullPath"),
             "original_price": json_data.get("goodsPrice", {}).get("normalPrice"),
             "discounted_price": json_data.get("goodsPrice", {}).get("salePrice"),
-            #"discount_rate": json_data.get("goodsPrice", {}).get("discountRate"),
             "image_url": json_data.get("thumbnailImageUrl"),
-            #"review_count": json_data.get("goodsReview", {}).get("totalCount"),
-            #"rating": json_data.get("goodsReview", {}).get("satisfactionScore"),
             "shop": "Musinsa",
             'is_available': json_data.get("goodsInfo", {}).get("soldOutYn") == "N",
+            #"review_count": json_data.get("goodsReview", {}).get("totalCount"),
+            #"rating": json_data.get("goodsReview", {}).get("satisfactionScore"),
+            #"discount_rate": json_data.get("goodsPrice", {}).get("discountRate"),
         }
 
         return product_info
