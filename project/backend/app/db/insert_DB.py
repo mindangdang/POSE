@@ -58,7 +58,7 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
                 vector_str = str(vector_list) if vector_list else None
 
                 batch_data.append((
-                    str(item_id),
+                    item_id,
                     str(user_id), 
                     source_url, 
                     title,

@@ -235,14 +235,14 @@ async def save_manual_item(
 
         await repos.saved_posts.create_manual_item(
             user_id=str(user_id),
-            url=payload.url,
+            source_url=payload.url,
             category=category,
             image_url=local_image_url,
             image_vector=vector_str,
             price=payload.price,
             brand=payload.brand,
             is_available=payload.is_available,
-            shop=payload.shop
+            shop=payload.shop,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     
