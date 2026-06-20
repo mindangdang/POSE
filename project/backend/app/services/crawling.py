@@ -1,11 +1,8 @@
-import asyncio
 import html
 import json
-
 from fastapi import FastAPI
 from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
 from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task
-from project.backend.app.db.insert_DB import insert_items_to_db
 from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
 
@@ -30,7 +27,7 @@ async def background_crawl_and_save(
         async with app.state.db_pool.connection() as conn:
             repos = get_repositories(conn)
             await repos.saved_posts.delete_by_id(item_id, user_id)
-            await insert_items_to_db(user_id, post_url, extracted_items, conn=conn)
+            await repos.saved_posts.insert_items_batch(user_id, post_url, extracted_items)
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
 
@@ -72,7 +69,7 @@ async def background_crawl_and_save(
 ###################################################################################################
 
 async def _extract_product_items(post_url: str) -> list[dict]:
-    data = await scrape_product_metadata(post_url)
+    data = await scrape_product_metadata(post_url) # TODO: product.py 코드로 교체
     if not data or data.get("title") == "추출 실패":
         print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
         return []

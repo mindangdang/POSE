@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Plus, ThumbsUp, ThumbsDown, Search, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
-import { getItemTitle, parseItemFacts } from '../../../lib/itemFacts';
+import { getItemTitle, parseItemFacts } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 
 type SearchResultCardProps = {

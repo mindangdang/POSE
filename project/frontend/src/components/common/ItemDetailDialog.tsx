@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
 import { apiFetch } from '../../lib/api';
-import { getItemTitle, parseItemFacts } from '../../lib/itemFacts';
+import { getItemTitle, parseItemFacts } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ItemDetailDialogProps = {

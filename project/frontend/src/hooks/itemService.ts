@@ -15,7 +15,7 @@ export async function saveItemToFeed(
       body: JSON.stringify({
         user_id: user.id,
         category: item.category || "WEB SEARCH",
-        sub_category: item.sub_category || "WEB SEARCH",
+        category: item.category || "WEB SEARCH",
         recommend: item.recommend,
         facts: item.facts,
         url: item.url,

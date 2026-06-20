@@ -4,7 +4,7 @@ import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
-import { parseItemFacts } from '../../../lib/itemFacts';
+import { parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
 import { FeedItemCard } from './FeedItemCard';
@@ -45,7 +45,7 @@ export function FeedTabContent({
   }, []);
 
   const factKeysToShow = ['title', 'price'];
-  const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
+  const isFeedAddItem = (item: SavedItem) => parseItemInforms(item)?._source === 'feed_add';
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
   const categories = useMemo(() => {
     const dynamicCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[];
@@ -64,7 +64,7 @@ export function FeedTabContent({
   const folders = useMemo(() => {
     const subs = new Set<string>();
     filteredItems.forEach((item) => {
-      if (item.sub_category) subs.add(item.sub_category);
+      if (item.category) subs.add(item.category);
     });
     return Array.from(subs);
   }, [filteredItems]);
@@ -74,22 +74,19 @@ export function FeedTabContent({
     if (selectedCategory === 'All') {
       baseItems = filteredItems;
     } else if (currentFolder) {
-      baseItems = filteredItems.filter((item) => item.sub_category === currentFolder);
+      baseItems = filteredItems.filter((item) => item.category === currentFolder);
     } else {
-      baseItems = filteredItems.filter((item) => !item.sub_category);
+      baseItems = filteredItems.filter((item) => !item.category);
     }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       return baseItems.filter((item) => {
-        const facts = parseItemFacts(item) || {};
-        const title = typeof facts.title === 'string' ? facts.title.toLowerCase() : '';
+        const informs = parseItemInforms(item) || {};
+        const title = typeof informs.title === 'string' ? informs.title.toLowerCase() : '';
         const category = (item.category || '').toLowerCase();
-        const subCategory = (item.sub_category || '').toLowerCase();
-        const recommend = (item.recommend || '').toLowerCase();
-        const factValues = Object.values(facts).map(v => String(v).toLowerCase()).join(' ');
 
-        return title.includes(query) || category.includes(query) || subCategory.includes(query) || recommend.includes(query) || factValues.includes(query);
+        return title.includes(query) || category.includes(query) || category.includes(query) || Object.values(informs).some((v) => typeof v === 'string' && v.toLowerCase().includes(query));
       });
     }
 
@@ -119,14 +116,14 @@ export function FeedTabContent({
           
           if (data.type === "CRAWL_SUCCESS") {
             onItemsChange((prev) => {
-              const filtered = prev.filter(item => item.id !== data.placeholder_id);
+              const filtered = prev.filter(item => item.item_id !== data.placeholder_id);
               return [...(data.items || []), ...filtered];
             });
             setCurrentFolder((prev) => prev === 'PROCESSING' ? null : prev);
             void refreshTaste();
           } else if (data.type === "CRAWL_ERROR") {
             alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
-            onItemsChange((prev) => prev.filter(item => item.id !== data.placeholder_id));
+            onItemsChange((prev) => prev.filter(item => item.item_id !== data.placeholder_id));
           }
         } catch (err) {
           console.error("웹소켓 메시지 파싱 오류:", err);
@@ -143,7 +140,7 @@ export function FeedTabContent({
 
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
-      const data = await apiJson<any>('/api/extract-url', {
+      const data = await apiJson<any>('/api/crawl_product', {
         method: 'POST',
         body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
       });
@@ -180,7 +177,7 @@ export function FeedTabContent({
     },
     onMutate: async ({ id }) => {
       const previousItems = items;
-      onItemsChange((currentItems) => currentItems.filter((item) => item.id !== id));
+      onItemsChange((currentItems) => currentItems.filter((item) => item.item_id !== id));
       return { previousItems };
     },
     onError: (error, _variables, context) => {
@@ -341,7 +338,7 @@ export function FeedTabContent({
                             onClick={() => setCurrentFolder(folder)}
                             className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
                           >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
                             <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
                               {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
                                 <Wind className="w-4 h-4" />
@@ -367,7 +364,7 @@ export function FeedTabContent({
                             onClick={() => setCurrentFolder(folder)}
                             className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
                           >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
                             <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
                               <Columns2 className="w-4 h-4" />
                             </div>
@@ -391,7 +388,7 @@ export function FeedTabContent({
                           onClick={() => setCurrentFolder(folder)}
                           className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
                         >
-                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
+                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
                           <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
                             {['shoes'].includes(folder.toLowerCase()) ? (
                               <Footprints className="w-4 h-4" />
@@ -430,8 +427,7 @@ export function FeedTabContent({
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
               <FeedItemCard
-                key={item.id}
-                factKeysToShow={factKeysToShow}
+                key={item.item_id}
                 item={item}
                 onDelete={handleDelete}
                 onSelect={() => onSelectItem(item)}

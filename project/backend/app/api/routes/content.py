@@ -31,7 +31,7 @@ from project.backend.basic_functions.ai_service.utils import upload_generated_im
 from project.backend.basic_functions.crawlers.utils import *
 from project.backend.basic_functions.searching.utils import *
 from project.backend.app.manage.settings import IMAGE_DIR
-from project.backend.app.db.insert_DB import _extract_vector_sync
+from project.backend.app.db.utils import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 from project.backend.app.services.searching import *
 
@@ -42,7 +42,7 @@ FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 router = APIRouter()
 websocket_manager_instance = ConnectionManager()
 
-@router.post("/extract-url")
+@router.post("/crawl_product")
 async def extract_and_save_url(
     payload: UrlAnalyzeRequest,
     request: Request,
@@ -76,8 +76,8 @@ async def extract_and_save_url(
         "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
         "item_id": new_item_id,
         "data": [
-            {
-                "id": new_item_id,
+            {   
+                "item_id": new_item_id,
                 "title": None,
                 "price": None,
                 "brand": None,
@@ -148,8 +148,6 @@ async def run_serpapi_search(
 
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
 
-######################################################################################
-
 @router.post("/lens")
 async def run_serpapi_lens_search(
     file: Optional[UploadFile] = File(None),
@@ -213,8 +211,6 @@ async def run_serpapi_lens_search(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
 
-######################################################################################
-
 @router.post("/items/manual") 
 async def save_manual_item(
     payload: ManualItemCreate,
@@ -223,19 +219,15 @@ async def save_manual_item(
 ):
     try:
         local_image_url = await fetch_image_task(payload, IMAGE_DIR)
-
-        category = payload.category
-
-        # 4. 임베딩 벡터 추출
         vector_list = await _extract_vector_sync(local_image_url)
         vector_str = str(vector_list) if vector_list else None
-
         user_id = current_user.get("sub")
 
         await repos.saved_posts.create_manual_item(
+            item_id = payload.item_id,
             user_id=str(user_id),
-            source_url=payload.url,
-            category=category,
+            source_url=payload.source_url,
+            category=payload.category,
             image_url=local_image_url,
             image_vector=vector_str,
             price=payload.price,
@@ -265,7 +257,6 @@ async def get_items(
         print(f"조회 에러: {exc}")
         return []
 
-
 @router.delete("/items/{item_id}")
 async def delete_item(
     item_id: int, 
@@ -280,7 +271,6 @@ async def delete_item(
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-
 @router.get("/images/{filename}")
 async def serve_image(filename: str):
     # 1. 일반 저장 폴더 우선 확인
@@ -294,7 +284,6 @@ async def serve_image(filename: str):
         return FileResponse(path=fail_path)
 
     raise HTTPException(status_code=404, detail="Image not found")
-
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):

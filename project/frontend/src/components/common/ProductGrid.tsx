@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Heart, Plus } from 'lucide-react';
-import { getItemTitle, parseItemFacts } from '../../lib/itemFacts';
+import { getItemTitle, parseItemFacts } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ProductGridProps = {

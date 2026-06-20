@@ -2,12 +2,11 @@ import { motion } from 'framer-motion';
 import { Instagram, Sparkles, Trash2, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useState } from 'react';
 
-import { getItemTitle, parseItemFacts } from '../../../lib/itemFacts';
+import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 
 type FeedItemCardProps = {
   item: SavedItem;
-  factKeysToShow: string[];
   onDelete: (id: number) => void | Promise<void>;
   onSelect: () => void;
   onSearchSecondhand?: (title: string) => void;
@@ -17,34 +16,27 @@ type FeedItemCardProps = {
 
 export function FeedItemCard({
   item,
-  factKeysToShow,
   onDelete,
   onSelect,
   onSearchSecondhand,
   onLike,
   onDislike,
 }: FeedItemCardProps) {
-  const facts = parseItemFacts(item);
+  const informs = parseItemInforms(item);
+  const informsList = Object.entries(informs).filter(
+    ([key, value]) =>
+      value != null &&
+      value !== '' &&
+      !['item_id', 'title', 'category', 'source_url', '_source'].includes(key)
+  );
   const title = getItemTitle(item);
-  const isProcessingItem =
-    item.category.trim().toUpperCase() === 'PROCESSING' ||
-    item.sub_category.trim().toUpperCase() === 'PROCESSING' ||
-    facts?._source === 'feed_add';
-  const categoryLabel = `${item.category}${item.sub_category ? ` / ${item.sub_category}` : ''}`;
-
-  // 사용자에게 노출할 필요가 없는 내부 메타데이터 키 목록
-  const INTERNAL_KEYS = ['title', 'image_vector', 'local_image_url', '_source', 'embedding_vector_text'];
-
-  const visibleFacts = facts
-    ? Object.entries(facts).filter(
-        ([key]) => !INTERNAL_KEYS.includes(key.toLowerCase()) && factKeysToShow.includes(key.toLowerCase())
-      )
-    : [];
-
+  const isProcessingItem = item.category.trim().toUpperCase() === 'PROCESSING' || informs._source === 'feed_add';
+  const categoryLabel = `${item.category}${item.category ? ` / ${item.category}` : ''}`;
   const aspectRatio = 'aspect-[2/3]';
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
 
+  /// TODO: hooks로 옮기기
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
     setLiked(!liked);
@@ -76,7 +68,7 @@ export function FeedItemCard({
           referrerPolicy="no-referrer"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            const localUrl = facts?.local_image_url as string | undefined;
+            const localUrl = informs?.local_image_url as string | undefined;
             if (localUrl && !target.src.includes(localUrl)) {
               target.src = `/api/images/${localUrl}`;
             } else {
@@ -92,7 +84,7 @@ export function FeedItemCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(item.id);
+            onDelete(item.item_id);
           }}
           className="absolute top-2 sm:top-3 right-2 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:scale-105"
           aria-label="Delete item"
@@ -141,10 +133,10 @@ export function FeedItemCard({
           {title}
         </h3>
 
-        {/* Facts */}
-        {visibleFacts.length > 0 && (
+        {/* Informs */}
+        {informsList.length > 0 && (
           <div className="pt-1 space-y-0.5 sm:space-y-1">
-            {visibleFacts.slice(0, 2).map(([key, value]) => (
+            {informsList.slice(0, 2).map(([key, value]) => (
               <p key={key} className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">
                 {Array.isArray(value) ? value.join(', ') : String(value)}
               </p>
@@ -154,9 +146,9 @@ export function FeedItemCard({
 
         {/* Source */}
         <div className="pt-1 sm:pt-2 flex flex-col gap-1 sm:gap-1.5">
-          {item.url && item.url.startsWith('http') ? (
+          {item.source_url && item.source_url.startsWith('http') && (
             <a
-              href={item.url}
+              href={item.source_url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -164,10 +156,6 @@ export function FeedItemCard({
             >
               <Instagram className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source
             </a>
-          ) : (
-            <span className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground">
-              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> AI Curated
-            </span>
           )}
 
           <button
