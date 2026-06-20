@@ -55,7 +55,7 @@ async def fetch_from_single_site(
             shop = item.get("source") or site_name or "알 수 없는 샵"
 
             results.append({
-                "id": str(uuid.uuid4()),
+                "item_id": str(uuid.uuid4()),
                 "title": item.get("title", "상품명 없음"),
                 "price": price,
                 "brand": item.get("source") or shop,

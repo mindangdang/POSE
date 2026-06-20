@@ -152,7 +152,6 @@ async def run_serpapi_search(
 
 @router.post("/lens")
 async def run_serpapi_lens_search(
-    request: Request,
     file: Optional[UploadFile] = File(None),
     query: Optional[str] = Form(None)
 ):
