@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,9 +26,10 @@ class SavedPostsRepository:
                     brand,
                     is_available,
                     image_url,
-                    shop
+                    shop,
+                    image_vector
                 )
-                VALUES (%s, %s, 'PROCESSING', 'PROCESSING', '분석 중...', NULL, NULL, 'AI가 열심히 정보를 추출하고 있어요', NULL)
+                VALUES (%s, %s, 'PROCESSING', 'PROCESSING', '분석 중...', NULL, NULL, 'AI가 열심히 정보를 추출하고 있어요', NULL, NULL)
                 RETURNING id
                 """,
                 (user_id, post_url),
@@ -46,9 +46,11 @@ class SavedPostsRepository:
 
     async def create_manual_item(
         self,
+        self,
         user_id: str,
         url: str,
         category: str,
+        title: str | None = None,
         image_url: str = "",
         image_vector: str | None = None,
         price: str | None = None,
@@ -71,7 +73,7 @@ class SavedPostsRepository:
                     image_vector,
                     shop
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
@@ -136,6 +138,7 @@ class SavedPostsRepository:
                 ),
             )
             item_id = (await cursor.fetchone())[0]
+            await self.conn.commit()
             return item_id
 
     async def list_feed_items(self, user_id: str):
@@ -144,7 +147,7 @@ class SavedPostsRepository:
                 """
                 SELECT
                     id,
-                    source_url as url,
+                    source_url,
                     title,
                     price,
                     brand,

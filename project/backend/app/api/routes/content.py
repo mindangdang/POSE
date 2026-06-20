@@ -86,7 +86,7 @@ async def extract_and_save_url(
                 "image_url": "",
                 "image_vector": None,
                 "shop": None,
-                "url": post_url,
+                "source_url": post_url,
             }
         ],
     }
@@ -223,9 +223,7 @@ async def save_manual_item(
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        local_image_url, data = await asyncio.gather(
-            fetch_image_task(),
-        )
+        local_image_url = await fetch_image_task(payload, IMAGE_DIR)
 
         category = payload.category
 
@@ -241,10 +239,10 @@ async def save_manual_item(
             category=category,
             image_url=local_image_url,
             image_vector=vector_str,
-            price=
-            brand=
-            is_available=
-            shop=
+            price=payload.price,
+            brand=payload.brand,
+            is_available=payload.is_available,
+            shop=payload.shop
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     

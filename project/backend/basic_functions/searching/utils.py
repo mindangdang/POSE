@@ -63,7 +63,8 @@ async def fetch_from_single_site(
                 "is_available": item.get("is_available", "알 수 없음"),
                 "image_url": image_url,
                 "shop": shop,
-                "url": item.get("link", ""),
+                "source_url": item.get("link", ""),
+                "image_vector": None,
             })
         return results
 

@@ -24,6 +24,11 @@ class ManualItemCreate(BaseModel):
     category: str
     url: str
     image_url: Optional[str] = ""
+    title: Optional[str] = None
+    price: Optional[str] = None
+    brand: Optional[str] = None
+    is_available: Optional[str] = None
+    shop: Optional[str] = None
 
 class GoogleAuthRequest(BaseModel):
     access_token: str

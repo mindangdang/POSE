@@ -97,12 +97,14 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     if brand_info:
         final_key_details = f"[{brand_info}] {final_key_details}".strip()
 
+    category = ai_parsed_data.get("category") or data.get("category") or "PRODUCT"
+
     return [
         {
             "title": clean_title or data.get("title", "Unknown"),
             "price": f"{data.get('price', '')} {data.get('currency', '')}".strip() or None,
             "brand": data.get("brand", ""),
-            "category": ,
+            "category": category,
             "is_available": data.get("is_available", "알 수 없음"),
             "image_url": normalized_image_url,
             "shop": data.get("source", "unknown"),
