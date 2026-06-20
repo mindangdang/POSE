@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
 import { apiFetch } from '../../lib/api';
-import { getItemTitle, parseItemFacts } from '../../lib/iteminform';
+import { getItemTitle, parseItemInforms } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ItemDetailDialogProps = {
@@ -24,7 +24,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
   const displayItem = viewedItem || item;
   const modalTitle = displayItem ? getItemTitle(displayItem) : '';
-  const facts = displayItem ? parseItemFacts(displayItem) : null;
+  const facts = displayItem ? parseItemInforms(displayItem) : null;
 
   useEffect(() => {
     if (displayItem) {
@@ -167,16 +167,6 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                   </div>
 
                   <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-2">
-                    {/* Vibe Analysis */}
-                    <section>
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-black" /> Vibe Analysis
-                      </h3>
-                      <p className="text-sm font-medium leading-relaxed text-foreground">
-                        {displayItem.recommend}
-                      </p>
-                    </section>
-
                     {/* Extracted Information */}
                     <section>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
@@ -211,10 +201,10 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     </section>
 
                     {/* Source Link */}
-                    {displayItem.url && (
+                    {displayItem.source_url && (
                       <section className="pt-2">
                         <a
-                          href={displayItem.url}
+                          href={displayItem.source_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 w-full h-11 bg-black text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
