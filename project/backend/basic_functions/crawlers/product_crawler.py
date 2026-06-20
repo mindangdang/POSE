@@ -91,7 +91,22 @@ def get_clean_category(title: str, category: str) -> str:
 
     return best_category
 
+def merge_product_info(*results):
+    merged = {}
+    for result in results:
+        if not result:
+            continue
 
+        for key, value in result.items():
+            if key not in merged:
+                merged[key] = value
+                continue
+
+            if merged[key] in (None, "", [], {}):
+                if value not in (None, "", [], {}):
+                    merged[key] = value
+
+    return merged
     
 ############################################# html crawling function ##################################################
 
@@ -278,7 +293,7 @@ def parse_html_with_json_ld(html_content):
                 offers = offers[0] if offers else {}
             if offers:
                 product_info["price"] = _normalize_price(offers.get("price"))
-                product_info["is_available"] = _normalize_availability(offers.get("availability"))
+                product_info["is_available"] = _normalize_availability(offers.get("availability")) or _normalize_availability(offers.get("status"))
 
             product_info["category"] = data.get("category")
             product_info["shop"] = None
@@ -327,7 +342,7 @@ def parse_html_with_opengraph(html_content):
         or og_data.get("og:price:amount")
     )
     product_info["is_available"] = _normalize_availability(
-        og_data.get("availability") or og_data.get("product:availability")
+        og_data.get("availability") or og_data.get("product:availability") or og_data.get("status")
     )
     product_info["shop"] = og_data.get("site_name")
 
@@ -376,7 +391,7 @@ def parse_musinsa_html(html_content):
             "discounted_price": json_data.get("goodsPrice", {}).get("salePrice"),
             "image_url": json_data.get("thumbnailImageUrl"),
             "shop": "Musinsa",
-            'is_available': json_data.get("goodsInfo", {}).get("soldOutYn") == "N",
+            'is_available': not json_data.get("isOutOfStock"),
             #"review_count": json_data.get("goodsReview", {}).get("totalCount"),
             #"rating": json_data.get("goodsReview", {}).get("satisfactionScore"),
             #"discount_rate": json_data.get("goodsPrice", {}).get("discountRate"),
@@ -436,24 +451,28 @@ async def product_crawler(url):
             #if chosen_proxy in proxy_list:
                 #proxy_list.remove(chosen_proxy)
 
-    result = None
+    final_result = None
     if html_content is not None:
-        print(f"[성공] 최종 HTML 확보 완료. 파싱을 시작합니다.")
+        print(f"[성공] 최종 HTML 확보 완료. 파싱을 시작합니다. {html_content}")
         if "musinsa.com" in url:
-            result = parse_musinsa_html(html_content)
+            final_result = parse_musinsa_html(html_content)
         else:
-            result = parse_html_basic(html_content)
-            if result is None:
-                result = parse_html_with_json_ld(html_content)
-                if result is None:
-                    result = parse_html_with_opengraph(html_content)
+            result_basic = parse_html_basic(html_content)
+            result_json_ld = parse_html_with_json_ld(html_content)
+            result_opengraph = parse_html_with_opengraph(html_content)
+
+            final_result = merge_product_info(
+                result_basic,
+                result_json_ld,
+                result_opengraph,
+            )
         
-        if result is not None:
+        if final_result is not None:
             print(f"[성공] HTML 파싱 완료")
-            result['shop'] = shop_name
-            clean_category = get_clean_category(result['title'], result['category'])
-            result['category'] = clean_category
-            return result
+            final_result['shop'] = shop_name
+            #clean_category = get_clean_category(result['title'], result['category'])
+            #result['category'] = clean_category
+            return final_result
     else:
         print("[최종 실패] 모든 재시도가 실패했으며 HTML을 가져오지 못했습니다.")
         return None
@@ -465,9 +484,19 @@ if __name__ == "__main__":
                 'fetching' : 'https://fetching.co.kr/product/58383691/%EC%8A%A4%EB%8B%88%EC%BB%A4%EC%A6%88%20V-S1%20%EC%BB%A8%ED%83%9D%ED%8A%B8%20%EB%B8%94%EB%9E%99', 
                 'fruitsfamily' : 'https://fruitsfamily.com/product/5qjtk/12fw-%EB%B0%B1%EC%8A%A4%ED%8B%B0%EC%B9%98-%EB%B8%8C%EC%9D%B4%EB%84%A5-%EB%8B%88%ED%8A%B8',
                 'jaded' : 'https://jadedldn.com/en-kr/products/product-of-age-cinch-back-xl-colossus',
-
+                'zara' : '',
+                "WORKSOUT":'',
+                "8DIVISION":'',
+                "IAMSHOP":'',
+                "THE BOUNCE":'',
+                "THE X SHOP":'',
+                "COLLECTIV":'',
+                "KREAM":'',
+                "EQL":'',
+                "29CM":'',
+                "Bunjang":'',
                 }
-    url = url_dict['musinsa']
+    url = url_dict['zara']
     result = asyncio.run(product_crawler(url))
     print(result)
   
