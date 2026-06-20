@@ -46,7 +46,6 @@ class SavedPostsRepository:
 
     async def create_manual_item(
         self,
-        self,
         user_id: str,
         url: str,
         category: str,

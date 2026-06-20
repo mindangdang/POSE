@@ -4,7 +4,7 @@ import json
 
 from fastapi import FastAPI
 from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
-from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task, parse_description_task
+from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task
 from project.backend.app.db.insert_DB import insert_items_to_db
 from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
@@ -34,7 +34,6 @@ async def background_crawl_and_save(
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
 
-            # 저장된 최신 아이템 정보를 다시 조회하여 클라이언트에 전송
             all_items = await repos.saved_posts.list_feed_items(user_id)
             new_items = [item for item in all_items if item.get("url") == post_url or item.get("source_url") == post_url]
             if not new_items:
@@ -83,30 +82,21 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     if normalized_image_url.startswith("//"):
         normalized_image_url = f"https:{normalized_image_url}"
 
-    local_image_url, ai_parsed_data = await asyncio.gather(
-        fetch_image_task(normalized_image_url, IMAGE_DIR),
-        parse_description_task(data)
-    )
-
-    ai_parsed_data = ai_parsed_data or {}
-
-    brand_info = data.get("brand", "")
-    clean_title = ai_parsed_data.get("title", "")
-    final_key_details = ai_parsed_data.get("key_details", "")
-    
-    if brand_info:
-        final_key_details = f"[{brand_info}] {final_key_details}".strip()
-
-    category = ai_parsed_data.get("category") or data.get("category") or "PRODUCT"
+    local_image_url = await fetch_image_task(normalized_image_url, IMAGE_DIR)
+    brand = data.get("brand", "Unknown")
+    title = data.get("title", "Unknown")
+    is_available = data.get("is_available", "Unknown")
+    shop = data.get("source", "Unknown")
+    category = data.get("category") or "PRODUCT"
 
     return [
         {
-            "title": clean_title or data.get("title", "Unknown"),
+            "title": title,
             "price": f"{data.get('price', '')} {data.get('currency', '')}".strip() or None,
-            "brand": data.get("brand", ""),
+            "brand": brand,
             "category": category,
-            "is_available": data.get("is_available", "알 수 없음"),
-            "image_url": normalized_image_url,
-            "shop": data.get("source", "unknown"),
+            "is_available": is_available,
+            "image_url": normalized_image_url or local_image_url or None,
+            "shop": shop,
         }
     ]

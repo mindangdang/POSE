@@ -1,13 +1,19 @@
 import os
 from google import genai
 from google.genai import types
-from project.backend.app.schemas.response import ProductAnalysisResult
+from project.backend.app.schemas.response import Product
 from project.backend.app.manage.settings import load_backend_env
 from fastapi import WebSocket
 import httpx
 import uuid
 import asyncio
 import httpx
+
+FAKE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Referer": "https://www.instagram.com/",
+    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+}
 
 class ConnectionManager:
     def __init__(self):
