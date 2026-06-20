@@ -336,7 +336,7 @@ export function FeedTabContent({
                         <Shirt className="w-3 h-3" /> Hanging Section
                       </div>
                       <div className="flex flex-wrap gap-6 pt-12">
-                        {folders.filter(f => ['outer', 'top', 'outerwear', 'tops'].includes(f.toLowerCase())).map((folder) => (
+                        {folders.filter(f => ['outer', 'top'].includes(f.toLowerCase())).map((folder) => (
                           <motion.div
                             layout
                             key={`folder-${folder}`}
@@ -362,7 +362,7 @@ export function FeedTabContent({
                       <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
                       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" /> {/* Drawer Handle */}
                       <div className="flex flex-wrap gap-6 justify-center">
-                        {folders.filter(f => ['bottom', 'bottoms', 'pants'].includes(f.toLowerCase())).map((folder) => (
+                        {folders.filter(f => ['bottom'].includes(f.toLowerCase())).map((folder) => (
                           <motion.div
                             layout
                             key={`folder-${folder}`}
@@ -408,11 +408,11 @@ export function FeedTabContent({
                   </div>
 
                   {/* Miscellaneous Section for undefined folders */}
-                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
+                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
                     <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
                       <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
                       <div className="flex flex-wrap gap-4">
-                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
                           <motion.div
                             layout
                             key={`folder-${folder}`}

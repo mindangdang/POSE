@@ -3,12 +3,7 @@ from project.backend.app.manage.settings import load_backend_env
 import httpx
 
 load_backend_env()
-api_key = os.environ.get("GOOGLE_API_KEY")
 GPU_SERVER_URL = os.environ.get("GPU_SERVER_URL")
-
-if not api_key:
-    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
-
 if not GPU_SERVER_URL:
     raise ValueError(".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다.")
 
@@ -48,5 +43,6 @@ async def _extract_text_vector_sync(text: str):
         return
 
 
+category = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
 
 

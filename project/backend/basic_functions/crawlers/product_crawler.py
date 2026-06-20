@@ -11,6 +11,9 @@ import asyncio
 import nodriver as uc
 import os
 from project.backend.app.manage.settings import load_backend_env
+import tldextract
+from project.backend.basic_functions.utils import _extract_text_vector_sync
+import numpy as np
 
 load_backend_env()
 
@@ -52,6 +55,44 @@ def _normalize_availability(availability_value):
         return False
     return True
 
+def get_source_site_name(url: str) -> str | None:
+    try:
+        extracted = tldextract.extract(url)
+
+        return extracted.domain or None
+    except Exception:
+        return None
+
+def get_clean_category(title: str, category: str) -> str:
+    category_vec_lst = []
+    def cosine_similarity(vec1, vec2):
+        vec1 = np.array(vec1)
+        vec2 = np.array(vec2)
+
+        return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    
+    title_vec = _extract_text_vector_sync(title)
+    category_vec = _extract_text_vector_sync(category)
+
+    # title + category 정보를 모두 반영
+    query_vec = (
+        np.array(title_vec) + np.array(category_vec)
+    ) / 2
+
+    best_category = None
+    best_score = -1
+
+    for category_name, vec in category_vec_lst:
+        score = cosine_similarity(query_vec, vec)
+
+        if score > best_score:
+            best_score = score
+            best_category = category_name
+
+    return best_category
+
+
+    
 ############################################# html crawling function ##################################################
 
 def get_html_from_url(url: str, proxy=None):
@@ -369,7 +410,8 @@ async def product_crawler(url):
     max_retries = 15  
     retry_count = 0
     html_content = None
-    
+    shop_name = get_source_site_name(url)
+
     while html_content is None and retry_count < max_retries:
         retry_count += 1
         
@@ -408,6 +450,9 @@ async def product_crawler(url):
         
         if result is not None:
             print(f"[성공] HTML 파싱 완료")
+            result['shop'] = shop_name
+            clean_category = get_clean_category(result['title'], result['category'])
+            result['category'] = clean_category
             return result
     else:
         print("[최종 실패] 모든 재시도가 실패했으며 HTML을 가져오지 못했습니다.")

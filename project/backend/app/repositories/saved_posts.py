@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
-import asyncio
 from fastapi.encoders import jsonable_encoder
 from psycopg.rows import dict_row
-from project.backend.app.db.utils import _extract_vector_sync
+from project.backend.basic_functions.utils import _extract_vector_sync
 
 
 @dataclass(slots=True)

@@ -31,7 +31,7 @@ from project.backend.basic_functions.ai_service.utils import upload_generated_im
 from project.backend.basic_functions.crawlers.utils import *
 from project.backend.basic_functions.searching.utils import *
 from project.backend.app.manage.settings import IMAGE_DIR
-from project.backend.app.db.utils import _extract_vector_sync
+from project.backend.basic_functions.utils import _extract_vector_sync
 from project.backend.app.api.routes.auth import get_current_user
 from project.backend.app.services.searching import *
 
