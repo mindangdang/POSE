@@ -218,7 +218,8 @@ async def save_manual_item(
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        local_image_url = await fetch_image_task(payload, IMAGE_DIR)
+        normalized_url = normalize_url(payload.image_url)
+        local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
         vector_list = await _extract_vector_sync(local_image_url)
         vector_str = str(vector_list) if vector_list else None
         user_id = current_user.get("sub")

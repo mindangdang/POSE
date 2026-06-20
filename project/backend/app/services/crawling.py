@@ -1,9 +1,8 @@
-import html
 import json
 from fastapi import FastAPI
 from project.backend.basic_functions.crawlers.shopping_crawler import scrape_product_metadata
 from project.backend.basic_functions.crawlers.product_crawler import product_crawler
-from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task
+from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task, normalize_url
 from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.repositories import get_repositories
 
@@ -77,11 +76,8 @@ async def _extract_product_items(post_url: str) -> list[dict]:
         return []
 
     raw_image_url = data.get("image_url", "")
-    normalized_image_url = html.unescape(raw_image_url.strip()) if isinstance(raw_image_url, str) else ""
-    if normalized_image_url.startswith("//"):
-        normalized_image_url = f"https:{normalized_image_url}"
-
-    local_image_url = await fetch_image_task(normalized_image_url, IMAGE_DIR)
+    normalized_url = normalize_url(raw_image_url)
+    local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
     brand = data.get("brand", "Unknown")
     title = data.get("title", "Unknown")
     is_available = data.get("is_available", "Unknown")
@@ -95,7 +91,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "brand": brand,
             "category": category,
             "is_available": is_available,
-            "image_url": normalized_image_url or local_image_url or None,
+            "image_url": raw_image_url or local_image_url or None,
             "shop": shop,
         }
     ]

@@ -1,13 +1,11 @@
 import os
-from google import genai
-from google.genai import types
-from project.backend.app.schemas.response import Product
 from project.backend.app.manage.settings import load_backend_env
 from fastapi import WebSocket
 import httpx
 import uuid
 import asyncio
 import httpx
+import html
 
 FAKE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -92,19 +90,20 @@ async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> li
     # 실패한(None) 다운로드를 걸러내고 성공한 경로만 반환
     return [path for path in results if path is not None]
 
-async def fetch_image_task(normalized_image_url,IMAGE_DIR) -> str:
-    if normalized_image_url.startswith(("http://", "https://")):
-        files = await download_images([normalized_image_url], str(IMAGE_DIR))
+def normalize_url(raw_url) -> str:
+    normalized_image_url = html.unescape(raw_url.strip()) if isinstance(raw_url, str) else ""
+    if normalized_image_url.startswith("//"):
+        normalized_image_url = f"https:{normalized_image_url}"
+    return normalized_image_url
+
+async def fetch_image_task(image_url,IMAGE_DIR) -> str:
+
+    if image_url.startswith(("http://", "https://")):
+        files = await download_images([image_url], str(IMAGE_DIR))
         if files:
             local_name = os.path.basename(files[0])
             print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_name}")
             return local_name
-        print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {normalized_image_url[:120]}")
+        print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {image_url[:120]}")
     return ""
     
-async def fetch_image_task(payload,IMAGE_DIR) -> str:
-    if payload.image_url and payload.image_url.startswith(("http://", "https://")):
-        files = await download_images([payload.image_url], str(IMAGE_DIR))
-        if files:
-            return os.path.basename(files[0])
-    return payload.image_url or ""
