@@ -15,19 +15,15 @@ if not GPU_SERVER_URL:
 
 async def _extract_vector_sync(image_url: str):
     payload = {"image_url": image_url}
-    
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{GPU_SERVER_URL}/embedding", json=payload, timeout=15.0)
-
         if response.status_code != 200:
             print(f"GPU 서버 연산 에러: {response.text}")
             return
-            
         image_vector = response.json().get("vector")
         if not image_vector:
             return
-        
         return image_vector
     
     except Exception as e:
@@ -44,26 +40,25 @@ async def insert_items_to_db(user_id: str, source_url: str, extracted_items: lis
         async with conn.cursor() as cursor:
             insert_query = """
                 INSERT INTO saved_posts 
-                (user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (item_id,user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO NOTHING; 
             """
             batch_data = []
             for item in extracted_items:
+                item_id = item.get("item_id")
                 title = item.get("title", "Unknown")
                 price = item.get("price")
-                if price is None:
-                    price = item.get("price_info") or item.get("price", "가격 미상")
-                brand = item.get("brand") or item.get("shop") or "알 수 없는 브랜드"
+                brand = item.get("brand") or "UNKNOWN"
                 category = item.get("category") or "PRODUCT"
-                is_available = str(item.get("is_available", "알 수 없음"))
-                shop = item.get("shop") or item.get("source") or "알 수 없는 쇼핑몰"
-
+                is_available = str(item.get("is_available", "Unknown"))
+                shop = item.get("shop") or "UNKNOWN"
                 image_url = item.get("image_url") or item.get("local_path") or ""
                 vector_list = await _extract_vector_sync(image_url)
                 vector_str = str(vector_list) if vector_list else None
 
                 batch_data.append((
+                    str(item_id),
                     str(user_id), 
                     source_url, 
                     title,
