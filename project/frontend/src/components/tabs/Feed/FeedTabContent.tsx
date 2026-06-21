@@ -48,7 +48,7 @@ export function FeedTabContent({
 
   const categories = useMemo(() => {
     const dynamicCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[];
-    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'FOLDER' && c.toUpperCase() !== 'ALL');
+    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'FOLDER' && c.toUpperCase() !== 'ALL' && c.toUpperCase() !== 'PROCESSING');
     return ['FOLDER', 'All', ...others];
   }, [menuItems]);
 
@@ -64,7 +64,7 @@ export function FeedTabContent({
   const folders = useMemo(() => {
     const subs = new Set<string>();
     filteredItems.forEach((item) => {
-      if (item.category) subs.add(item.category);
+      if (item.category && item.category.toUpperCase() !== 'PROCESSING') subs.add(item.category);
     });
     return Array.from(subs);
   }, [filteredItems]);
@@ -123,7 +123,6 @@ export function FeedTabContent({
               const filtered = prev.filter(item => item.item_id !== data.placeholder_id);
               return [...(data.items || []), ...filtered];
             });
-            setCurrentFolder((prev) => prev === 'PROCESSING' ? null : prev);
             void refreshTaste();
           } else if (data.type === "CRAWL_ERROR") {
             alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -214,13 +213,6 @@ export function FeedTabContent({
     } catch (err) {
       // Error is already handled by deleteItemMutation.onError
     }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    const normalizedCategory = category.toUpperCase();
-    if (normalizedCategory === 'ALL') return Grid3X3;
-    if (normalizedCategory === 'PROCESSING') return Clock3;
-    return Folder;
   };
 
   const getCategoryLabel = (category: string) => {
@@ -439,8 +431,8 @@ export function FeedTabContent({
           </motion.div>
         </AnimatePresence>
 
-        {/* Empty State */}
-        {items.length === 0 && !addItemMutation.isPending && (
+        {/* Empty State for All tab: show icon and first-item button only when viewing 'All' and no items exist */}
+        {selectedCategory === 'All' && items.length === 0 && !addItemMutation.isPending && (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
               <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
