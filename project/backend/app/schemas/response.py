@@ -6,7 +6,7 @@ class Product(BaseModel):
     title: Optional[str] = Field(description="상품명", default=None)
     price: Optional[str] = Field(description="상품가격", default=None)
     brand: Optional[str] = Field(description="브랜드명", default=None)
-    category: Optional[str] = Field(description="아우터,자켓,상의,하의,신발,악세서리 중 택1", default=None)
+    category: Optional[str] = Field(description="'outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'", default=None)
     is_available: Optional[str] = Field(description="구매 가능 여부", default=None)
     image_url: Optional[str] = Field(description="이미지 퍼블릭 url", default=None)
     image_vector: Optional[str] = Field(description="이미지 임베딩 벡터", default=None)

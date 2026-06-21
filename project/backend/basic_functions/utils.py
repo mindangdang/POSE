@@ -43,6 +43,4 @@ async def _extract_text_vector_sync(text: str):
         return
 
 
-category = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
-
 

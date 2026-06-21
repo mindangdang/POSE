@@ -58,6 +58,7 @@ async def extract_and_save_url(
 
     try:
         new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
+        print("임시 아이템 저장 성공")
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {exc}") from exc

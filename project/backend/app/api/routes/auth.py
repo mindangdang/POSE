@@ -79,7 +79,7 @@ async def guest_auth(conn=Depends(get_db_connection)):
     guest_profile_image = None
 
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("SELECT * FROM users WHERE id = %s", (guest_id,))
+        await cur.execute("SELECT * FROM users WHERE user_id = %s", (guest_id,))
         user = await cur.fetchone()
         if not user:
             await cur.execute(
@@ -97,7 +97,7 @@ async def guest_auth(conn=Depends(get_db_connection)):
     )
 
     user_data = {
-        "id": user["id"],
+        "user_id": user["user_id"],
         "email": user["email"],
         "name": user["name"],
         "profile_image": user["profile_image"],

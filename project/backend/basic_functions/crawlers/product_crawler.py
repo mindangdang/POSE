@@ -64,7 +64,7 @@ def get_source_site_name(url: str) -> str | None:
         return None
 
 def get_clean_category(title: str, category: str) -> str:
-    category_vec_lst = []
+    category_lst = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
     def cosine_similarity(vec1, vec2):
         vec1 = np.array(vec1)
         vec2 = np.array(vec2)
@@ -73,8 +73,6 @@ def get_clean_category(title: str, category: str) -> str:
     
     title_vec = _extract_text_vector_sync(title)
     category_vec = _extract_text_vector_sync(category)
-
-    # title + category 정보를 모두 반영
     query_vec = (
         np.array(title_vec) + np.array(category_vec)
     ) / 2
@@ -82,7 +80,8 @@ def get_clean_category(title: str, category: str) -> str:
     best_category = None
     best_score = -1
 
-    for category_name, vec in category_vec_lst:
+    for category_name in category_lst:
+        vec = _extract_text_vector_sync(category_name)
         score = cosine_similarity(query_vec, vec)
 
         if score > best_score:
@@ -470,8 +469,8 @@ async def product_crawler(url):
         if final_result is not None:
             print(f"[성공] HTML 파싱 완료")
             final_result['shop'] = shop_name
-            #clean_category = get_clean_category(result['title'], result['category'])
-            #result['category'] = clean_category
+            clean_category = get_clean_category(final_result['title'], final_result['category'])
+            final_result['category'] = clean_category
             return final_result
     else:
         print("[최종 실패] 모든 재시도가 실패했으며 HTML을 가져오지 못했습니다.")
@@ -492,11 +491,11 @@ if __name__ == "__main__":
                 "THE X SHOP":'',
                 "COLLECTIV":'',
                 "KREAM":'',
-                "EQL":'',
-                "29CM":'',
+                "EQL":'https://www.eqlstore.com/product/GPFN26060473023/detail?_gl=1*1cp9enf*_gcl_aw*R0NMLjE3ODE5NjY4OTYuRUFJYUlRb2JDaE1JcHNMOTlvZVdsUU1WTngxN0J4MWtOeExSRUFBWUFTQUFFZ0pMZ1BEX0J3RQ..*_gcl_au*MTI5Nzg1MTI4OS4xNzgxOTY2ODk2*_ga*MjEzOTc5MjkzMC4xNzgxOTY2ODk2*_ga_E7EBD0FG29*czE3ODE5NjY4OTUkbzEkZzAkdDE3ODE5NjY4OTUkajYwJGwwJGgw',
+                "29CM":'https://www.29cm.co.kr/products/4012083', # url정규화 필요
                 "Bunjang":'',
                 }
-    url = url_dict['zara']
+    url = url_dict['EQL']
     result = asyncio.run(product_crawler(url))
     print(result)
   
