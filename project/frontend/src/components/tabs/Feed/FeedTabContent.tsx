@@ -28,7 +28,6 @@ export function FeedTabContent({
 }: FeedTabContentProps) {
   const { user } = useAuth();
   const [newUrl, setNewUrl] = useState("");
-  const [sessionId, setSessionId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('FOLDER');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
@@ -144,10 +143,10 @@ export function FeedTabContent({
   }, [user, onItemsChange, refreshTaste]);
 
   const addItemMutation = useMutation({
-    mutationFn: async ({ nextUrl, nextSessionId, userId }: { nextUrl: string; nextSessionId: string; userId: string | number }) => {
+    mutationFn: async ({ nextUrl, userId }: { nextUrl: string; userId: string | number }) => {
       const data = await apiJson<any>('/api/crawl_product', {
         method: 'POST',
-        body: JSON.stringify({ url: nextUrl, session_id: nextSessionId, user_id: userId })
+        body: JSON.stringify({ url: nextUrl, user_id: userId })
       });
 
       return {
@@ -160,7 +159,6 @@ export function FeedTabContent({
         onItemsChange((prev) => [...data.data, ...prev]);
       }
       setNewUrl("");
-      setSessionId("");
     },
     onError: (error: Error) => {
       console.error(error);
@@ -199,7 +197,6 @@ export function FeedTabContent({
     if (!newUrl || !user) return;
     try {
       await addItemMutation.mutateAsync({
-        nextSessionId: sessionId,
         nextUrl: newUrl,
         userId: user.id,
       });
@@ -510,18 +507,6 @@ export function FeedTabContent({
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-                      Session ID (Optional)
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Session ID"
-                      value={sessionId}
-                      onChange={(e) => setSessionId(e.target.value)}
                       className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
                     />
                   </div>

@@ -70,7 +70,7 @@ async def background_crawl_and_save(
 
 async def _extract_product_items(post_url: str) -> list[dict]:
     #data = await scrape_product_metadata(post_url) # TODO: product.py 코드로 교체
-    data = product_crawler(post_url)
+    data = await product_crawler(post_url)
     if not data or data.get("title") == "추출 실패":
         print("[백그라운드] 웹페이지 정보를 가져올 수 없습니다.")
         return []

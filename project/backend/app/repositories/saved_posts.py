@@ -95,28 +95,40 @@ class SavedPostsRepository:
         return_id: bool = False,
     ) -> int | None:
         '''DB에 아이템을 삽입하고 item_id를 반환하는 공통 메서드입니다.'''
-        
-        query = self._BASE_INSERT_QUERY
+        # item_id가 주어지면 명시적으로 item_id 컬럼을 포함하여 삽입,
+        # 주어지지 않으면 기본 컬럼 목록으로 삽입하여 시퀀스(DEFAULT)가 동작하도록 함.
+        base_columns = self._INSERT_COLUMNS
+        base_placeholders = self._INSERT_PLACEHOLDERS
+
+        params = (
+            user_id,
+            source_url,
+            category,
+            title,
+            price,
+            brand,
+            is_available,
+            image_url,
+            image_vector,
+            shop,
+        )
+
+        if item_id is not None:
+            columns = "item_id, " + base_columns
+            placeholders = ", ".join(["%s"] * (len(params) + 1))
+            query = f"INSERT INTO saved_posts ({columns}) VALUES ({placeholders})"
+            exec_params = (item_id,) + params
+        else:
+            columns = base_columns
+            placeholders = base_placeholders
+            query = f"INSERT INTO saved_posts ({columns}) VALUES ({placeholders})"
+            exec_params = params
+
         if return_id:
             query = f"{query} RETURNING item_id"
 
         async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                query,
-                (
-                    item_id,
-                    user_id,
-                    source_url,
-                    category,
-                    title,
-                    price,
-                    brand,
-                    is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                ),
-            )
+            await cursor.execute(query, exec_params)
             new_item_id = None
             if return_id:
                 row = await cursor.fetchone()

@@ -452,7 +452,7 @@ async def product_crawler(url):
 
     final_result = None
     if html_content is not None:
-        print(f"[성공] 최종 HTML 확보 완료. 파싱을 시작합니다. {html_content}")
+        print(f"[성공] 최종 HTML 확보 완료. 파싱을 시작합니다.")
         if "musinsa.com" in url:
             final_result = parse_musinsa_html(html_content)
         else:
@@ -469,8 +469,9 @@ async def product_crawler(url):
         if final_result is not None:
             print(f"[성공] HTML 파싱 완료")
             final_result['shop'] = shop_name
-            clean_category = get_clean_category(final_result['title'], final_result['category'])
-            final_result['category'] = clean_category
+            print(final_result)
+            #clean_category = get_clean_category(final_result['title'], final_result['category'])
+            #final_result['category'] = clean_category
             return final_result
     else:
         print("[최종 실패] 모든 재시도가 실패했으며 HTML을 가져오지 못했습니다.")

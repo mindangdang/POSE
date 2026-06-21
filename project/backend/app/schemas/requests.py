@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 class UrlAnalyzeRequest(BaseModel):
     url: str
-    session_id: Optional[str] = None
 
 
 class TasteUpdate(BaseModel):

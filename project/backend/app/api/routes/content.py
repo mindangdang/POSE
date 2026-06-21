@@ -51,7 +51,6 @@ async def extract_and_save_url(
     current_user: dict = Depends(get_current_user)
 ):
     post_url = payload.url
-    session_id = payload.session_id
     user_id = str(current_user.get("sub"))
 
     request.app.state.websocket_manager = websocket_manager_instance
@@ -69,7 +68,6 @@ async def extract_and_save_url(
         new_item_id,
         user_id,
         post_url,
-        session_id,
     )
 
     return {
