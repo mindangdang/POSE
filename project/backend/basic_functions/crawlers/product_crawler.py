@@ -17,8 +17,6 @@ import numpy as np
 from deep_translator import GoogleTranslator
 
 load_backend_env()
-
-# 🛠️ 전역 캐싱: 고정 카테고리의 임베딩 벡터를 최초 1회만 계산하여 재사용
 CATEGORY_LIST = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
 _CATEGORY_VECTORS = {cat: None for cat in CATEGORY_LIST}
 
@@ -73,12 +71,14 @@ async def get_clean_category(title: str, category: str) -> str:
     def cosine_similarity(vec1, vec2):
         if vec1 is None or vec2 is None:
             return 0.0
-        vec1 = np.array(vec1)
-        vec2 = np.array(vec2)
+        vec1 = np.array(vec1).flatten()
+        vec2 = np.array(vec2).flatten()
+        
         norm1 = np.linalg.norm(vec1)
         norm2 = np.linalg.norm(vec2)
         if norm1 == 0 or norm2 == 0:
             return 0.0
+            
         return np.dot(vec1, vec2) / (norm1 * norm2)
     
     try:
@@ -89,12 +89,12 @@ async def get_clean_category(title: str, category: str) -> str:
         translated_title = title
         translated_category = category
 
-    combined_text = f"{translated_title} {translated_category}".strip()
+    combined_text = f"{translated_title} {translated_category}".strip().lower()
+    
     raw_query_vec = await _extract_text_vector_sync(combined_text)
-
     if raw_query_vec is None:
         print("[경고] 검색 텍스트의 벡터를 추출하지 못했습니다. 기본값 'unknown'을 반환합니다.")
-        return "unknown"  
+        return "unknown"
         
     query_vec = np.array(raw_query_vec)
     best_category = None
@@ -107,17 +107,12 @@ async def get_clean_category(title: str, category: str) -> str:
                 _CATEGORY_VECTORS[category_name] = np.array(raw_cat_vec)
             else:
                 print(f"[경고] 카테고리 '{category_name}'의 벡터 추출 실패. 건너뜁니다.")
-                continue  
+                continue
         
         vec = _CATEGORY_VECTORS[category_name]
         if vec is None:
             continue
-        
-        # 차원 맞추기 기법 (기존 동일)
-        if query_vec.shape != vec.shape:
-            query_vec = query_vec.flatten()
-            vec = vec.flatten()
-            
+
         score = cosine_similarity(query_vec, vec)
 
         if score > best_score:
