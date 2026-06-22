@@ -35,6 +35,7 @@ export function FeedTabContent({
   const [searchQuery, setSearchQuery] = useState("");
   const addSuccessTimeout = useRef<number | null>(null);
 
+  // 컴포넌트 언마운트 시 타이머 클리어
   useEffect(() => {
     return () => {
       if (addSuccessTimeout.current) {
@@ -44,6 +45,7 @@ export function FeedTabContent({
   }, []);
 
   const isFeedAddItem = (item: SavedItem) => parseItemInforms(item)?._source === 'feed_add';
+  
   const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
 
   const categories = useMemo(() => {
@@ -69,16 +71,13 @@ export function FeedTabContent({
     return Array.from(subs);
   }, [filteredItems]);
 
+  // 검색 및 노출 아이템 필터링 로직 최적화 및 버그 수정
   const itemsToDisplay = useMemo(() => {
     let baseItems: SavedItem[] = [];
     if (selectedCategory === 'All') {
       baseItems = filteredItems;
     } else if (selectedCategory === 'FOLDER') {
-      if (currentFolder) {
-        baseItems = filteredItems.filter((item) => item.category === currentFolder);
-      } else {
-        baseItems = [];
-      }
+      baseItems = currentFolder ? filteredItems.filter((item) => item.category === currentFolder) : [];
     } else {
       baseItems = filteredItems.filter((item) => item.category === selectedCategory);
     }
@@ -90,7 +89,14 @@ export function FeedTabContent({
         const title = typeof informs.title === 'string' ? informs.title.toLowerCase() : '';
         const category = (item.category || '').toLowerCase();
 
-        return title.includes(query) || category.includes(query) || category.includes(query) || Object.values(informs).some((v) => typeof v === 'string' && v.toLowerCase().includes(query));
+        // 중복 조건 제거 및 배열/객체 프로퍼티 검색 지원 강화
+        const matchesInforms = Object.values(informs).some((v) => {
+          if (typeof v === 'string') return v.toLowerCase().includes(query);
+          if (Array.isArray(v)) return v.some(subV => typeof subV === 'string' && subV.toLowerCase().includes(query));
+          return false;
+        });
+
+        return title.includes(query) || category.includes(query) || matchesInforms;
       });
     }
 
@@ -104,6 +110,7 @@ export function FeedTabContent({
     }
   }, [categories, selectedCategory]);
 
+  // 웹소켓 이펙트
   useEffect(() => {
     if (!user) return;
 
@@ -179,23 +186,27 @@ export function FeedTabContent({
     };
   }, [user, onItemsChange, refreshTaste]);
 
+  // 아이템 추가 Mutation
   const addItemMutation = useMutation({
     mutationFn: async ({ nextUrl, userId }: { nextUrl: string; userId: string | number }) => {
       const data = await apiJson<any>('/api/crawl_product', {
         method: 'POST',
         body: JSON.stringify({ url: nextUrl, user_id: userId })
       });
-
-      return {
-        nextUrl,
-        data,
-      };
+      return { nextUrl, data };
     },
     onSuccess: ({ data }) => {
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         onItemsChange((prev) => [...data.data, ...prev]);
       }
       setNewUrl("");
+      
+      // 기획하신 Added! 인터랙션 작동하도록 구현
+      setIsAddButtonSuccess(true);
+      addSuccessTimeout.current = window.setTimeout(() => {
+        setIsAddButtonSuccess(false);
+        setIsAddPanelOpen(false); // 성공 후 모달 닫기
+      }, 1500);
     },
     onError: (error: Error) => {
       console.error(error);
@@ -203,16 +214,13 @@ export function FeedTabContent({
     },
   });
 
+  // 아이템 삭제 Mutation
   const deleteItemMutation = useMutation({
     mutationFn: async ({ id, userId }: { id: number; userId: string | number }) => {
       const res = await apiFetch(`/api/items/${id}?user_id=${userId}`, { 
         method: 'DELETE',
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to delete item');
-      }
-
+      if (!res.ok) throw new Error('Failed to delete item');
       return id;
     },
     onMutate: async ({ id }) => {
@@ -238,7 +246,7 @@ export function FeedTabContent({
         userId: user.id,
       });
     } catch (err) {
-      // Error is already handled by addItemMutation.onError
+      // 오류는 Mutation onError에서 처리됨
     }
   };
 
@@ -249,7 +257,7 @@ export function FeedTabContent({
     try {
       await deleteItemMutation.mutateAsync({ id, userId: user.id });
     } catch (err) {
-      // Error is already handled by deleteItemMutation.onError
+      // 오류는 Mutation onError에서 처리됨
     }
   };
 
@@ -273,7 +281,7 @@ export function FeedTabContent({
         </h1>
       </div>
 
-      {/* Add Item Button Position - Directly above search toolbar */}
+      {/* Add Item Button */}
       <div className="flex justify-end mb-1 sm:mb-2">
         <button
           onClick={() => setIsAddPanelOpen(true)}
@@ -348,84 +356,35 @@ export function FeedTabContent({
               </div>
             )}
 
-            {/* Folder Cards - Interactive Closet Interior Layout */}
-            {!currentFolder && selectedCategory !== 'All' &&
-              (
-                <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
-                  
-                  {/* Left Column: Hanging Area and Bottom Drawer */}
-                  <div className="lg:col-span-3 space-y-6">
-                    {/* Hanging Area (Outer & Top) */}
-                    <div className="relative min-h-[320px] bg-white border border-zinc-200 rounded-[2.5rem] p-8 overflow-hidden group/hanging shadow-sm">
-                      <div className="absolute top-10 left-8 right-8 h-1 bg-zinc-200 rounded-full shadow-inner" /> {/* Closet Rod */}
-                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Shirt className="w-3 h-3" /> Hanging Section
-                      </div>
-                      <div className="flex flex-wrap gap-6 pt-12">
-                        {folders.filter(f => ['outer', 'top'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
-                          >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
-                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                              {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
-                                <Wind className="w-4 h-4" />
-                              ) : (
-                                <Shirt className="w-4 h-4" />
-                              )}
-                            </div>
-                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bottom Drawer (Bottom) */}
-                    <div className="relative min-h-[180px] bg-zinc-100 border border-zinc-200 rounded-[2.5rem] p-8 shadow-inner overflow-hidden">
-                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" /> {/* Drawer Handle */}
-                      <div className="flex flex-wrap gap-6 justify-center">
-                        {folders.filter(f => ['bottom'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
-                          >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
-                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                              <Columns2 className="w-4 h-4" />
-                            </div>
-                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Shoes and Accessories Sub-drawer */}
-                  <div className="lg:col-span-1 relative bg-zinc-200/40 border border-zinc-200 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-sm overflow-hidden">
+            {/* Folder Cards Closet Layout */}
+            {!currentFolder && selectedCategory !== 'All' && (
+              <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+                
+                {/* Left Column: Hanging Area and Bottom Drawer */}
+                <div className="lg:col-span-3 space-y-6">
+                  {/* Hanging Area */}
+                  <div className="relative min-h-[320px] bg-white border border-zinc-200 rounded-[2.5rem] p-8 overflow-hidden group/hanging shadow-sm">
+                    <div className="absolute top-10 left-8 right-8 h-1 bg-zinc-200 rounded-full shadow-inner" />
                     <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Box className="w-3 h-3" /> Side Storage
+                      <Shirt className="w-3 h-3" /> Hanging Section
                     </div>
-                    <div className="flex flex-col gap-6 pt-8 items-center">
-                      {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                    <div className="flex flex-wrap gap-6 pt-12">
+                      {folders.filter(f => ['outer', 'top'].includes(f.toLowerCase())).map((folder) => (
                         <motion.div
                           layout
                           key={`folder-${folder}`}
                           onClick={() => setCurrentFolder(folder)}
-                          className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
+                          className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
                         >
-                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.category === folder).length}</div>
+                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
+                            {filteredItems.filter((i) => i.category === folder).length}
+                          </div>
                           <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                            {['shoes'].includes(folder.toLowerCase()) ? (
-                              <Footprints className="w-4 h-4" />
+                            {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
+                              <Wind className="w-4 h-4" />
                             ) : (
-                              <Gem className="w-4 h-4" />
+                              <Shirt className="w-4 h-4" />
                             )}
                           </div>
                           <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
@@ -434,27 +393,80 @@ export function FeedTabContent({
                     </div>
                   </div>
 
-                  {/* Miscellaneous Section for undefined folders */}
-                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
-                    <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
-                      <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
-                      <div className="flex flex-wrap gap-4">
-                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex px-6 py-3 items-center justify-center bg-white border border-zinc-200 rounded-full shadow-sm transition-all duration-300 cursor-pointer hover:bg-black hover:text-white hover:border-black"
-                          >
-                            <span className="text-[10px] font-bold uppercase tracking-widest">{folder}</span>
-                          </motion.div>
-                        ))}
-                      </div>
+                  {/* Bottom Drawer */}
+                  <div className="relative min-h-[180px] bg-zinc-100 border border-zinc-200 rounded-[2.5rem] p-8 shadow-inner overflow-hidden">
+                    <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" />
+                    <div className="flex flex-wrap gap-6 justify-center">
+                      {folders.filter(f => ['bottom'].includes(f.toLowerCase())).map((folder) => (
+                        <motion.div
+                          layout
+                          key={`folder-${folder}`}
+                          onClick={() => setCurrentFolder(folder)}
+                          className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
+                        >
+                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
+                            {filteredItems.filter((i) => i.category === folder).length}
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                            <Columns2 className="w-4 h-4" />
+                          </div>
+                          <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                        </motion.div>
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </div>
-              )
-            }
+
+                {/* Right Column: Side Storage */}
+                <div className="lg:col-span-1 relative bg-zinc-200/40 border border-zinc-200 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-sm overflow-hidden">
+                  <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Box className="w-3 h-3" /> Side Storage
+                  </div>
+                  <div className="flex flex-col gap-6 pt-8 items-center">
+                    {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                      <motion.div
+                        layout
+                        key={`folder-${folder}`}
+                        onClick={() => setCurrentFolder(folder)}
+                        className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
+                      >
+                        <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
+                          {filteredItems.filter((i) => i.category === folder).length}
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
+                          {['shoes'].includes(folder.toLowerCase()) ? (
+                            <Footprints className="w-4 h-4" />
+                          ) : (
+                            <Gem className="w-4 h-4" />
+                          )}
+                        </div>
+                        <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Miscellaneous Section */}
+                {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
+                  <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
+                    <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
+                    <div className="flex flex-wrap gap-4">
+                      {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                        <motion.div
+                          layout
+                          key={`folder-${folder}`}
+                          onClick={() => setCurrentFolder(folder)}
+                          className="group/item relative flex px-6 py-3 items-center justify-center bg-white border border-zinc-200 rounded-full shadow-sm transition-all duration-300 cursor-pointer hover:bg-black hover:text-white hover:border-black"
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-widest">{folder}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
@@ -469,7 +481,7 @@ export function FeedTabContent({
           </motion.div>
         </AnimatePresence>
 
-        {/* Empty State for All tab: show icon and first-item button only when viewing 'All' and no items exist */}
+        {/* Empty State for All tab */}
         {selectedCategory === 'All' && items.length === 0 && !addItemMutation.isPending && (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
@@ -532,9 +544,10 @@ export function FeedTabContent({
                     <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
                       URL 혹은 상품이름
                     </label>
+                    {/* 일반 텍스트 검색어도 정상 제출되도록 type="text"로 교체 */}
                     <input
-                      type="url"
-                      placeholder="https://..."
+                      type="text"
+                      placeholder="https://... 또는 상품명 입력"
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
                       className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
-import { Instagram, Sparkles, Trash2, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useState } from 'react';
+import { Instagram, Trash2, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
 
 import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
@@ -14,6 +14,8 @@ type FeedItemCardProps = {
   onDislike?: (item: SavedItem) => void;
 };
 
+const FALLBACK_IMAGE = 'https://placehold.co/400x400?text=No+Image';
+
 export function FeedItemCard({
   item,
   onDelete,
@@ -22,22 +24,39 @@ export function FeedItemCard({
   onLike,
   onDislike,
 }: FeedItemCardProps) {
-  const informs = parseItemInforms(item);
-  const informsList = Object.entries(informs).filter(
-    ([key, value]) =>
-      value != null &&
-      value !== '' &&
-      !['item_id', 'title', 'category', 'source_url', '_source'].includes(key)
-  );
-  const title = getItemTitle(item);
-  const isProcessingItem = item.category.trim().toUpperCase() === 'PROCESSING' || informs._source === 'feed_add';
-  const categoryLabel = `${item.category}${item.category ? ` / ${item.category}` : ''}`;
-  const aspectRatio = 'aspect-[2/3]';
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
-  const fallbackImage = 'https://placehold.co/400x400?text=No+Image';
 
-  /// TODO: hooks로 옮기기
+  // 1. 매 렌더링마다 계산되는 무거운 파싱 및 필터 연산을 묶어서 최적화
+  const { informsList, title, isProcessingItem, displayImageUrl } = useMemo(() => {
+    const informs = parseItemInforms(item);
+    const filteredInforms = Object.entries(informs).filter(
+      ([key, value]) =>
+        value != null &&
+        value !== '' &&
+        !['item_id', 'title', 'category', 'source_url', '_source'].includes(key)
+    );
+
+    const itemTitle = getItemTitle(item);
+    const isProcessing = item.category.trim().toUpperCase() === 'PROCESSING' || informs._source === 'feed_add';
+
+    // 이미지 URL 파싱 단순화
+    let imageUrl = FALLBACK_IMAGE;
+    if (item.image_url) {
+      imageUrl = item.image_url.startsWith('http') || item.image_url.startsWith('data:') || item.image_url.startsWith('//')
+        ? item.image_url
+        : `/api/images/${item.image_url}`;
+    }
+
+    return {
+      informsList: filteredInforms,
+      title: itemTitle,
+      isProcessingItem: isProcessing,
+      displayImageUrl: imageUrl,
+    };
+  }, [item]);
+
+  // 2. 이벤트 핸들러 비즈니스 로직
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
     setLiked(!liked);
@@ -61,19 +80,18 @@ export function FeedItemCard({
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Image Container */}
-      <div className={`relative ${aspectRatio} overflow-hidden rounded-2xl sm:rounded-3xl bg-muted`}>
+      <div className="relative aspect-[2/3] overflow-hidden rounded-2xl sm:rounded-3xl bg-muted">
         <img
-          src={item.image_url?.startsWith('http') || item.image_url?.startsWith('data:') || item.image_url?.startsWith('//') ? item.image_url : item.image_url ? `/api/images/${item.image_url}` : 'https://via.placeholder.com/400x400?text=No+Image'}
+          src={displayImageUrl}
           alt={item.category}
           className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
           referrerPolicy="no-referrer"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            const localUrl = item?.image_url as string | undefined;
-            if (localUrl && !target.src.includes(localUrl)) {
-              target.src = `/api/images/${localUrl}`;
+            if (item.image_url && !target.src.includes(item.image_url)) {
+              target.src = `/api/images/${item.image_url}`;
             } else {
-              target.src = 'https://via.placeholder.com/400x400?text=PoSe';
+              target.src = FALLBACK_IMAGE;
             }
           }}
         />
@@ -87,14 +105,14 @@ export function FeedItemCard({
             e.stopPropagation();
             onDelete(item.item_id);
           }}
-          className="absolute top-2 sm:top-3 right-2 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:scale-105"
+          className="absolute top-2 sm:top-3 right-2 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:scale-105 z-10"
           aria-label="Delete item"
         >
           <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
         </button>
 
-        {/* Like/Dislike and Search - Bottom */}
-        <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-200">
+        {/* Like/Dislike Buttons - Bottom (UI 찢어짐 방지를 위해 flex gap 구조로 배치) */}
+        <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
           <button
             onClick={handleLike}
             className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full shadow-md transition-all ${
@@ -123,9 +141,9 @@ export function FeedItemCard({
       {/* Content */}
       <div className="mt-2 sm:mt-3 space-y-1 sm:space-y-1.5 px-1">
         {/* Category */}
-        {!isProcessingItem && (
+        {!isProcessingItem && item.category && (
           <span className="text-[9px] sm:text-[10px] font-semibold text-black uppercase tracking-widest">
-            {categoryLabel}
+            {item.category}
           </span>
         )}
         
@@ -145,9 +163,9 @@ export function FeedItemCard({
           </div>
         )}
 
-        {/* Source */}
+        {/* Source Links */}
         <div className="pt-1 sm:pt-2 flex flex-col gap-1 sm:gap-1.5">
-          {item.source_url && item.source_url.startsWith('http') && (
+          {item.source_url?.startsWith('http') && (
             <a
               href={item.source_url}
               target="_blank"

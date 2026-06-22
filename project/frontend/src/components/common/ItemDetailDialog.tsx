@@ -12,6 +12,16 @@ type ItemDetailDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+// 중복되는 이미지 URL 파싱 로직을 외부 함수로 분리
+const getImageUrl = (imageUrl?: string, localImageUrl?: string) => {
+  if (!imageUrl) return 'https://via.placeholder.com/600x600?text=No+Image';
+  if (imageUrl.startsWith('http') || imageUrl.startsWith('data:') || imageUrl.startsWith('//')) {
+    return imageUrl.startsWith('//') ? `https:${imageUrl}` : imageUrl;
+  }
+  if (localImageUrl) return `/api/images/${localImageUrl}`;
+  return `/api/images/${imageUrl}`;
+};
+
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
   const [viewedItem, setViewedItem] = useState<SavedItem | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -25,22 +35,26 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
   const displayItem = viewedItem || item;
   const modalTitle = displayItem ? getItemTitle(displayItem) : '';
+  
   const facts = useMemo(() => {
     if (!displayItem) return null;
     return parseItemInforms(displayItem);
   }, [displayItem]);
 
-  const requestKey = useMemo(() => {
-    if (!displayItem) {
-      return '';
-    }
+  // 이미지 URL 메모이제이션 (JSX와 useEffect에서 공통 사용)
+  const displayImageUrl = useMemo(() => {
+    return getImageUrl(displayItem?.image_url, (facts as any)?.local_image_url);
+  }, [displayItem, facts]);
 
+  const requestKey = useMemo(() => {
+    if (!displayItem) return '';
     const image = displayItem.image_url || '';
     const source = displayItem.source_url || '';
     const id = displayItem.item_id ?? '';
     return `${id}:${image}:${source}`;
   }, [displayItem]);
 
+  // 데이터 패칭 로직 최적화
   useEffect(() => {
     if (!displayItem) {
       setSimilarItems([]);
@@ -49,40 +63,25 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
       return;
     }
 
-    const currentKey = requestKey;
-
-    if (lastRequestedItemKey.current === currentKey) {
-      return;
-    }
-
-    lastRequestedItemKey.current = currentKey;
+    if (lastRequestedItemKey.current === requestKey) return;
+    lastRequestedItemKey.current = requestKey;
 
     let isMounted = true;
 
     const fetchSimilarItems = async () => {
       setIsLoadingSimilar(true);
-      setSimilarItems([]);
+      // 의도적으로 깜빡임을 주지 않으려면 이전 데이터를 유지하는 것이 좋지만, 
+      // 스크롤을 맨 위로 올리는 기획 특성상 유지하고 싶다면 아래 라인은 남겨두셔도 됩니다.
+      setSimilarItems([]); 
 
       if (scrollRef.current) {
         scrollRef.current.scrollTop = 0;
       }
 
       try {
-        let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//')
-          ? displayItem.image_url
-          : (facts as any)?.local_image_url
-            ? `/api/images/${(facts as any).local_image_url}`
-            : displayItem.image_url
-              ? `/api/images/${displayItem.image_url}`
-              : '';
-
-        if (targetUrl.startsWith('//')) {
-          targetUrl = `https:${targetUrl}`;
-        }
-
-        const absoluteUrl = targetUrl.startsWith('/api/')
-          ? `${window.location.origin}${targetUrl}`
-          : targetUrl;
+        const absoluteUrl = displayImageUrl.startsWith('/api/')
+          ? `${window.location.origin}${displayImageUrl}`
+          : displayImageUrl;
 
         const formData = new FormData();
         formData.append('query', absoluteUrl || modalTitle);
@@ -94,9 +93,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
         const data = await res.json();
 
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         if (data.success && Array.isArray(data.results)) {
           setSimilarItems(data.results);
@@ -104,10 +101,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
           setSimilarItems([]);
         }
       } catch (err) {
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         console.error('Failed to fetch similar items', err);
         setSimilarItems([]);
       } finally {
@@ -122,16 +116,21 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
     return () => {
       isMounted = false;
     };
-  }, [displayItem, modalTitle, facts]);
+  }, [requestKey, modalTitle, displayImageUrl, displayItem]); // 의존성을 명확한 데이터 기준으로 정렬
 
-  if (!displayItem) {
-    return null;
-  }
+  if (!displayItem) return null;
 
   const factEntries =
-    facts && typeof facts === 'object'
-      ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
-      : [];
+  facts && typeof facts === 'object'
+    ? Object.entries(facts).filter(([key]) => {
+        const lowerKey = key.toLowerCase();
+        return (
+          lowerKey !== 'title' &&
+          lowerKey !== 'id' &&          
+          !lowerKey.includes('source')    
+        );
+      })
+    : [];
 
   return (
     <Dialog.Root open onOpenChange={onOpenChange}>
@@ -157,15 +156,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                 {/* Image Section */}
                 <div className="md:w-1/2 bg-muted flex items-center justify-center overflow-hidden p-6">
                   <img
-                    src={
-                      displayItem.image_url?.startsWith('http') || 
-                      displayItem.image_url?.startsWith('data:') || 
-                      displayItem.image_url?.startsWith('//')
-                        ? displayItem.image_url
-                        : displayItem.image_url
-                          ? `/api/images/${displayItem.image_url}`
-                          : 'https://via.placeholder.com/600x600?text=No+Image'
-                    }
+                    src={displayImageUrl}
                     alt={displayItem.category}
                     className="w-full h-full object-contain rounded-xl"
                     referrerPolicy="no-referrer"
