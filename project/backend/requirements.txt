@@ -21,3 +21,5 @@ curl_cffi
 lxml
 nodriver
 tldextract
+deep-translator>=1.11.0
+numpy>=1.20.0
