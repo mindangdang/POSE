@@ -109,35 +109,73 @@ export function FeedTabContent({
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/api/ws/${user.id}`;
-    let ws: WebSocket;
+    const wsRef = { current: null as WebSocket | null };
+    let reconnectTimeout: number | null = null;
+    let isUnmounted = false;
 
-    try {
-      ws = new WebSocket(wsUrl);
+    const connectWebSocket = () => {
+      if (isUnmounted) return;
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === "CRAWL_SUCCESS") {
-            onItemsChange((prev) => {
-              const filtered = prev.filter(item => item.item_id !== data.placeholder_id);
-              return [...(data.items || []), ...filtered];
-            });
-            void refreshTaste();
-          } else if (data.type === "CRAWL_ERROR") {
-            alert(data.message || "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.");
-            onItemsChange((prev) => prev.filter(item => item.item_id !== data.placeholder_id));
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.info('웹소켓 연결이 설정되었습니다.');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'CRAWL_SUCCESS') {
+              onItemsChange((prev) => {
+                const filtered = prev.filter((item) => item.item_id !== data.placeholder_id);
+                return [...(data.items || []), ...filtered];
+              });
+              void refreshTaste();
+            } else if (data.type === 'CRAWL_ERROR') {
+              alert(data.message || '데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
+              onItemsChange((prev) => prev.filter((item) => item.item_id !== data.placeholder_id));
+            }
+          } catch (err) {
+            console.error('웹소켓 메시지 파싱 오류:', err);
           }
-        } catch (err) {
-          console.error("웹소켓 메시지 파싱 오류:", err);
+        };
+
+        ws.onerror = (event) => {
+          console.error('웹소켓 연결 오류:', event);
+        };
+
+        ws.onclose = (event) => {
+          if (isUnmounted) return;
+          console.warn(`웹소켓 연결이 종료되었습니다 (code=${event.code}). 3초 후 재연결 시도합니다.`);
+          if (reconnectTimeout) {
+            window.clearTimeout(reconnectTimeout);
+          }
+          reconnectTimeout = window.setTimeout(() => {
+            if (!isUnmounted) connectWebSocket();
+          }, 3000);
+        };
+      } catch (err) {
+        console.error('웹소켓 연결 설정 오류:', err);
+        if (!isUnmounted) {
+          reconnectTimeout = window.setTimeout(connectWebSocket, 3000);
         }
-      };
-    } catch (err) {
-      console.error("웹소켓 연결 에러:", err);
-    }
+      }
+    };
+
+    connectWebSocket();
 
     return () => {
-      if (ws) ws.close();
+      isUnmounted = true;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (reconnectTimeout) {
+        window.clearTimeout(reconnectTimeout);
+      }
     };
   }, [user, onItemsChange, refreshTaste]);
 

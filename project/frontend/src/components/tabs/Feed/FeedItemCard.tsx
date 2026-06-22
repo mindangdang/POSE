@@ -35,6 +35,7 @@ export function FeedItemCard({
   const aspectRatio = 'aspect-[2/3]';
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
+  const fallbackImage = 'https://placehold.co/400x400?text=No+Image';
 
   /// TODO: hooks로 옮기기
   const handleLike = (e: React.MouseEvent) => {
@@ -68,7 +69,7 @@ export function FeedItemCard({
           referrerPolicy="no-referrer"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
-            const localUrl = informs?.local_image_url as string | undefined;
+            const localUrl = item?.image_url as string | undefined;
             if (localUrl && !target.src.includes(localUrl)) {
               target.src = `/api/images/${localUrl}`;
             } else {

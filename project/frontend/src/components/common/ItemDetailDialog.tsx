@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
@@ -15,6 +15,7 @@ type ItemDetailDialogProps = {
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
   const [viewedItem, setViewedItem] = useState<SavedItem | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastRequestedItemKey = useRef<string>('');
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
@@ -24,66 +25,103 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
   const displayItem = viewedItem || item;
   const modalTitle = displayItem ? getItemTitle(displayItem) : '';
-  const facts = displayItem ? parseItemInforms(displayItem) : null;
+  const facts = useMemo(() => {
+    if (!displayItem) return null;
+    return parseItemInforms(displayItem);
+  }, [displayItem]);
+
+  const requestKey = useMemo(() => {
+    if (!displayItem) {
+      return '';
+    }
+
+    const image = displayItem.image_url || '';
+    const source = displayItem.source_url || '';
+    const id = displayItem.item_id ?? '';
+    return `${id}:${image}:${source}`;
+  }, [displayItem]);
 
   useEffect(() => {
-    if (displayItem) {
-      let isMounted = true;
+    if (!displayItem) {
+      setSimilarItems([]);
+      setIsLoadingSimilar(false);
+      lastRequestedItemKey.current = '';
+      return;
+    }
+
+    const currentKey = requestKey;
+
+    if (lastRequestedItemKey.current === currentKey) {
+      return;
+    }
+
+    lastRequestedItemKey.current = currentKey;
+
+    let isMounted = true;
+
+    const fetchSimilarItems = async () => {
       setIsLoadingSimilar(true);
       setSimilarItems([]);
-      
+
       if (scrollRef.current) {
         scrollRef.current.scrollTop = 0;
       }
-      
-      const fetchSimilarItems = async () => {
-        try {
-          let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//') 
-            ? displayItem.image_url 
-            : (facts as any)?.local_image_url 
-              ? `/api/images/${(facts as any).local_image_url}`
-              : displayItem.image_url 
-                ? `/api/images/${displayItem.image_url}` 
-                : '';
-          
-          if (targetUrl.startsWith('//')) {
-            targetUrl = `https:${targetUrl}`;
-          }
-          
-          // SerpApi는 공용 URL이 필요하므로, 로컬 경로인 경우 현재 도메인을 붙여줍니다.
-          const absoluteUrl = targetUrl.startsWith('/api/') 
-            ? `${window.location.origin}${targetUrl}` 
-            : targetUrl;
 
-          const formData = new FormData();
-          formData.append('query', absoluteUrl || modalTitle);
+      try {
+        let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//')
+          ? displayItem.image_url
+          : (facts as any)?.local_image_url
+            ? `/api/images/${(facts as any).local_image_url}`
+            : displayItem.image_url
+              ? `/api/images/${displayItem.image_url}`
+              : '';
 
-          const res = await apiFetch('/api/lens', {
-            method: 'POST',
-            body: formData,
-          });
-          const data = await res.json();
-          if (isMounted && data.success && data.results) {
-            setSimilarItems(data.results);
-          }
-        } catch (err) {
-          console.error('Failed to fetch similar items', err);
-        } finally {
-          if (isMounted) {
-            setIsLoadingSimilar(false);
-          }
+        if (targetUrl.startsWith('//')) {
+          targetUrl = `https:${targetUrl}`;
         }
-      };
 
-      fetchSimilarItems();
+        const absoluteUrl = targetUrl.startsWith('/api/')
+          ? `${window.location.origin}${targetUrl}`
+          : targetUrl;
 
-      return () => {
-        isMounted = false;
-      };
-    } else {
-      setSimilarItems([]);
-      setIsLoadingSimilar(false);
-    }
+        const formData = new FormData();
+        formData.append('query', absoluteUrl || modalTitle);
+
+        const res = await apiFetch('/api/lens', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (data.success && Array.isArray(data.results)) {
+          setSimilarItems(data.results);
+        } else {
+          setSimilarItems([]);
+        }
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error('Failed to fetch similar items', err);
+        setSimilarItems([]);
+      } finally {
+        if (isMounted) {
+          setIsLoadingSimilar(false);
+        }
+      }
+    };
+
+    void fetchSimilarItems();
+
+    return () => {
+      isMounted = false;
+    };
   }, [displayItem, modalTitle, facts]);
 
   if (!displayItem) {
