@@ -1,11 +1,12 @@
 import os
-from project.backend.app.manage.settings import load_backend_env
 from fastapi import WebSocket
 import httpx
 import uuid
 import asyncio
 import httpx
 import html
+import logging
+from fastapi import WebSocket, WebSocketDisconnect
 
 FAKE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -13,9 +14,12 @@ FAKE_HEADERS = {
     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 }
 
+logger = logging.getLogger("websocket")
+logging.basicConfig(level=logging.INFO)
+
 class ConnectionManager:
     def __init__(self):
-        # 유저 ID별로 '여러 개'의 활성 웹소켓 연결(배열)을 관리합니다. (Strict Mode 대응)
+        # 유저 ID별로 '여러 개'의 활성 웹소켓 연결(배열)을 관리합니다.
         self.active_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, user_id: str):
@@ -23,26 +27,41 @@ class ConnectionManager:
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
         self.active_connections[user_id].append(websocket)
+        logger.info(f"🟢 [Connect] User: {user_id} | Total connections for user: {len(self.active_connections[user_id])}")
 
-    def disconnect(self, websocket: WebSocket, user_id: str):
-        # 해당 유저의 특정 웹소켓만 찾아 배열에서 안전하게 제거
+    def disconnect(self, websocket: WebSocket, user_id: str, code: int = 1000, reason: str = "Unknown"):
+        # 웹소켓 종료 로그 기록
+        logger.info(f"🔴 [Disconnect] User: {user_id} | Code: {code} | Reason: {reason}")
+        
         if user_id in self.active_connections:
             if websocket in self.active_connections[user_id]:
                 self.active_connections[user_id].remove(websocket)
+            
             # 남은 커넥션이 하나도 없으면 딕셔너리에서 키 삭제
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
 
     async def broadcast_to_user(self, user_id: str, message: str):
-        if user_id in self.active_connections:
-            dead_sockets = []
-            for ws in self.active_connections[user_id]:
-                try:
-                    await ws.send_text(message)
-                except Exception:
-                    dead_sockets.append(ws)
-            for dead_ws in dead_sockets:
-                self.disconnect(dead_ws, user_id)
+        if user_id not in self.active_connections:
+            return
+
+        dead_sockets = []
+        for ws in self.active_connections[user_id]:
+            try:
+                await ws.send_text(message)
+            except WebSocketDisconnect as e:
+                # 클라이언트가 정상/비정상적으로 연결을 끊었을 때 발생
+                logger.error(f"[Broadcast Fail] User: {user_id} | WebSocketDisconnect! Code: {e.code}")
+                # disconnect 함수에 넘겨주기 위해 기록
+                dead_sockets.append((ws, e.code, "WebSocketDisconnect"))
+            except Exception as e:
+                # 그 외 예기치 못한 에러 (네트워크 에러, 타임아웃 등)
+                logger.error(f"[Broadcast Fail] User: {user_id} | Unexpected Error: {str(e)}", exc_info=True)
+                dead_sockets.append((ws, 1006, f"Exception: {str(e)}"))
+
+        # 끊어진 소켓들을 안전하게 정리
+        for dead_ws, code, reason in dead_sockets:
+            self.disconnect(dead_ws, user_id, code, reason)
 
 
 def _mark_feed_add_items(items: list[dict]) -> None:
