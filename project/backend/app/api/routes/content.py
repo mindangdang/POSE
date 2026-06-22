@@ -77,10 +77,10 @@ async def extract_and_save_url(
         "data": [
             {   
                 "item_id": new_item_id,
-                "title": None,
+                "title": "PROCESSING",
                 "price": None,
                 "brand": None,
-                "category": "PROCESSING",
+                "category": None,
                 "is_available": None,
                 "image_url": "",
                 "image_vector": None,
