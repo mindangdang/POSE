@@ -5,22 +5,38 @@ from project.backend.app.schemas.requests import GoogleAuthRequest
 from google.oauth2 import id_token
 from google.auth.transport import requests
 import jwt
-from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 from psycopg.rows import dict_row
+from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.manage.database import get_db_connection
 from project.backend.app.manage.settings import load_backend_env
 
 router = APIRouter()
+
+
+class AuthUserResponse(BaseModel):
+    id: str
+    email: str | None = None
+    name: str | None = None
+    profile_image: str | None = None
+    username: str | None = None
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: AuthUserResponse
+
+
+class CurrentUserResponse(BaseModel):
+    user: AuthUserResponse
 
 load_backend_env()
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 
-# FastAPI의 OAuth2 표준에 따라 Authorization 헤더에서 Bearer 토큰을 추출합니다.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/google")
-
-@router.post("/auth/google")
+@router.post("/auth/google", response_model=AuthTokenResponse)
 async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection)):
     try:
         # Verify GOOGLE_CLIENT_ID is configured
@@ -71,7 +87,7 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
 
-@router.post("/auth/guest")
+@router.post("/auth/guest", response_model=AuthTokenResponse)
 async def guest_auth(conn=Depends(get_db_connection)):
     guest_id = "1"
     guest_email = "guest@pose.local"
@@ -105,20 +121,7 @@ async def guest_auth(conn=Depends(get_db_connection)):
     }
     return {"access_token": internal_token, "token_type": "bearer", "user": user_data}
 
-# 팀 내 백엔드 컨벤션: 인증이 필요한 API 호출 시 이 Dependency를 사용합니다.
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-
-@router.get("/auth/me")
+@router.get("/auth/me", response_model=CurrentUserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user), conn=Depends(get_db_connection)):
     """현재 로그인한 사용자의 정보를 반환합니다."""
     try:

@@ -33,7 +33,7 @@ from project.backend.basic_functions.crawlers.utils import *
 from project.backend.basic_functions.searching.utils import *
 from project.backend.app.manage.settings import IMAGE_DIR
 from project.backend.app.db.insert_DB import _extract_vector_sync
-from project.backend.app.api.routes.auth import get_current_user
+from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.searching import *
 
 load_backend_env()
@@ -329,4 +329,3 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             await websocket.receive_text()  # Keep connection alive
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
-
