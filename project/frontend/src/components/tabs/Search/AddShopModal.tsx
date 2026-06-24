@@ -2,11 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import React, { useState } from 'react';
 
-type Shop = {
-  name: string;
-  url: string;
-  desc: string;
-};
+import type { Shop } from './searchConfig';
 
 type AddShopModalProps = {
   isOpen: boolean;

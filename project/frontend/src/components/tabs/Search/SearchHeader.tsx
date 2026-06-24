@@ -1,66 +1,75 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Loader2, Sparkles, BrainCircuit, Zap, X, Plus } from 'lucide-react';
+import { Search, Loader2, BrainCircuit, Zap, X, Plus } from 'lucide-react';
 import React, { useEffect, useState, useCallback } from 'react';
 
 import { SearchState } from '../../../hooks/searchUtils';
+import type { DetailedSearchQuery, SearchMode } from './searchConfig';
 
-type ModeOptionValue = "digging" | "ai";
-
-type SearchHeaderProps = {
-  searchMode: ModeOptionValue;
-  setSearchMode: React.Dispatch<React.SetStateAction<ModeOptionValue>>;
-  searchQuery: string;
-  setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
-  isDetailedSearch: boolean;
-  setIsDetailedSearch: React.Dispatch<React.SetStateAction<boolean>>;
-  detailedSearchQuery: { mood: string; color: string; fit: string; category: string; brand: string };
-  setDetailedSearchQuery: React.Dispatch<React.SetStateAction<{ mood: string; color: string; fit: string; category: string; brand: string }>>;
-  pastedFile: File | null;
-  previewUrl: string | null;
-  handlePaste: (event: React.ClipboardEvent<HTMLInputElement>) => void;
-  clearImage: () => void;
-  status: SearchState;
-  quotaCountdown: number | null;
-  generatedImage: string | null;
-  displayActivity: boolean;
-  handleSearch: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
-  selectedShopNames: Set<string>;
-  setSelectedShopNames: React.Dispatch<React.SetStateAction<Set<string>>>;
-  randomSuggestions: string[]; // Add randomSuggestions to props
+type QueryProps = {
+  mode: SearchMode;
+  setMode: React.Dispatch<React.SetStateAction<SearchMode>>;
+  value: string;
+  setValue: React.Dispatch<React.SetStateAction<string>>;
+  isDetailed: boolean;
+  setIsDetailed: React.Dispatch<React.SetStateAction<boolean>>;
+  details: DetailedSearchQuery;
+  setDetails: React.Dispatch<React.SetStateAction<DetailedSearchQuery>>;
 };
 
-const SUGGESTION_POOL = [
-  "빈티지 리바이스", "폴로 카라티", "아카이브 헬무트랭", "슬림핏 반팔", "유니폼",
-  "아크테릭스 바람막이", "와이드 팬츠", "디스트로이드 데님", "빈티지 돌체 앤 가바나",
-  "테크웨어", "웨스턴 셔츠", "그런지 팬츠", "올드머니 룩", "가죽 자켓", "포엣코어",
-  "Y2K", "버버리 트렌치 코트", "헤비 스웨트셔츠", "팀버랜드 부츠", "펜던트 목걸이"
-];
+type ImageProps = {
+  previewUrl: string | null;
+  onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+};
 
+type SearchStatusProps = {
+  status: SearchState;
+  quotaCountdown: number | null;
+  displayActivity: boolean;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+};
+
+type ShopBadgeProps = {
+  selectedNames: Set<string>;
+  onRemoveSelected: (name: string) => void;
+  onClearSelected: () => void;
+};
+
+type SuggestionsProps = {
+  items: string[];
+};
+
+type SearchHeaderProps = {
+  query: QueryProps;
+  image: ImageProps;
+  searchStatus: SearchStatusProps;
+  shopBadges: ShopBadgeProps;
+  suggestions: SuggestionsProps;
+};
 
 export function SearchHeader({
-  searchMode,
-  setSearchMode,
-  searchQuery,
-  setSearchQuery,
-  isDetailedSearch,
-  setIsDetailedSearch,
-  detailedSearchQuery,
-  setDetailedSearchQuery,
-  pastedFile,
-  previewUrl,
-  handlePaste,
-  clearImage,
-  status,
-  quotaCountdown,
-  generatedImage,
-  displayActivity,
-  handleSearch,
-  selectedShopNames,
-  setSelectedShopNames,
-  randomSuggestions, // Destructure randomSuggestions
+  query,
+  image,
+  searchStatus,
+  shopBadges,
+  suggestions,
 }: SearchHeaderProps) {
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showDetailedSuggestions, setShowDetailedSuggestions] = useState(false);
+  const {
+    mode: searchMode,
+    setMode: setSearchMode,
+    value: searchQuery,
+    setValue: setSearchQuery,
+    isDetailed: isDetailedSearch,
+    setIsDetailed: setIsDetailedSearch,
+    details: detailedSearchQuery,
+    setDetails: setDetailedSearchQuery,
+  } = query;
+  const { previewUrl, onPaste: handlePaste, onClear: clearImage } = image;
+  const { status, quotaCountdown, displayActivity, onSubmit: handleSearch } = searchStatus;
+  const { selectedNames: selectedShopNames, onRemoveSelected, onClearSelected } = shopBadges;
+  const { items: randomSuggestions } = suggestions;
 
   const modeOptions = [
     { value: "digging", label: "일반 검색", icon: Plus, activeClass: "text-black cursor-pointer hover:bg-gray-200", hoverClass: "hover:text-black hover:cursor-pointer" },
@@ -85,14 +94,14 @@ export function SearchHeader({
     return () => window.clearTimeout(timer);
   }, [displayActivity, isDetailedSearch, searchMode]);
 
-  const applySelectedMode = useCallback((mode: ModeOptionValue) => {
+  const applySelectedMode = useCallback((mode: SearchMode) => {
     setSearchMode(mode);
     if (mode !== "digging") {
       setIsDetailedSearch(false);
     }
   }, [setSearchMode, setIsDetailedSearch]);
 
-  const handleSelectMode = useCallback((mode: ModeOptionValue) => {
+  const handleSelectMode = useCallback((mode: SearchMode) => {
     setIsModeMenuOpen(false);
     if (showDetailedSuggestions) {
       setShowDetailedSuggestions(false);
@@ -267,18 +276,12 @@ export function SearchHeader({
                   {Array.from(selectedShopNames).map((name) => (
                     <div key={name} className="flex items-center gap-1.5 px-3 py-1 bg-black text-white rounded-full text-[10px] font-bold uppercase">
                       {name}
-                      <button type="button" onClick={() => {
-                        setSelectedShopNames(prev => {
-                          const next = new Set(prev);
-                          next.delete(name);
-                          return next;
-                        });
-                      }} className="hover:text-red-400">
+                      <button type="button" onClick={() => onRemoveSelected(name)} className="hover:text-red-400">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
-                  <button type="button" onClick={() => setSelectedShopNames(new Set())} className="text-[10px] font-bold text-muted-foreground hover:text-black uppercase underline">Clear All</button>
+                  <button type="button" onClick={onClearSelected} className="text-[10px] font-bold text-muted-foreground hover:text-black uppercase underline">Clear All</button>
                 </motion.div>
               )}
             </AnimatePresence>
