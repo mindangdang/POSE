@@ -1,15 +1,13 @@
-import os
 from typing import List
 from PIL import Image
 import asyncio
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 from project.backend.app.schemas.response import InstaAnalysisResult
 from google import genai
 from google.genai import types
 from project.backend.app.manage.resilience import with_llm_resilience
 
-load_backend_env()
-api_key = os.environ.get("GOOGLE_API_KEY")
+api_key = get_settings().google_api_key
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 

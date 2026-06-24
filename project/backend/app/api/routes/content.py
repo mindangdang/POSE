@@ -26,17 +26,15 @@ from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
-from project.backend.app.manage.settings import load_backend_env
 from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
 from project.backend.basic_functions.ai_service.utils import upload_generated_image
 from project.backend.basic_functions.crawlers.utils import *
 from project.backend.basic_functions.searching.utils import *
-from project.backend.app.manage.settings import IMAGE_DIR
+from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.db.insert_DB import _extract_vector_sync
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.searching import *
 
-load_backend_env()
 FAIL_IMAGE_DIR = Path("project/backend/fail_images")
 FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -93,7 +91,7 @@ async def extract_and_save_url(
 
 async def background_pse_search(app: FastAPI, user_id: str, query: str, page: Optional[int], custom_domain_map: Optional[dict] = None):
     manager = getattr(app.state, "websocket_manager", websocket_manager_instance)
-    serp_api_key = os.environ.get("SERP_API_KEY")
+    serp_api_key = get_settings().serp_api_key
     
     if not serp_api_key:
         if manager:
@@ -154,7 +152,7 @@ async def run_serpapi_lens_search(
     file: Optional[UploadFile] = File(None),
     query: Optional[str] = Form(None)
 ):
-    serp_api_key = os.environ.get("SERP_API_KEY")
+    serp_api_key = get_settings().serp_api_key
     if not serp_api_key:
         raise HTTPException(status_code=500, detail="SerpApi 키가 설정되지 않았습니다.")
 

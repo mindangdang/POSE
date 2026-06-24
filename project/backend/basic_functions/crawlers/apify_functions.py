@@ -1,9 +1,7 @@
-import os
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 from apify_client import ApifyClient
 
-load_backend_env()
-api_key = os.environ.get("APIFY_API_KEY") 
+api_key = get_settings().apify_api_key
 client = ApifyClient(api_key)
 
 def apify_insta_crawler(post_url: str, result_nums: int):

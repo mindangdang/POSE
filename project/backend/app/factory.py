@@ -5,12 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from project.backend.app.api.router import api_router
 from project.backend.app.manage.database import lifespan
 from project.backend.app.api.routes.web import router as web_router
-from project.backend.app.manage.settings import FRONTEND_DIST_DIR, IMAGE_DIR, load_backend_env
+from project.backend.app.manage.settings import FRONTEND_DIST_DIR, IMAGE_DIR
 
 
 def create_app() -> FastAPI:
-    load_backend_env()
-
     app = FastAPI(lifespan=lifespan)
 
     IMAGE_DIR.mkdir(exist_ok=True)

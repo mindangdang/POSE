@@ -1,16 +1,15 @@
-import os
 import asyncio
 from google import genai
 from google.genai import types
 from pathlib import Path
 from project.backend.app.schemas.response import TasteProfileResult 
-from project.backend.app.manage.settings import IMAGE_DIR, load_backend_env
+from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 from project.backend.basic_functions.ai_service.utils import *
 
-load_backend_env()
-NEON_DB_URL = os.environ.get("NEON_DB_URL")
-api_key = os.environ.get("GOOGLE_API_KEY")
+settings = get_settings()
+NEON_DB_URL = settings.neon_db_url
+api_key = settings.google_api_key
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 

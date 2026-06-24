@@ -1,10 +1,8 @@
-import os
 import psycopg
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 
 # 1. 환경변수에서 Neon DB 접속 주소 불러오기
-load_backend_env()
-neon_url = os.environ.get("NEON_DB_URL")
+neon_url = get_settings().neon_db_url
 
 if not neon_url:
     raise ValueError(" .env 파일에 NEON_DB_URL이 설정되지 않았습니다. 접속 주소를 확인해주세요.")

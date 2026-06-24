@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from project.backend.app.schemas.requests import GoogleAuthRequest
@@ -9,7 +8,7 @@ from pydantic import BaseModel
 from psycopg.rows import dict_row
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.manage.database import get_db_connection
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 
 router = APIRouter()
 
@@ -31,10 +30,9 @@ class AuthTokenResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     user: AuthUserResponse
 
-load_backend_env()
-
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-JWT_SECRET = os.environ.get("JWT_SECRET")
+settings = get_settings()
+GOOGLE_CLIENT_ID = settings.google_client_id
+JWT_SECRET = settings.jwt_secret
 
 @router.post("/auth/google", response_model=AuthTokenResponse)
 async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection)):
@@ -42,6 +40,8 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
         # Verify GOOGLE_CLIENT_ID is configured
         if not GOOGLE_CLIENT_ID:
             raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+        if not JWT_SECRET:
+            raise HTTPException(status_code=500, detail="JWT_SECRET not configured")
         
         # 1. 프론트엔드에서 보낸 구글 토큰 검증
         idinfo = id_token.verify_oauth2_token(
@@ -89,6 +89,9 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
 
 @router.post("/auth/guest", response_model=AuthTokenResponse)
 async def guest_auth(conn=Depends(get_db_connection)):
+    if not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="JWT_SECRET not configured")
+
     guest_id = "1"
     guest_email = "guest@pose.local"
     guest_name = "Guest"
