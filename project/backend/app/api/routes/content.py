@@ -15,7 +15,6 @@ from typing import Optional
 from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
-from project.backend.basic_functions.crawlers.utils import ConnectionManager
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.content import (
     delete_item_for_user,
@@ -26,9 +25,9 @@ from project.backend.app.services.content import (
     search_with_lens,
     start_url_extraction,
 )
+from project.backend.app.services.websocket import get_websocket_manager
 
 router = APIRouter()
-websocket_manager_instance = ConnectionManager()
 
 @router.post("/extract-url")
 async def extract_and_save_url(
@@ -44,7 +43,6 @@ async def extract_and_save_url(
         background_tasks=background_tasks,
         repos=repos,
         user_id=str(current_user.get("sub")),
-        websocket_manager=websocket_manager_instance,
     )
 
 ######################################################################################
@@ -61,7 +59,6 @@ async def run_serpapi_search(
         app=request.app,
         background_tasks=background_tasks,
         user_id=str(current_user.get("sub")),
-        websocket_manager=websocket_manager_instance,
     )
 
 ######################################################################################
@@ -113,10 +110,7 @@ async def serve_image(filename: str):
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    # 동일한 전역 매니저 객체 주소를 앱 상태에 강제 할당
-    websocket.app.state.websocket_manager = websocket_manager_instance
-
-    manager = websocket.app.state.websocket_manager
+    manager = get_websocket_manager(websocket.app)
     await manager.connect(websocket, user_id)
     try:
         while True:

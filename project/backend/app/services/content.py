@@ -16,6 +16,7 @@ from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.services.searching import process_site
+from project.backend.app.services.websocket import get_websocket_manager
 from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
 from project.backend.basic_functions.ai_service.utils import upload_generated_image
 from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini, download_images
@@ -31,11 +32,9 @@ async def start_url_extraction(
     background_tasks: BackgroundTasks,
     repos: Repositories,
     user_id: str,
-    websocket_manager,
 ):
     post_url = payload.url
     session_id = payload.session_id
-    app.state.websocket_manager = websocket_manager
 
     try:
         new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
@@ -76,9 +75,8 @@ async def background_pse_search(
     query: str,
     page: Optional[int],
     custom_domain_map: Optional[dict] = None,
-    websocket_manager=None,
 ):
-    manager = getattr(app.state, "websocket_manager", websocket_manager)
+    manager = get_websocket_manager(app)
     serp_api_key = get_settings().serp_api_key
 
     if not serp_api_key:
@@ -129,9 +127,7 @@ def enqueue_pse_search(
     app: FastAPI,
     background_tasks: BackgroundTasks,
     user_id: str,
-    websocket_manager,
 ):
-    app.state.websocket_manager = websocket_manager
     background_tasks.add_task(
         background_pse_search,
         app,
@@ -139,7 +135,6 @@ def enqueue_pse_search(
         payload.query,
         payload.page,
         payload.domain_map,
-        websocket_manager,
     )
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
 

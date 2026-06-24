@@ -6,10 +6,12 @@ from project.backend.app.api.router import api_router
 from project.backend.app.manage.database import lifespan
 from project.backend.app.api.routes.web import router as web_router
 from project.backend.app.manage.settings import FRONTEND_DIST_DIR, IMAGE_DIR
+from project.backend.app.services.websocket import ConnectionManager
 
 
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=lifespan)
+    app.state.websocket_manager = ConnectionManager()
 
     IMAGE_DIR.mkdir(exist_ok=True)
     app.mount("/api/images", StaticFiles(directory=str(IMAGE_DIR)), name="images")
