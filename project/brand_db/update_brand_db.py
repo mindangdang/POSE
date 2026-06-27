@@ -1,14 +1,10 @@
 import asyncio
-import os
-import json
 import httpx
 import psycopg
 from tqdm.asyncio import tqdm
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 
-# Load environment variables
-load_backend_env()
-NEON_DB_URL = os.environ.get("NEON_DB_URL")
+NEON_DB_URL = get_settings().neon_db_url
 FRUITS_GRAPHQL_URL = "https://web-server.production.fruitsfamily.com/graphql"
 HEADERS = {
     "Content-Type": "application/json",

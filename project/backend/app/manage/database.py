@@ -1,11 +1,10 @@
-import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import Depends, FastAPI, Request
 from psycopg_pool import AsyncConnectionPool
 
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 from project.backend.app.db.session import (
     create_db_pool,
     get_db_connection as get_pooled_db_connection,
@@ -14,11 +13,8 @@ from project.backend.app.db.session import (
 from project.backend.app.repositories import Repositories, get_repositories
 
 
-load_backend_env()
-
-
 def get_neon_db_url() -> str:
-    db_url = os.environ.get("NEON_DB_URL")
+    db_url = get_settings().neon_db_url
     if not db_url:
         raise RuntimeError("NEON_DB_URL environment variable is not set.")
     return db_url

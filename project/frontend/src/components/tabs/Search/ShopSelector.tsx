@@ -2,11 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ExternalLink, X } from 'lucide-react';
 import React from 'react';
 
-type Shop = {
-  name: string;
-  url: string;
-  desc: string;
-};
+import type { Shop } from './searchConfig';
 
 type ShopSelectorProps = {
   shops: Shop[];

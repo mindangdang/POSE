@@ -1,12 +1,10 @@
-import os
 from psycopg.types.json import Json
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 import httpx
 
-# 환경변수 세팅
-load_backend_env()
-api_key = os.environ.get("GOOGLE_API_KEY")
-GPU_SERVER_URL = os.environ.get("GPU_SERVER_URL")
+settings = get_settings()
+api_key = settings.google_api_key
+GPU_SERVER_URL = settings.gpu_server_url
 
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")

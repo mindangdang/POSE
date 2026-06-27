@@ -1,22 +1,21 @@
-import os
 from google import genai
 from google.genai import types
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 from fastapi import HTTPException
 from supabase import create_client, Client
 from project.backend.app.manage.resilience import with_llm_resilience
 
-load_backend_env()
-
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
-BUCKET_NAME = "vibe-images"
+settings = get_settings()
+url: str = settings.supabase_url
+key: str = settings.supabase_key
 
 if not url or not key:
     raise ValueError("Supabase 환경 변수가 설정되지 않았습니다.")
 
-api_key = os.environ.get("GOOGLE_API_KEY")
+supabase: Client = create_client(url, key)
+BUCKET_NAME = "vibe-images"
+
+api_key = settings.google_api_key
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
@@ -61,4 +60,3 @@ async def generate_image_from_query(user_query: str) -> bytes:
         return part.image_bytes
         
     raise ValueError("생성된 이미지 데이터를 찾을 수 없습니다.")
-

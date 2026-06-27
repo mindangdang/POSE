@@ -1,12 +1,8 @@
 import asyncio
-import os
 import psycopg
-from dotenv import load_dotenv
+from project.backend.app.manage.settings import get_settings
 
-# 환경 변수 로드 (.env)
-load_dotenv()
-
-DATABASE_URL = os.environ.get("NEON_DB_URL")
+DATABASE_URL = get_settings().neon_db_url
 
 async def init_db():
     if not DATABASE_URL:

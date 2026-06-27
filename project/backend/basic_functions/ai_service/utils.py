@@ -1,10 +1,7 @@
 import os
 import uuid
 import asyncio
-from project.backend.app.manage.settings import load_backend_env
 from supabase import create_client, Client
-import os
-import asyncio
 import httpx
 import psycopg 
 from psycopg.rows import dict_row 
@@ -12,20 +9,21 @@ from google import genai
 from google.genai import types
 from pathlib import Path
 from project.backend.app.schemas.response import TasteProfileResult 
-from project.backend.app.manage.settings import IMAGE_DIR, load_backend_env
+from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 
-load_backend_env()
-NEON_DB_URL = os.environ.get("NEON_DB_URL")
+settings = get_settings()
+NEON_DB_URL = settings.neon_db_url
 
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
-BUCKET_NAME = "vibe-images"
-LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
+url: str = settings.supabase_url
+key: str = settings.supabase_key
 
 if not url or not key:
     raise ValueError("Supabase 환경 변수가 설정되지 않았습니다.")
+
+supabase: Client = create_client(url, key)
+BUCKET_NAME = "vibe-images"
+LOCAL_IMAGE_DIR = Path(IMAGE_DIR)
 
 async def upload_generated_image(image_bytes: bytes) -> str:
 

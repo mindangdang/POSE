@@ -1,4 +1,3 @@
-import os
 import re
 import json
 import uuid
@@ -20,6 +19,7 @@ from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright, Browser
 from playwright_stealth import Stealth
+from project.backend.app.manage.settings import get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 
 # ------------------------------------------------------------------------
@@ -137,7 +137,7 @@ class ProxyManager:
                     logger.warning("Proxy evicted due to low score", extra={"proxy": proxy})
 
 # Fallback to single proxy if list not provided
-_env_proxy = os.environ.get("RESIDENTIAL_PROXY_URL")
+_env_proxy = get_settings().residential_proxy_url
 proxy_manager = ProxyManager([_env_proxy] if _env_proxy else [])
 
 # ------------------------------------------------------------------------
@@ -416,7 +416,7 @@ _gemini_client_instance = None
 def _get_gemini_client():
     global _gemini_client_instance
     if _gemini_client_instance is None:
-        _gemini_client_instance = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+        _gemini_client_instance = genai.Client(api_key=get_settings().google_api_key)
     return _gemini_client_instance
 
 @with_llm_resilience(fallback_default=None)

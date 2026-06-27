@@ -1,8 +1,7 @@
-import os
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from project.backend.app import create_app
+from project.backend.app.manage.settings import get_settings
 
 
 app = create_app()
@@ -28,5 +27,6 @@ app.add_middleware(SecurityHeadersMiddleware)
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 8000)))
+    settings = get_settings()
+    port = settings.backend_port or settings.port or 8000
     uvicorn.run("project.backend.main:app", host="0.0.0.0", port=port, reload=True)

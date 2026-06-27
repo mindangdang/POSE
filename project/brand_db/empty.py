@@ -1,12 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
-import os
-import json
 import psycopg
-from project.backend.app.manage.settings import load_backend_env
+from project.backend.app.manage.settings import get_settings
 
-load_backend_env()
-neon_url = os.environ.get("NEON_DB_URL")
+neon_url = get_settings().neon_db_url
 
 if not neon_url:
     raise ValueError(" .env 파일에 NEON_DB_URL이 설정되지 않았습니다. 접속 주소를 확인해주세요.")

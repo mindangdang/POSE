@@ -1,13 +1,16 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Plus, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
 import { parseItemFacts } from '../../../lib/itemFacts';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
+import { FeedAddItemModal } from './FeedAddItemModal';
+import { FeedClosetFolders } from './FeedClosetFolders';
 import { FeedItemCard } from './FeedItemCard';
+import { FeedToolbar } from './FeedToolbar';
 
 type FeedTabContentProps = {
   items: SavedItem[];
@@ -32,17 +35,7 @@ export function FeedTabContent({
   const [selectedCategory, setSelectedCategory] = useState<string>('PRODUCT');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
-  const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const addSuccessTimeout = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (addSuccessTimeout.current) {
-        window.clearTimeout(addSuccessTimeout.current);
-      }
-    };
-  }, []);
 
   const factKeysToShow = ['title', 'price_info', 'time_info', 'key_details'];
   const isFeedAddItem = (item: SavedItem) => parseItemFacts(item)?._source === 'feed_add';
@@ -217,16 +210,9 @@ export function FeedTabContent({
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    const normalizedCategory = category.toUpperCase();
-    if (normalizedCategory === 'ALL') return Grid3X3;
-    if (normalizedCategory === 'PROCESSING') return Clock3;
-    return Folder;
-  };
-
-  const getCategoryLabel = (category: string) => {
-    if (category.toUpperCase() === 'ALL') return 'All';
-    return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+  const handleSelectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setCurrentFolder(null);
   };
 
   return (
@@ -256,43 +242,13 @@ export function FeedTabContent({
         </button>
       </div>
 
-      {/* Category Tabs and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-border">
-        <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 md:pb-0 category-nav">
-          {categories.map((category) => {
-            const label = getCategoryLabel(category);
-            const isSelected = selectedCategory === category;
-
-            return (
-              <button
-                key={category}
-                onClick={() => {
-                  setSelectedCategory(category);
-                  setCurrentFolder(null);
-                }}
-                className={`flex items-center pb-2 px-1 text-xs sm:text-sm font-bold uppercase tracking-widest whitespace-nowrap transition-all border-b-2 ${
-                  isSelected
-                    ? 'border-black text-black'
-                    : 'border-transparent text-muted-foreground hover:text-black hover:border-black/20'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="relative w-full md:w-64 lg:w-72 shrink-0">
-          <Search className="absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="제목"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 sm:h-10 pl-7 pr-2 bg-transparent border-b-2 border-black rounded-none text-xs sm:text-sm font-bold focus:outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-      </div>
+      <FeedToolbar
+        categories={categories}
+        selectedCategory={selectedCategory}
+        searchQuery={searchQuery}
+        onSelectCategory={handleSelectCategory}
+        onSearchQueryChange={setSearchQuery}
+      />
 
       {/* Items Grid */}
       <div className="flex-1">
@@ -319,113 +275,13 @@ export function FeedTabContent({
               </div>
             )}
 
-            {/* Folder Cards - Interactive Closet Interior Layout */}
-            {!currentFolder && selectedCategory !== 'All' &&
-              (
-                <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
-                  
-                  {/* Left Column: Hanging Area and Bottom Drawer */}
-                  <div className="lg:col-span-3 space-y-6">
-                    {/* Hanging Area (Outer & Top) */}
-                    <div className="relative min-h-[320px] bg-white border border-zinc-200 rounded-[2.5rem] p-8 overflow-hidden group/hanging shadow-sm">
-                      <div className="absolute top-10 left-8 right-8 h-1 bg-zinc-200 rounded-full shadow-inner" /> {/* Closet Rod */}
-                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Shirt className="w-3 h-3" /> Hanging Section
-                      </div>
-                      <div className="flex flex-wrap gap-6 pt-12">
-                        {folders.filter(f => ['outer', 'top', 'outerwear', 'tops'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
-                          >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
-                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                              {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
-                                <Wind className="w-4 h-4" />
-                              ) : (
-                                <Shirt className="w-4 h-4" />
-                              )}
-                            </div>
-                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bottom Drawer (Bottom) */}
-                    <div className="relative min-h-[180px] bg-zinc-100 border border-zinc-200 rounded-[2.5rem] p-8 shadow-inner overflow-hidden">
-                      <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" /> {/* Drawer Handle */}
-                      <div className="flex flex-wrap gap-6 justify-center">
-                        {folders.filter(f => ['bottom', 'bottoms', 'pants'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
-                          >
-                            <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
-                            <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                              <Columns2 className="w-4 h-4" />
-                            </div>
-                            <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Shoes and Accessories Sub-drawer */}
-                  <div className="lg:col-span-1 relative bg-zinc-200/40 border border-zinc-200 rounded-[2.5rem] p-8 flex flex-col gap-6 shadow-sm overflow-hidden">
-                    <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Box className="w-3 h-3" /> Side Storage
-                    </div>
-                    <div className="flex flex-col gap-6 pt-8 items-center">
-                      {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
-                        <motion.div
-                          layout
-                          key={`folder-${folder}`}
-                          onClick={() => setCurrentFolder(folder)}
-                          className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
-                        >
-                          <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">{filteredItems.filter((i) => i.sub_category === folder).length}</div>
-                          <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                            {['shoes'].includes(folder.toLowerCase()) ? (
-                              <Footprints className="w-4 h-4" />
-                            ) : (
-                              <Gem className="w-4 h-4" />
-                            )}
-                          </div>
-                          <h3 className="text-[11px] font-bold text-foreground uppercase tracking-widest text-center px-2">{folder}</h3>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Miscellaneous Section for undefined folders */}
-                  {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
-                    <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
-                      <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
-                      <div className="flex flex-wrap gap-4">
-                        {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'outerwear', 'tops', 'bottoms', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
-                          <motion.div
-                            layout
-                            key={`folder-${folder}`}
-                            onClick={() => setCurrentFolder(folder)}
-                            className="group/item relative flex px-6 py-3 items-center justify-center bg-white border border-zinc-200 rounded-full shadow-sm transition-all duration-300 cursor-pointer hover:bg-black hover:text-white hover:border-black"
-                          >
-                            <span className="text-[10px] font-bold uppercase tracking-widest">{folder}</span>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            }
+            {!currentFolder && selectedCategory !== 'All' && (
+              <FeedClosetFolders
+                folders={folders}
+                items={filteredItems}
+                onSelectFolder={setCurrentFolder}
+              />
+            )}
 
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
@@ -468,105 +324,16 @@ export function FeedTabContent({
         )}
       </div>
 
-      {/* Add Item Modal */}
-      <AnimatePresence>
-        {isAddPanelOpen && (
-          <>
-            <motion.div
-              key="add-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-              onClick={() => setIsAddPanelOpen(false)}
-            />
-            <motion.div
-              key="add-popup"
-              initial={{ opacity: 0, scale: 0.96, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            >
-              <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-background p-6 sm:p-8 shadow-2xl border border-border">
-                <div className="flex items-center justify-between mb-6 sm:mb-8">
-                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">추가하기</h3>
-                  <button
-                    onClick={() => setIsAddPanelOpen(false)}
-                    className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleAddItem} className="space-y-4 sm:space-y-5">
-                  <div>
-                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-                      URL 혹은 상품이름
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-                      Session ID (Optional)
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Session ID"
-                      value={sessionId}
-                      onChange={(e) => setSessionId(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={`w-full h-10 sm:h-12 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
-                      isAddButtonSuccess
-                        ? 'bg-green-600 text-white'
-                        : 'bg-black text-white hover:opacity-90 disabled:opacity-50'
-                    }`}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.span
-                        key={addItemMutation.isPending ? 'pending' : isAddButtonSuccess ? 'success' : 'idle'}
-                        initial={{ opacity: 0, y: 3 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -3 }}
-                        transition={{ duration: 0.12, ease: 'easeOut' }}
-                        className="flex items-center gap-2"
-                      >
-                        {addItemMutation.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Adding...
-                          </>
-                        ) : isAddButtonSuccess ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Added!
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4" />
-                            Add Item
-                          </>
-                        )}
-                      </motion.span>
-                    </AnimatePresence>
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <FeedAddItemModal
+        isOpen={isAddPanelOpen}
+        isPending={addItemMutation.isPending}
+        newUrl={newUrl}
+        sessionId={sessionId}
+        onClose={() => setIsAddPanelOpen(false)}
+        onSubmit={handleAddItem}
+        onNewUrlChange={setNewUrl}
+        onSessionIdChange={setSessionId}
+      />
     </motion.div>
   );
 }
