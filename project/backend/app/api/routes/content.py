@@ -29,7 +29,7 @@ from project.backend.app.services.websocket import get_websocket_manager
 
 router = APIRouter()
 
-@router.post("/extract-url")
+@router.post("/crawl_product")
 async def extract_and_save_url(
     payload: UrlAnalyzeRequest,
     request: Request,
@@ -37,13 +37,45 @@ async def extract_and_save_url(
     repos: Repositories = Depends(get_repos),
     current_user: dict = Depends(get_current_user)
 ):
-    return await start_url_extraction(
-        payload=payload,
-        app=request.app,
-        background_tasks=background_tasks,
-        repos=repos,
-        user_id=str(current_user.get("sub")),
+    post_url = payload.url
+    user_id = str(current_user.get("sub"))
+
+    request.app.state.websocket_manager = websocket_manager_instance
+
+    try:
+        new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
+        print("임시 아이템 저장 성공")
+    except Exception as exc:
+        await repos.saved_posts.conn.rollback()
+        raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {exc}") from exc
+
+    background_tasks.add_task(
+        background_crawl_and_save,
+        request.app,
+        new_item_id,
+        user_id,
+        post_url,
     )
+
+    return {
+        "success": True,
+        "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
+        "item_id": new_item_id,
+        "data": [
+            {   
+                "item_id": new_item_id,
+                "title": "PROCESSING",
+                "price": None,
+                "brand": None,
+                "category": "PROCESSING",
+                "is_available": None,
+                "image_url": "",
+                "image_vector": None,
+                "shop": None,
+                "source_url": post_url,
+            }
+        ],
+    }
 
 ######################################################################################
 
@@ -61,8 +93,6 @@ async def run_serpapi_search(
         user_id=str(current_user.get("sub")),
     )
 
-######################################################################################
-
 @router.post("/lens")
 async def run_serpapi_lens_search(
     file: Optional[UploadFile] = File(None),
@@ -70,9 +100,7 @@ async def run_serpapi_lens_search(
 ):
     return await search_with_lens(file=file, query=query)
 
-######################################################################################
-
-@router.post("/items/manual")
+@router.post("/items/manual") 
 async def save_manual_item(
     payload: ManualItemCreate,
     repos: Repositories = Depends(get_repos),
@@ -93,7 +121,6 @@ async def get_items(
 ):
     return await list_items_for_user(user_id=str(current_user.get("sub")), repos=repos)
 
-
 @router.delete("/items/{item_id}")
 async def delete_item(
     item_id: int, 
@@ -102,11 +129,9 @@ async def delete_item(
 ):
     return await delete_item_for_user(item_id=item_id, user_id=str(current_user.get("sub")), repos=repos)
 
-
 @router.get("/images/{filename}")
 async def serve_image(filename: str):
     return FileResponse(path=resolve_image_path(filename))
-
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):

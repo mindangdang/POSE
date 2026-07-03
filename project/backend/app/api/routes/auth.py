@@ -62,7 +62,7 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
             if not user:
                 await cur.execute(
                     """
-                    INSERT INTO users (id, email, name, profile_image)
+                    INSERT INTO users (user_id, email, name, profile_image)
                     VALUES (%s, %s, %s, %s) RETURNING *
                     """,
                     (google_id, email, name, picture)
@@ -79,7 +79,7 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
         )
 
         # 프론트엔드에서 사용할 AppUser 형태의 데이터와 access_token 반환
-        user_data = {"id": google_id, "email": email, "name": name, "profile_image": picture}
+        user_data = {"user_id": google_id, "email": email, "name": name, "profile_image": picture}
         return {"access_token": internal_token, "token_type": "bearer", "user": user_data}
         
     except ValueError as e:
@@ -98,11 +98,11 @@ async def guest_auth(conn=Depends(get_db_connection)):
     guest_profile_image = None
 
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("SELECT * FROM users WHERE id = %s", (guest_id,))
+        await cur.execute("SELECT * FROM users WHERE user_id = %s", (guest_id,))
         user = await cur.fetchone()
         if not user:
             await cur.execute(
-                "INSERT INTO users (id, email, name, profile_image) VALUES (%s, %s, %s, %s) RETURNING *",
+                "INSERT INTO users (user_id, email, name, profile_image) VALUES (%s, %s, %s, %s) RETURNING *",
                 (guest_id, guest_email, guest_name, guest_profile_image)
             )
             user = await cur.fetchone()
@@ -116,7 +116,7 @@ async def guest_auth(conn=Depends(get_db_connection)):
     )
 
     user_data = {
-        "id": user["id"],
+        "user_id": user["user_id"],
         "email": user["email"],
         "name": user["name"],
         "profile_image": user["profile_image"],
@@ -132,7 +132,7 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user), 
         
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
-                "SELECT id, email, name, profile_image FROM users WHERE id = %s",
+                "SELECT user_id, email, name, profile_image FROM users WHERE user_id = %s",
                 (user_id,)
             )
             user = await cur.fetchone()
@@ -142,7 +142,7 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user), 
         
         # 프론트엔드가 사용하는 AppUser 형태의 데이터 반환
         user_data = {
-            "id": user["id"],
+            "user_id": user["user_id"],
             "email": user["email"],
             "name": user["name"],
             "profile_image": user["profile_image"],

@@ -7,15 +7,6 @@ from typing import Callable, Any
 logger = logging.getLogger(__name__)
 
 def with_llm_resilience(fallback_default: Any = None, max_retries: int = 3, base_delay: float = 1.0, chaos_mode: bool = False):
-    """
-    Chaos Engineering inspired resilience decorator for LLM calls.
-    
-    Features:
-    1. Exponential Backoff with Jitter: Prevents thundering herds on rate limits (429) or server errors (500).
-    2. Chaos Injection: Randomly simulates failures if chaos_mode is True to test fallback robustness.
-    3. Graceful Fallback: Returns fallback_default or executes fallback_default() if all retries are exhausted.
-       If fallback_default is an Exception, it safely raises it up the call stack.
-    """
     def decorator(func: Callable):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):

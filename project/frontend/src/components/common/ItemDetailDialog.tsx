@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
 import { apiFetch } from '../../lib/api';
-import { getItemTitle, parseItemFacts } from '../../lib/itemFacts';
+import { getItemTitle, parseItemInforms } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ItemDetailDialogProps = {
@@ -12,9 +12,20 @@ type ItemDetailDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+// 중복되는 이미지 URL 파싱 로직을 외부 함수로 분리
+const getImageUrl = (imageUrl?: string, localImageUrl?: string) => {
+  if (!imageUrl) return 'https://via.placeholder.com/600x600?text=No+Image';
+  if (imageUrl.startsWith('http') || imageUrl.startsWith('data:') || imageUrl.startsWith('//')) {
+    return imageUrl.startsWith('//') ? `https:${imageUrl}` : imageUrl;
+  }
+  if (localImageUrl) return `/api/images/${localImageUrl}`;
+  return `/api/images/${imageUrl}`;
+};
+
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
   const [viewedItem, setViewedItem] = useState<SavedItem | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastRequestedItemKey = useRef<string>('');
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
 
@@ -24,76 +35,102 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
   const displayItem = viewedItem || item;
   const modalTitle = displayItem ? getItemTitle(displayItem) : '';
-  const facts = displayItem ? parseItemFacts(displayItem) : null;
+  
+  const facts = useMemo(() => {
+    if (!displayItem) return null;
+    return parseItemInforms(displayItem);
+  }, [displayItem]);
 
+  // 이미지 URL 메모이제이션 (JSX와 useEffect에서 공통 사용)
+  const displayImageUrl = useMemo(() => {
+    return getImageUrl(displayItem?.image_url, (facts as any)?.local_image_url);
+  }, [displayItem, facts]);
+
+  const requestKey = useMemo(() => {
+    if (!displayItem) return '';
+    const image = displayItem.image_url || '';
+    const source = displayItem.source_url || '';
+    const id = displayItem.item_id ?? '';
+    return `${id}:${image}:${source}`;
+  }, [displayItem]);
+
+  // 데이터 패칭 로직 최적화
   useEffect(() => {
-    if (displayItem) {
-      let isMounted = true;
-      setIsLoadingSimilar(true);
+    if (!displayItem) {
       setSimilarItems([]);
-      
+      setIsLoadingSimilar(false);
+      lastRequestedItemKey.current = '';
+      return;
+    }
+
+    if (lastRequestedItemKey.current === requestKey) return;
+    lastRequestedItemKey.current = requestKey;
+
+    let isMounted = true;
+
+    const fetchSimilarItems = async () => {
+      setIsLoadingSimilar(true);
+      // 의도적으로 깜빡임을 주지 않으려면 이전 데이터를 유지하는 것이 좋지만, 
+      // 스크롤을 맨 위로 올리는 기획 특성상 유지하고 싶다면 아래 라인은 남겨두셔도 됩니다.
+      setSimilarItems([]); 
+
       if (scrollRef.current) {
         scrollRef.current.scrollTop = 0;
       }
-      
-      const fetchSimilarItems = async () => {
-        try {
-          let targetUrl = displayItem.image_url?.startsWith('http') || displayItem.image_url?.startsWith('data:') || displayItem.image_url?.startsWith('//') 
-            ? displayItem.image_url 
-            : (facts as any)?.local_image_url 
-              ? `/api/images/${(facts as any).local_image_url}`
-              : displayItem.image_url 
-                ? `/api/images/${displayItem.image_url}` 
-                : '';
-          
-          if (targetUrl.startsWith('//')) {
-            targetUrl = `https:${targetUrl}`;
-          }
-          
-          // SerpApi는 공용 URL이 필요하므로, 로컬 경로인 경우 현재 도메인을 붙여줍니다.
-          const absoluteUrl = targetUrl.startsWith('/api/') 
-            ? `${window.location.origin}${targetUrl}` 
-            : targetUrl;
 
-          const formData = new FormData();
-          formData.append('query', absoluteUrl || modalTitle);
+      try {
+        const absoluteUrl = displayImageUrl.startsWith('/api/')
+          ? `${window.location.origin}${displayImageUrl}`
+          : displayImageUrl;
 
-          const res = await apiFetch('/api/lens', {
-            method: 'POST',
-            body: formData,
-          });
-          const data = await res.json();
-          if (isMounted && data.success && data.results) {
-            setSimilarItems(data.results);
-          }
-        } catch (err) {
-          console.error('Failed to fetch similar items', err);
-        } finally {
-          if (isMounted) {
-            setIsLoadingSimilar(false);
-          }
+        const formData = new FormData();
+        formData.append('query', absoluteUrl || modalTitle);
+
+        const res = await apiFetch('/api/lens', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!isMounted) return;
+
+        if (data.success && Array.isArray(data.results)) {
+          setSimilarItems(data.results);
+        } else {
+          setSimilarItems([]);
         }
-      };
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Failed to fetch similar items', err);
+        setSimilarItems([]);
+      } finally {
+        if (isMounted) {
+          setIsLoadingSimilar(false);
+        }
+      }
+    };
 
-      fetchSimilarItems();
+    void fetchSimilarItems();
 
-      return () => {
-        isMounted = false;
-      };
-    } else {
-      setSimilarItems([]);
-      setIsLoadingSimilar(false);
-    }
-  }, [displayItem, modalTitle, facts]);
+    return () => {
+      isMounted = false;
+    };
+  }, [requestKey, modalTitle, displayImageUrl, displayItem]); // 의존성을 명확한 데이터 기준으로 정렬
 
-  if (!displayItem) {
-    return null;
-  }
+  if (!displayItem) return null;
 
   const factEntries =
-    facts && typeof facts === 'object'
-      ? Object.entries(facts).filter(([key]) => key.toLowerCase() !== 'title')
-      : [];
+  facts && typeof facts === 'object'
+    ? Object.entries(facts).filter(([key]) => {
+        const lowerKey = key.toLowerCase();
+        return (
+          lowerKey !== 'title' &&
+          lowerKey !== 'id' &&          
+          !lowerKey.includes('source')    
+        );
+      })
+    : [];
 
   return (
     <Dialog.Root open onOpenChange={onOpenChange}>
@@ -119,15 +156,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                 {/* Image Section */}
                 <div className="md:w-1/2 bg-muted flex items-center justify-center overflow-hidden p-6">
                   <img
-                    src={
-                      displayItem.image_url?.startsWith('http') || 
-                      displayItem.image_url?.startsWith('data:') || 
-                      displayItem.image_url?.startsWith('//')
-                        ? displayItem.image_url
-                        : displayItem.image_url
-                          ? `/api/images/${displayItem.image_url}`
-                          : 'https://via.placeholder.com/600x600?text=No+Image'
-                    }
+                    src={displayImageUrl}
                     alt={displayItem.category}
                     className="w-full h-full object-contain rounded-xl"
                     referrerPolicy="no-referrer"
@@ -167,16 +196,6 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                   </div>
 
                   <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-2">
-                    {/* Vibe Analysis */}
-                    <section>
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-black" /> Vibe Analysis
-                      </h3>
-                      <p className="text-sm font-medium leading-relaxed text-foreground">
-                        {displayItem.recommend}
-                      </p>
-                    </section>
-
                     {/* Extracted Information */}
                     <section>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
@@ -211,10 +230,10 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                     </section>
 
                     {/* Source Link */}
-                    {displayItem.url && (
+                    {displayItem.source_url && (
                       <section className="pt-2">
                         <a
-                          href={displayItem.url}
+                          href={displayItem.source_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 w-full h-11 bg-black text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"

@@ -15,7 +15,7 @@ async def init_db():
             print("users 테이블 생성 중...")
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id VARCHAR(255) PRIMARY KEY,
+                    user_id VARCHAR(255) PRIMARY KEY,
                     email VARCHAR(255) UNIQUE NOT NULL,
                     name VARCHAR(255),
                     profile_image TEXT,

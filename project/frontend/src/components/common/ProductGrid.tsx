@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Heart, Plus } from 'lucide-react';
-import { getItemTitle, parseItemFacts } from '../../lib/itemFacts';
+import { getItemTitle, parseItemInforms } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ProductGridProps = {
@@ -69,7 +69,7 @@ type ProductCardProps = {
 
 function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: ProductCardProps) {
   const title = getItemTitle(item);
-  const facts = parseItemFacts(item);
+  const facts = parseItemInforms(item);
   const priceInfo = facts?.price_info;
   const priceText =
     typeof priceInfo === 'string' || typeof priceInfo === 'number'

@@ -13,13 +13,16 @@ export async function saveItemToFeed(
     await apiJson('/api/items/manual', {
       method: 'POST',
       body: JSON.stringify({
+        item_id: item.item_id,
         user_id: user.id,
-        category: item.category || "WEB SEARCH",
-        sub_category: item.sub_category || "WEB SEARCH",
-        recommend: item.recommend,
-        facts: item.facts,
-        url: item.url,
-        image_url: item.image_url
+        source_url: item.source_url,
+        category: item.category,
+        image_url: item.image_url,
+        image_vector: item.image_vector,
+        price: item.price,
+        brand: item.brand,
+        is_available: item.is_available,
+        shop: item.shop
       })
     });
 

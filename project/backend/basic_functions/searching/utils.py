@@ -55,17 +55,16 @@ async def fetch_from_single_site(
             shop = item.get("source") or site_name or "알 수 없는 샵"
 
             results.append({
-                "id": str(uuid.uuid4()),
-                "category": "PRODUCT",
-                "sub_category": query if not query.startswith("http") else "PRODUCT",
-                "recommend": f"{shop}에서 발견한 아이템",
+                "item_id": str(uuid.uuid4()),
+                "title": item.get("title", "상품명 없음"),
+                "price": price,
+                "brand": item.get("source") or shop,
+                "category": item.get("category") or "알 수 없는 카테고리",
+                "is_available": item.get("is_available", "알 수 없음"),
                 "image_url": image_url,
-                "url": item.get("link", ""),
-                "facts": {
-                    "title": item.get("title", "상품명 없음"),
-                    "Price": price,
-                    "Shop": shop,
-                },
+                "shop": shop,
+                "source_url": item.get("link", ""),
+                "image_vector": None,
             })
         return results
 

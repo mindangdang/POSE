@@ -1,28 +1,17 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
-
-class ProductAnalysisResult(BaseModel):
-    recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
-    key_details: List[str] = Field(description="핵심 특징 1, 2, 3")
-    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Shoes", default=None)
-
-class Facts(BaseModel):
-    title: Optional[str] = Field(description="상품명, 브랜드명, 작품명, 상호명 또는 주제, 제목", default=None)
-    price_info: Optional[str] = Field(description="상품가격, 메뉴 가격대 등 비용 관련 텍스트", default=None)
-    location_text: Optional[str] = Field(description="위치, 주소 텍스트", default=None)
-    time_info: Optional[str] = Field(description="시간/기간 텍스트", default=None)
-    key_details: Optional[List[str]] = Field(description="핵심 특징 1, 2, 3", default=None)
-
-class ExtractedItem(BaseModel):
-    image_index: int = Field(description="이 대상이 가장 잘 나타난 슬라이드의 인덱스 (첫 번째 사진은 0)") 
-    category: str = Field(description="PLACE, PRODUCT, MEDIA, TIP, INSPIRATION 중 택 1")
-    sub_category: Optional[str] = Field(description="Choose 1 from Outerwear, Jacket, Top, Bottom, Jewelry, Accessories, or Shoes", default=None)
-    recommend: str = Field(description="어떤 사람에게 추천하는지 설명+대상에 대한 큐레이팅")
-    facts: Facts
-
-class InstaAnalysisResult(BaseModel):
-    extracted_items: List[ExtractedItem]
+class Product(BaseModel):
+    id: Optional[str] = Field(description="상품 고유 ID", default=None)
+    title: Optional[str] = Field(description="상품명", default=None)
+    price: Optional[str] = Field(description="상품가격", default=None)
+    brand: Optional[str] = Field(description="브랜드명", default=None)
+    category: Optional[str] = Field(description="'outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'", default=None)
+    is_available: Optional[str] = Field(description="구매 가능 여부", default=None)
+    image_url: Optional[str] = Field(description="이미지 퍼블릭 url", default=None)
+    image_vector: Optional[str] = Field(description="이미지 임베딩 벡터", default=None)
+    shop: Optional[str] = Field(description="쇼핑몰 출처", default=None)
+    source_url: Optional[str] = Field(description="상품 정보 출처 URL", default=None)
 
 class TasteProfileResult(BaseModel):
     persona: str = Field(description="유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀")

@@ -56,7 +56,7 @@ async def fetch_user_data_from_neon(user_id: str):
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT facts, recommend, category, sub_category, title, image_url,image_vector
+                    SELECT category, title, image_url,image_vector
                     FROM saved_posts
                     WHERE user_id = %s
                     ORDER BY created_at DESC
@@ -97,14 +97,3 @@ async def get_image_bytes(url_or_filename: str) -> bytes | None:
 
     return await asyncio.to_thread(read_local)
 
-def format_data_for_prompt(item: dict) -> str:
-    facts = item.get("facts") or {}
-    title = facts.get("title", "알 수 없음")
-    location = facts.get("location_text", "위치 정보 없음")
-    key_details = facts.get("key_details", [])
-
-    return f"""[Item {title}]
-    - Category: {item.get('category', 'UNKNOWN')}
-    - Location: {location}
-    - Recommend: {item.get('recommend', '')}
-    - Key Details: {key_details} """

@@ -1,10 +1,8 @@
 from collections.abc import AsyncGenerator
 from typing import Any, Awaitable, Callable
-
 from fastapi import HTTPException
 from psycopg import InterfaceError, OperationalError
 from psycopg_pool import AsyncConnectionPool
-
 
 async def init_db(db_pool: AsyncConnectionPool) -> None:
     try:
@@ -13,16 +11,17 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                 await cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS saved_posts (
-                        id SERIAL PRIMARY KEY,
+                        item_id SERIAL PRIMARY KEY,
                         user_id TEXT,
                         source_url TEXT,
                         title TEXT,
+                        price TEXT,
+                        brand TEXT,
                         category TEXT,
-                        sub_category TEXT,
+                        is_available TEXT,
                         image_url TEXT,
-                        recommend TEXT,
                         image_vector vector(768),
-                        facts JSONB,
+                        shop TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(source_url, title)
                     );
@@ -44,16 +43,13 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
     except Exception as exc:
         print(f"DB 초기화 중 경고: {exc}")
 
-
 def create_db_pool(conninfo: str, min_size: int = 5, max_size: int = 20) -> AsyncConnectionPool:
     return AsyncConnectionPool(conninfo=conninfo, min_size=min_size, max_size=max_size)
-
 
 async def _ping_connection(conn: Any) -> None:
     async with conn.cursor() as cursor:
         await cursor.execute("SELECT 1")
         await cursor.fetchone()
-
 
 async def get_db_connection(
     pool: AsyncConnectionPool | None,

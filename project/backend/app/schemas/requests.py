@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 class UrlAnalyzeRequest(BaseModel):
     url: str
-    session_id: Optional[str] = None
 
 
 class TasteUpdate(BaseModel):
@@ -22,11 +21,13 @@ class SearchRequest(BaseModel):
 class ManualItemCreate(BaseModel):
     user_id: str | int
     category: str
-    sub_category: str
-    recommend: str
-    facts: dict
     url: str
     image_url: Optional[str] = ""
+    title: Optional[str] = None
+    price: Optional[str] = None
+    brand: Optional[str] = None
+    is_available: Optional[str] = None
+    shop: Optional[str] = None
 
 class GoogleAuthRequest(BaseModel):
     access_token: str

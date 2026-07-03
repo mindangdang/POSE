@@ -8,7 +8,9 @@ import httpx
 import uuid
 import asyncio
 import httpx
-
+import html
+import logging
+from fastapi import WebSocket, WebSocketDisconnect
 
 FAKE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -20,53 +22,55 @@ settings = get_settings()
 api_key = settings.google_api_key
 if not api_key:
     raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
+logger = logging.getLogger("websocket")
+logging.basicConfig(level=logging.INFO)
 
-my_proxy_url = "https://lucky-bush-20ba.dear-m1njn.workers.dev" 
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(
-        base_url=my_proxy_url
-    )
-)
+class ConnectionManager:
+    def __init__(self):
+        # 유저 ID별로 '여러 개'의 활성 웹소켓 연결(배열)을 관리합니다.
+        self.active_connections: dict[str, list[WebSocket]] = {}
 
-GPU_SERVER_URL = settings.gpu_server_url
-if not GPU_SERVER_URL:
-    raise ValueError(".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다.")
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        logger.info(f"🟢 [Connect] User: {user_id} | Total connections for user: {len(self.active_connections[user_id])}")
 
-@with_llm_resilience(fallback_default=lambda description: {
-    "recommend": "", 
-    "key_details": description[:100].strip() + "..." if len(description) > 100 else description,
-    "sub_category": "미분류",
-})
-async def analyze_description_with_gemini(description: str) -> dict:
-    if not description or description == "No description available":
-        return {"title": "", "recommend": "", "price": "", "key_details": "", "sub_category": "미분류"}
+    def disconnect(self, websocket: WebSocket, user_id: str, code: int = 1000, reason: str = "Unknown"):
+        # 웹소켓 종료 로그 기록
+        logger.info(f"🔴 [Disconnect] User: {user_id} | Code: {code} | Reason: {reason}")
+        
+        if user_id in self.active_connections:
+            if websocket in self.active_connections[user_id]:
+                self.active_connections[user_id].remove(websocket)
+            
+            # 남은 커넥션이 하나도 없으면 딕셔너리에서 키 삭제
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
 
-    prompt = f"""
-    다음 상품정보를 분석하여 'title', 'recommend', 'price' 'key_details', 'sub_category'로 분리해.
-    *참고: 아우터는 패딩,코트 같은 종류고, 자켓은 블루종,가죽자켓 같은 종류야.
+    async def broadcast_to_user(self, user_id: str, message: str):
+        if user_id not in self.active_connections:
+            return
 
-    [상품 정보]
-    {description} """
+        dead_sockets = []
+        for ws in self.active_connections[user_id]:
+            try:
+                await ws.send_text(message)
+            except WebSocketDisconnect as e:
+                # 클라이언트가 정상/비정상적으로 연결을 끊었을 때 발생
+                logger.error(f"[Broadcast Fail] User: {user_id} | WebSocketDisconnect! Code: {e.code}")
+                # disconnect 함수에 넘겨주기 위해 기록
+                dead_sockets.append((ws, e.code, "WebSocketDisconnect"))
+            except Exception as e:
+                # 그 외 예기치 못한 에러 (네트워크 에러, 타임아웃 등)
+                logger.error(f"[Broadcast Fail] User: {user_id} | Unexpected Error: {str(e)}", exc_info=True)
+                dead_sockets.append((ws, 1006, f"Exception: {str(e)}"))
 
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt, 
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ProductAnalysisResult, 
-            temperature=0.1 
-        )
-    )
-    data = response.parsed
-    
-    return {
-        "recommend": data.recommend,
-        "key_details": data.key_details,
-        "sub_category": data.sub_category,
-        "title": data.title,
-        "price": data.price
-    }
+        # 끊어진 소켓들을 안전하게 정리
+        for dead_ws, code, reason in dead_sockets:
+            self.disconnect(dead_ws, user_id, code, reason)
+
 
 def _mark_feed_add_items(items: list[dict]) -> None:
     for item in items:
@@ -112,3 +116,21 @@ async def download_images(image_urls: list, save_dir: str = "insta_vibes") -> li
 
     # 실패한(None) 다운로드를 걸러내고 성공한 경로만 반환
     return [path for path in results if path is not None]
+
+def normalize_url(raw_url) -> str:
+    normalized_image_url = html.unescape(raw_url.strip()) if isinstance(raw_url, str) else ""
+    if normalized_image_url.startswith("//"):
+        normalized_image_url = f"https:{normalized_image_url}"
+    return normalized_image_url
+
+async def fetch_image_task(image_url,IMAGE_DIR) -> str:
+
+    if image_url.startswith(("http://", "https://")):
+        files = await download_images([image_url], str(IMAGE_DIR))
+        if files:
+            local_name = os.path.basename(files[0])
+            print(f"[백그라운드] 외부 상품 이미지를 로컬로 저장 완료: {local_name}")
+            return local_name
+        print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {image_url[:120]}")
+    return ""
+    

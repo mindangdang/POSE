@@ -446,7 +446,7 @@ async def fallback_with_gemini(url: str, html_content: str):
     data = response.parsed
     
     return {
-        "url": url,
+        "source_url": url,
         "title": data.title,
         "brand": data.brand,
         "price": data.price,
@@ -692,6 +692,7 @@ async def scrape_product_metadata(url: str) -> dict:
 
             extracted_data = {
                 "url": final_url,
+                "source_url": final_url,
                 "title": title,
                 "brand": brand,
                 "price": price,

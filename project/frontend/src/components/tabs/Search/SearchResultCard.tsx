@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Plus, ThumbsUp, ThumbsDown, Search, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
-import { getItemTitle, parseItemFacts } from '../../../lib/itemFacts';
+import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 
 type SearchResultCardProps = {
@@ -25,7 +25,7 @@ export function SearchResultCard({
   onDislike,
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
-  const facts = parseItemFacts(item);
+  const facts = parseItemInforms(item);
   const aspectRatio = 'aspect-[2/3]';
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
