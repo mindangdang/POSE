@@ -32,7 +32,7 @@ async def background_crawl_and_save(
             print("[백그라운드] 작업 및 DB 저장 완료")
 
             all_items = await repos.saved_posts.list_feed_items(user_id)
-            new_items = [item for item in all_items if item.get("url") == post_url or item.get("source_url") == post_url]
+            new_items = [item for item in all_items if item.get("source_url") == post_url]
             if not new_items:
                 print("[백그라운드] DB에서 새 아이템을 찾을 수 없습니다.")
 
@@ -93,5 +93,6 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "is_available": is_available,
             "image_url": raw_image_url or local_image_url or None,
             "shop": shop,
+            "source_url": post_url
         }
     ]

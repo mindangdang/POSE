@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, Folder, Grid3X3, Clock3, X, Check, Search, Hash, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
+import { Plus, Loader2, X, Check, Search, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
@@ -45,14 +45,8 @@ export function FeedTabContent({
   }, []);
 
   const isFeedAddItem = (item: SavedItem) => parseItemInforms(item)?._source === 'feed_add';
-  
-  const menuItems = useMemo(() => items.filter((item) => !isFeedAddItem(item)), [items]);
 
-  const categories = useMemo(() => {
-    const dynamicCategories = Array.from(new Set(menuItems.map((item) => item.category))).filter(Boolean) as string[];
-    const others = dynamicCategories.filter(c => c.toUpperCase() !== 'FOLDER' && c.toUpperCase() !== 'ALL' && c.toUpperCase() !== 'PROCESSING');
-    return ['FOLDER', 'All', ...others];
-  }, [menuItems]);
+  const categories = useMemo(() => ['FOLDER', 'All'], []);
 
   const filteredItems = useMemo(
     () => (
@@ -63,21 +57,25 @@ export function FeedTabContent({
     [items, selectedCategory]
   );
 
+  // 🌟 [버그 수정] 옷장 UI 조건식 매칭을 위해 폴더 카테고리명을 애초에 소문자로 포맷팅하여 수집합니다.
   const folders = useMemo(() => {
     const subs = new Set<string>();
     filteredItems.forEach((item) => {
-      if (item.category && item.category.toUpperCase() !== 'PROCESSING') subs.add(item.category);
+      if (item.category && item.category.toUpperCase() !== 'PROCESSING') {
+        subs.add(item.category.toLowerCase());
+      }
     });
     return Array.from(subs);
   }, [filteredItems]);
 
-  // 검색 및 노출 아이템 필터링 로직 최적화 및 버그 수정
+  // 검색 및 노출 아이템 필터링 로직
   const itemsToDisplay = useMemo(() => {
     let baseItems: SavedItem[] = [];
     if (selectedCategory === 'All') {
       baseItems = filteredItems;
     } else if (selectedCategory === 'FOLDER') {
-      baseItems = currentFolder ? filteredItems.filter((item) => item.category === currentFolder) : [];
+      // 🌟 [안전장치] 폴더 검사 시 소문자 비교 처리로 버그 예방
+      baseItems = currentFolder ? filteredItems.filter((item) => item.category?.toLowerCase() === currentFolder) : [];
     } else {
       baseItems = filteredItems.filter((item) => item.category === selectedCategory);
     }
@@ -89,7 +87,6 @@ export function FeedTabContent({
         const title = typeof informs.title === 'string' ? informs.title.toLowerCase() : '';
         const category = (item.category || '').toLowerCase();
 
-        // 중복 조건 제거 및 배열/객체 프로퍼티 검색 지원 강화
         const matchesInforms = Object.values(informs).some((v) => {
           if (typeof v === 'string') return v.toLowerCase().includes(query);
           if (Array.isArray(v)) return v.some(subV => typeof subV === 'string' && subV.toLowerCase().includes(query));
@@ -103,12 +100,8 @@ export function FeedTabContent({
     return baseItems;
   }, [filteredItems, currentFolder, selectedCategory, searchQuery]);
 
-  useEffect(() => {
-    if (!categories.includes(selectedCategory) && categories.length > 0) {
-      setSelectedCategory('FOLDER');
-      setCurrentFolder(null);
-    }
-  }, [categories, selectedCategory]);
+  // 🌟 [삭제 완료] 무한 루프 및 강제 리다이렉션을 유발하던 selectedCategory 추적 이펙트를 제거했습니다.
+  // 탭 전환 시 상위나 다른 경로에서 상태를 관리하도록 핸들러에서 직접 리셋하는 편이 안전합니다.
 
   // 웹소켓 이펙트
   useEffect(() => {
@@ -126,48 +119,44 @@ export function FeedTabContent({
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
+        ws.onopen = () => console.info('웹소켓 연결이 설정되었습니다.');
 
-        ws.onopen = () => {
-          console.info('웹소켓 연결이 설정되었습니다.');
-        };
-
-        ws.onmessage = (event) => {
+        ws.onmessage = async (event) => {
           try {
             const data = JSON.parse(event.data);
+            const removePlaceholder = (prevItems: SavedItem[]) => 
+              prevItems.filter(item => Number(item.item_id) !== Number(data.placeholder_id));
 
             if (data.type === 'CRAWL_SUCCESS') {
-              onItemsChange((prev) => {
-                const filtered = prev.filter((item) => item.item_id !== data.placeholder_id);
-                return [...(data.items || []), ...filtered];
-              });
-              void refreshTaste();
+              onItemsChange((prev) => [...(data.items || []), ...removePlaceholder(prev)]);
+              
+              await Promise.allSettled([
+                refreshItems?.(),
+                refreshTaste?.()
+              ]);
+
             } else if (data.type === 'CRAWL_ERROR') {
-              alert(data.message || '데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
-              onItemsChange((prev) => prev.filter((item) => item.item_id !== data.placeholder_id));
+              alert(data.message || '데이터를 가져오는 데 실패했습니다.');
+              onItemsChange(removePlaceholder);
             }
           } catch (err) {
             console.error('웹소켓 메시지 파싱 오류:', err);
           }
         };
 
-        ws.onerror = (event) => {
-          console.error('웹소켓 연결 오류:', event);
-        };
-
+        ws.onerror = (event) => console.error('웹소켓 연결 오류:', event);
         ws.onclose = (event) => {
           if (isUnmounted) return;
-          console.warn(`웹소켓 연결이 종료되었습니다 (code=${event.code}). 3초 후 재연결 시도합니다.`);
-          if (reconnectTimeout) {
-            window.clearTimeout(reconnectTimeout);
-          }
-          reconnectTimeout = window.setTimeout(() => {
-            if (!isUnmounted) connectWebSocket();
-          }, 3000);
+          console.warn(`웹소켓 연결 종료 (code=${event.code}). 3초 후 재연결합니다.`);
+          
+          if (reconnectTimeout) window.clearTimeout(reconnectTimeout);
+          reconnectTimeout = window.setTimeout(() => connectWebSocket(), 3000);
         };
+        
       } catch (err) {
-        console.error('웹소켓 연결 설정 오류:', err);
+        console.error('웹소켓 설정 오류:', err);
         if (!isUnmounted) {
-          reconnectTimeout = window.setTimeout(connectWebSocket, 3000);
+          reconnectTimeout = window.setTimeout(() => connectWebSocket(), 3000);
         }
       }
     };
@@ -184,7 +173,8 @@ export function FeedTabContent({
         window.clearTimeout(reconnectTimeout);
       }
     };
-  }, [user, onItemsChange, refreshTaste]);
+    // 🌟 [의존성 수정] 빠져있던 refreshItems 함수를 채워주어 동기화 버그를 원천 차단합니다.
+  }, [user, onItemsChange, refreshItems, refreshTaste]);
 
   // 아이템 추가 Mutation
   const addItemMutation = useMutation({
@@ -201,11 +191,10 @@ export function FeedTabContent({
       }
       setNewUrl("");
       
-      // 기획하신 Added! 인터랙션 작동하도록 구현
       setIsAddButtonSuccess(true);
       addSuccessTimeout.current = window.setTimeout(() => {
         setIsAddButtonSuccess(false);
-        setIsAddPanelOpen(false); // 성공 후 모달 닫기
+        setIsAddPanelOpen(false);
       }, 1500);
     },
     onError: (error: Error) => {
@@ -345,7 +334,7 @@ export function FeedTabContent({
             {/* Current Folder Header */}
             {currentFolder && (
               <div className="col-span-full mb-4 flex items-center gap-4 border-b border-border pb-3">
-                <h3 className="text-lg font-bold text-foreground">{currentFolder}</h3>
+                <h3 className="text-lg font-bold text-foreground uppercase tracking-wider">{currentFolder}</h3>
                 <button
                   onClick={() => setCurrentFolder(null)}
                   className="ml-auto flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -370,7 +359,7 @@ export function FeedTabContent({
                       <Shirt className="w-3 h-3" /> Hanging Section
                     </div>
                     <div className="flex flex-wrap gap-6 pt-12">
-                      {folders.filter(f => ['outer', 'top'].includes(f.toLowerCase())).map((folder) => (
+                      {folders.filter(f => ['outer', 'top'].includes(f)).map((folder) => (
                         <motion.div
                           layout
                           key={`folder-${folder}`}
@@ -378,10 +367,10 @@ export function FeedTabContent({
                           className="group/item relative flex w-32 sm:w-40 aspect-[3/4] flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-2 hover:border-black"
                         >
                           <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
-                            {filteredItems.filter((i) => i.category === folder).length}
+                            {filteredItems.filter((i) => i.category?.toLowerCase() === folder).length}
                           </div>
                           <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                            {['outer', 'outerwear'].includes(folder.toLowerCase()) ? (
+                            {['outer', 'outerwear'].includes(folder) ? (
                               <Wind className="w-4 h-4" />
                             ) : (
                               <Shirt className="w-4 h-4" />
@@ -398,7 +387,7 @@ export function FeedTabContent({
                     <div className="absolute top-4 left-8 text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Lower Drawer</div>
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 bg-white rounded-full shadow-sm" />
                     <div className="flex flex-wrap gap-6 justify-center">
-                      {folders.filter(f => ['bottom'].includes(f.toLowerCase())).map((folder) => (
+                      {folders.filter(f => ['bottom'].includes(f)).map((folder) => (
                         <motion.div
                           layout
                           key={`folder-${folder}`}
@@ -406,7 +395,7 @@ export function FeedTabContent({
                           className="group/item relative flex w-32 sm:w-40 aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-black"
                         >
                           <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
-                            {filteredItems.filter((i) => i.category === folder).length}
+                            {filteredItems.filter((i) => i.category?.toLowerCase() === folder).length}
                           </div>
                           <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
                             <Columns2 className="w-4 h-4" />
@@ -424,7 +413,7 @@ export function FeedTabContent({
                     <Box className="w-3 h-3" /> Side Storage
                   </div>
                   <div className="flex flex-col gap-6 pt-8 items-center">
-                    {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                    {folders.filter(f => ['shoes', 'accessories', 'jewelry'].includes(f)).map((folder) => (
                       <motion.div
                         layout
                         key={`folder-${folder}`}
@@ -432,10 +421,10 @@ export function FeedTabContent({
                         className="group/item relative flex w-full max-w-[160px] aspect-square flex-col items-center justify-center p-4 bg-white border border-zinc-100 rounded-xl shadow-sm transition-all duration-500 cursor-pointer hover:shadow-xl hover:scale-105 hover:border-black"
                       >
                         <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
-                          {filteredItems.filter((i) => i.category === folder).length}
+                          {filteredItems.filter((i) => i.category?.toLowerCase() === folder).length}
                         </div>
                         <div className="w-8 h-8 rounded-full bg-zinc-50 flex items-center justify-center mb-4 group-hover/item:bg-black group-hover/item:text-white transition-colors">
-                          {['shoes'].includes(folder.toLowerCase()) ? (
+                          {['shoes'].includes(folder) ? (
                             <Footprints className="w-4 h-4" />
                           ) : (
                             <Gem className="w-4 h-4" />
@@ -448,11 +437,11 @@ export function FeedTabContent({
                 </div>
 
                 {/* Miscellaneous Section */}
-                {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).length > 0 && (
+                {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f)).length > 0 && (
                   <div className="col-span-full pt-8 border-t border-zinc-200/50 mt-4">
                     <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.2em] mb-6 px-2">Other Collections</h4>
                     <div className="flex flex-wrap gap-4">
-                      {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f.toLowerCase())).map((folder) => (
+                      {folders.filter(f => !['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry'].includes(f)).map((folder) => (
                         <motion.div
                           layout
                           key={`folder-${folder}`}
@@ -544,7 +533,6 @@ export function FeedTabContent({
                     <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
                       URL 혹은 상품이름
                     </label>
-                    {/* 일반 텍스트 검색어도 정상 제출되도록 type="text"로 교체 */}
                     <input
                       type="text"
                       placeholder="https://... 또는 상품명 입력"

@@ -80,7 +80,7 @@ async def extract_and_save_url(
                 "title": "PROCESSING",
                 "price": None,
                 "brand": None,
-                "category": None,
+                "category": "PROCESSING",
                 "is_available": None,
                 "image_url": "",
                 "image_vector": None,
