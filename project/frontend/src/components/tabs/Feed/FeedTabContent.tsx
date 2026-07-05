@@ -1,7 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, X } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Plus, Loader2, X, Check, Search, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
@@ -36,6 +34,8 @@ export function FeedTabContent({
   const [selectedCategory, setSelectedCategory] = useState<string>('FOLDER');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
+  const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
+  const [sessionId, setSessionId] = useState('');
   const [searchQuery, setSearchQuery] = useState("");
   const addSuccessTimeout = useRef<number | null>(null);
 
@@ -257,6 +257,8 @@ export function FeedTabContent({
   const handleSelectCategory = (category: string) => {
     setSelectedCategory(category);
     setCurrentFolder(null);
+  };
+
   const getCategoryLabel = (category: string) => {
     if (category.toUpperCase() === 'ALL') return 'All';
     return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
@@ -323,14 +325,14 @@ export function FeedTabContent({
             )}
 
             {!currentFolder && selectedCategory !== 'All' && (
-              <FeedClosetFolders
-                folders={folders}
-                items={filteredItems}
-                onSelectFolder={setCurrentFolder}
-              />
-            {/* Folder Cards Closet Layout */}
-            {!currentFolder && selectedCategory !== 'All' && (
-              <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
+              <>
+                <FeedClosetFolders
+                  folders={folders}
+                  items={filteredItems}
+                  onSelectFolder={setCurrentFolder}
+                />
+                {/* Folder Cards Closet Layout */}
+                <div className="col-span-full grid grid-cols-1 lg:grid-cols-4 gap-6 bg-zinc-50/50 p-6 sm:p-10 rounded-[3rem] border border-zinc-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-zinc-200/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
                 
                 {/* Left Column: Hanging Area and Bottom Drawer */}
@@ -437,7 +439,8 @@ export function FeedTabContent({
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              </>
             )}
 
             {/* Item Cards */}
