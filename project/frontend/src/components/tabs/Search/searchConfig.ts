@@ -27,7 +27,7 @@ const SHOP_STORAGE_KEY = 'user_shops';
 const SUGGESTION_POOL = [
   "빈티지 리바이스",
   "폴로 카라티",
-  "아카이브 헬무트랭",
+  "아르마니 익스체인지",
   "슬림핏 반팔",
   "유니폼",
   "아크테릭스 바람막이",
@@ -44,13 +44,12 @@ const SUGGESTION_POOL = [
   "버버리 트렌치 코트",
   "헤비 스웨트셔츠",
   "팀버랜드 부츠",
-  "펜던트 목걸이",
+  "펜던트 목걸이"
 ];
 
-const SELECT_SHOPS: Shop[] = [
+const SELECT_SHOPS = [
   { name: "FRUITS FAMILY", desc: "감도높은 빈티지/세컨핸드 매물 거래용", url: "https://fruitsfamily.com" },
   { name: "FETCHING", desc: "전 세계 럭셔리 편집샵 아이템 비교 직구", url: "https://fetching.co.kr" },
-  { name: "HYPEBEAST", desc: "글로벌 스트릿 패션 트렌드 및 큐레이션", url: "https://hypebeast.kr" },
   { name: "EMPTY", desc: "무신사가 제안하는 실험적 디자이너 브랜드", url: "https://empty.seoul.kr" },
   { name: "WORKSOUT", desc: "하이엔드 스트릿웨어와 라이프스타일 셀렉샵", url: "https://worksout.co.kr" },
   { name: "8DIVISION", desc: "남성 헤리티지 및 컨템포러리 셀렉샵", url: "https://8division.com" },
@@ -63,6 +62,9 @@ const SELECT_SHOPS: Shop[] = [
   { name: "EQL", desc: "한섬에서 제안하는 감각적인 라이프스타일 셀렉샵", url: "https://eqlstore.com" },
   { name: "29CM", desc: "감도깊은 취향 셀렉트샵", url: "https://29cm.co.kr" },
   { name: "Bunjang", desc: "브랜드 중고거래 플랫폼", url: "https://bunjang.co.kr" },
+  { name: "Danggeun Market", desc: "지역 기반 중고거래 플랫폼", url: "https://www.daangn.com" },
+  { name: "Joonggonara", desc: "중고나라 커뮤니티 기반 중고거래 플랫폼", url: "https://www.joongna.com" },
+  { name: "ZARA", desc: "글로벌 패션 브랜드, 트렌디한 아이템 다수 보유", url: "https://www.zara.com" }
 ];
 
 export function getInitialShops() {
