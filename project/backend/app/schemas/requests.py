@@ -1,5 +1,4 @@
 from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -28,6 +27,3 @@ class ManualItemCreate(BaseModel):
     brand: Optional[str] = None
     is_available: Optional[str] = None
     shop: Optional[str] = None
-
-class GoogleAuthRequest(BaseModel):
-    access_token: str

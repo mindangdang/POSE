@@ -37,45 +37,13 @@ async def extract_and_save_url(
     repos: Repositories = Depends(get_repos),
     current_user: dict = Depends(get_current_user)
 ):
-    post_url = payload.url
-    user_id = str(current_user.get("sub"))
-
-    request.app.state.websocket_manager = websocket_manager_instance
-
-    try:
-        new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
-        print("임시 아이템 저장 성공")
-    except Exception as exc:
-        await repos.saved_posts.conn.rollback()
-        raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {exc}") from exc
-
-    background_tasks.add_task(
-        background_crawl_and_save,
-        request.app,
-        new_item_id,
-        user_id,
-        post_url,
+    return await start_url_extraction(
+        payload=payload,
+        app=request.app,
+        background_tasks=background_tasks,
+        repos=repos,
+        user_id=str(current_user.get("sub")),
     )
-
-    return {
-        "success": True,
-        "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
-        "item_id": new_item_id,
-        "data": [
-            {   
-                "item_id": new_item_id,
-                "title": "PROCESSING",
-                "price": None,
-                "brand": None,
-                "category": "PROCESSING",
-                "is_available": None,
-                "image_url": "",
-                "image_vector": None,
-                "shop": None,
-                "source_url": post_url,
-            }
-        ],
-    }
 
 ######################################################################################
 

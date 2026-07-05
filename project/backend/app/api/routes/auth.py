@@ -1,34 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
-from project.backend.app.schemas.requests import GoogleAuthRequest
 from google.oauth2 import id_token
 from google.auth.transport import requests
 import jwt
-from pydantic import BaseModel
+from project.backend.app.schemas.auth_response import *
 from psycopg.rows import dict_row
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.manage.database import get_db_connection
 from project.backend.app.manage.settings import get_settings
 
 router = APIRouter()
-
-
-class AuthUserResponse(BaseModel):
-    id: str
-    email: str | None = None
-    name: str | None = None
-    profile_image: str | None = None
-    username: str | None = None
-
-
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: AuthUserResponse
-
-
-class CurrentUserResponse(BaseModel):
-    user: AuthUserResponse
 
 settings = get_settings()
 GOOGLE_CLIENT_ID = settings.google_client_id

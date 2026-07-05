@@ -9,8 +9,7 @@ from typing import Optional
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
-
-from project.backend.app.db.insert_DB import _extract_vector_sync
+from project.backend.basic_functions.utils import _extract_vector_sync
 from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.repositories import Repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
