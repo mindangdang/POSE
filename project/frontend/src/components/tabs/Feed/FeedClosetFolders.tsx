@@ -21,7 +21,7 @@ function inGroup(folder: string, group: string[]) {
 function FolderCount({ folder, items }: { folder: string; items: SavedItem[] }) {
   return (
     <div className="absolute top-3 right-3 text-[10px] font-bold opacity-30 group-hover/item:opacity-100">
-      {items.filter((item) => item.sub_category === folder).length}
+      {items.filter((item) => item.category === folder).length}
     </div>
   );
 }

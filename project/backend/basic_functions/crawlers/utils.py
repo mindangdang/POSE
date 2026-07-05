@@ -1,7 +1,6 @@
 import os
 from google import genai
 from google.genai import types
-from project.backend.app.schemas.response import ProductAnalysisResult
 from project.backend.app.manage.settings import get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 import httpx

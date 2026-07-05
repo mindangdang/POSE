@@ -21,7 +21,7 @@ from project.backend.app.services.content import (
     enqueue_pse_search,
     list_items_for_user,
     resolve_image_path,
-    save_manual_item_for_user,
+    save_manual_item as save_manual_item_for_user,
     search_with_lens,
     start_url_extraction,
 )

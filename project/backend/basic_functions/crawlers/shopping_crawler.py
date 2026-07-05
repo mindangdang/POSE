@@ -137,7 +137,7 @@ class ProxyManager:
                     logger.warning("Proxy evicted due to low score", extra={"proxy": proxy})
 
 # Fallback to single proxy if list not provided
-_env_proxy = get_settings().residential_proxy_url
+_env_proxy = get_settings().base_proxy_url
 proxy_manager = ProxyManager([_env_proxy] if _env_proxy else [])
 
 # ------------------------------------------------------------------------

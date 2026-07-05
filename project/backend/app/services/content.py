@@ -18,7 +18,7 @@ from project.backend.app.services.searching import process_site
 from project.backend.app.services.websocket import get_websocket_manager
 from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
 from project.backend.basic_functions.ai_service.utils import upload_generated_image
-from project.backend.basic_functions.crawlers.utils import analyze_description_with_gemini, download_images
+from project.backend.basic_functions.crawlers.utils import fetch_image_task, normalize_url
 from project.backend.basic_functions.searching.utils import domain_map, fetch_from_single_site
 
 FAIL_IMAGE_DIR = Path("project/backend/fail_images")
@@ -55,14 +55,17 @@ async def start_url_extraction(
         "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
         "item_id": new_item_id,
         "data": [
-            {
-                "id": new_item_id,
-                "url": post_url,
+            {   
+                "item_id": new_item_id,
+                "title": "PROCESSING",
+                "price": None,
+                "brand": None,
                 "category": "PROCESSING",
-                "sub_category": "PROCESSING",
-                "recommend": "AI가 열심히 바이브를 추출하고 있어요",
-                "facts": {"title": "분석 중..."},
+                "is_available": None,
                 "image_url": "",
+                "image_vector": None,
+                "shop": None,
+                "source_url": post_url,
             }
         ],
     }
@@ -199,53 +202,36 @@ async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) ->
     return await upload_generated_image(generated_image_bytes)
 
 
-async def save_manual_item_for_user(payload: ManualItemCreate, user_id: str, repos: Repositories):
+async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repositories):
     try:
-        local_image_url, ai_parsed_data = await asyncio.gather(
-            _fetch_manual_image(payload),
-            _parse_manual_description(payload),
-        )
-        ai_parsed_data = ai_parsed_data or {}
+        normalized_image_url = normalize_url(payload.image_url)
+        if normalized_image_url.startswith(("http://", "https://")):
+            stored_image_url = await fetch_image_task(normalized_image_url, IMAGE_DIR)
+            image_url = stored_image_url or normalized_image_url
+        else:
+            image_url = normalized_image_url
 
-        facts = payload.facts.copy() if isinstance(payload.facts, dict) else {}
-        if ai_parsed_data.get("key_details"):
-            facts["key_details"] = ai_parsed_data["key_details"]
-
-        category = payload.category
-        sub_category = ai_parsed_data.get("sub_category") or payload.sub_category
-
-        vector_list = await _extract_vector_sync(local_image_url, sub_category or category)
+        vector_source = image_url or normalized_image_url
+        vector_list = await _extract_vector_sync(vector_source) if vector_source else None
         vector_str = str(vector_list) if vector_list else None
 
         await repos.saved_posts.create_manual_item(
-            user_id=user_id,
-            url=payload.url,
-            category=category,
-            sub_category=sub_category,
-            recommend=ai_parsed_data.get("recommend") or payload.recommend,
-            facts=facts,
-            image_url=local_image_url,
+            item_id=getattr(payload, "item_id", None),
+            user_id=str(user_id),
+            source_url=payload.url,
+            category=payload.category,
+            title=payload.title,
+            image_url=image_url,
             image_vector=vector_str,
+            price=payload.price,
+            brand=payload.brand,
+            is_available=payload.is_available,
+            shop=payload.shop,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc
-
-
-async def _fetch_manual_image(payload: ManualItemCreate) -> str:
-    if payload.image_url and payload.image_url.startswith(("http://", "https://")):
-        files = await download_images([payload.image_url], str(IMAGE_DIR))
-        if files:
-            return os.path.basename(files[0])
-    return payload.image_url or ""
-
-
-async def _parse_manual_description(payload: ManualItemCreate) -> dict:
-    title = payload.facts.get("title", "") if isinstance(payload.facts, dict) else ""
-    if title:
-        return await analyze_description_with_gemini(title)
-    return {}
 
 
 async def list_items_for_user(user_id: str, repos: Repositories):
