@@ -20,11 +20,9 @@ class Settings(BaseSettings):
     gpu_server_url: str | None = None
     supabase_url: str | None = None
     supabase_key: str | None = None
-    apify_api_key: str | None = None
     serp_api_key: str | None = None
     backend_port: int | None = None
-    port: int | None = None
-    residential_proxy_url: str | None = None
+    base_proxy_url: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

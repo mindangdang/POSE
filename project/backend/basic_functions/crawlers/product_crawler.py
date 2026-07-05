@@ -10,13 +10,12 @@ import random
 import asyncio
 import nodriver as uc
 import os
-from project.backend.app.manage.settings import load_backend_env
 import tldextract
+from project.backend.app.manage.settings import get_settings
 from project.backend.basic_functions.utils import _extract_text_vector_sync
 import numpy as np
 from deep_translator import GoogleTranslator
 
-load_backend_env()
 CATEGORY_LIST = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
 _CATEGORY_VECTORS = {cat: None for cat in CATEGORY_LIST}
 
@@ -384,7 +383,7 @@ def parse_musinsa_html(soup):
 ########################################################################################################################
 
 async def product_crawler(url):
-    base_proxy_url = os.environ.get("BASE_PROXY_URL")
+    base_proxy_url = get_settings().base_proxy_url
     max_retries = 15  
     retry_count = 0
     html_content = None
