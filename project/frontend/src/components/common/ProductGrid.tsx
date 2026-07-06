@@ -45,11 +45,11 @@ export function ProductGrid({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {items.map((item) => (
             <ProductCard
-              key={item.id}
+              key={item.item_id}
               item={item}
               onSelect={() => onSelectItem(item)}
               onSave={onSaveItem ? () => onSaveItem(item) : undefined}
-              onDelete={onDeleteItem ? () => onDeleteItem(item.id) : undefined}
+              onDelete={onDeleteItem ? () => onDeleteItem(item.item_id) : undefined}
               showSaveButton={showSaveButton}
             />
           ))}

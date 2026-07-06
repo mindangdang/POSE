@@ -422,7 +422,7 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {items.slice(0, 12).map((item) => (
           <div
-            key={item.id}
+            key={item.item_id}
             className="aspect-square bg-muted overflow-hidden cursor-pointer group relative rounded-xl"
             onClick={() => onSelectItem(item)}
           >
@@ -434,8 +434,7 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
                 const target = e.target as HTMLImageElement;
                 let localUrl: string | undefined;
                 try {
-                  const facts = typeof item.facts === 'string' ? JSON.parse(item.facts) : (item.facts || {});
-                  localUrl = facts?.local_image_url;
+                  localUrl = item.image_url;
                 } catch (err) {
                   // parsing error ignored
                 }

@@ -133,9 +133,9 @@ export function SearchResultCard({
 
         {/* Source and Secondhand */}
         <div className="pt-1 flex flex-col gap-1 sm:gap-1.5">
-          {item.url && item.url.startsWith('http') && (
+          {item.image_url && item.image_url.startsWith('http') && (
             <a
-              href={item.url}
+              href={item.image_url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
