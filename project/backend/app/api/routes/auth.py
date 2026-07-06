@@ -60,7 +60,7 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
         )
 
         # 프론트엔드에서 사용할 AppUser 형태의 데이터와 access_token 반환
-        user_data = {"user_id": google_id, "email": email, "name": name, "profile_image": picture}
+        user_data = {"id": google_id, "email": email, "name": name, "profile_image": picture}
         return {"access_token": internal_token, "token_type": "bearer", "user": user_data}
         
     except ValueError as e:
@@ -97,7 +97,7 @@ async def guest_auth(conn=Depends(get_db_connection)):
     )
 
     user_data = {
-        "user_id": user["user_id"],
+        "id": user["user_id"],
         "email": user["email"],
         "name": user["name"],
         "profile_image": user["profile_image"],
@@ -123,7 +123,7 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user), 
         
         # 프론트엔드가 사용하는 AppUser 형태의 데이터 반환
         user_data = {
-            "user_id": user["user_id"],
+            "id": user["user_id"],
             "email": user["email"],
             "name": user["name"],
             "profile_image": user["profile_image"],
