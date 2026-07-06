@@ -33,7 +33,7 @@ async def start_url_extraction(
     user_id: str,
 ):
     post_url = payload.url
-    session_id = payload.session_id
+
 
     try:
         new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
@@ -47,7 +47,6 @@ async def start_url_extraction(
         new_item_id,
         user_id,
         post_url,
-        session_id,
     )
 
     return {

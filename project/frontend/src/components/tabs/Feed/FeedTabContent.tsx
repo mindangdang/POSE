@@ -7,7 +7,6 @@ import { apiFetch, apiJson } from '../../../lib/api';
 import { parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
-import { FeedAddItemModal } from './FeedAddItemModal';
 import { FeedClosetFolders } from './FeedClosetFolders';
 import { FeedItemCard } from './FeedItemCard';
 import { FeedToolbar } from './FeedToolbar';
@@ -374,16 +373,6 @@ export function FeedTabContent({
         )}
       </div>
 
-      <FeedAddItemModal
-        isOpen={isAddPanelOpen}
-        isPending={addItemMutation.isPending}
-        newUrl={newUrl}
-        sessionId={sessionId}
-        onClose={() => setIsAddPanelOpen(false)}
-        onSubmit={handleAddItem}
-        onNewUrlChange={setNewUrl}
-        onSessionIdChange={setSessionId}
-      />
       {/* Add Item Modal */}
       <AnimatePresence>
         {isAddPanelOpen && (
