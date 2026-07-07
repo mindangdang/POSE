@@ -91,7 +91,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "brand": brand,
             "category": category,
             "is_available": is_available,
-            "image_url": raw_image_url or local_image_url or None,
+            "image_url": raw_image_url or None,
             "shop": shop,
             "source_url": post_url
         }

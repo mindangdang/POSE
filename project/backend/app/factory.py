@@ -15,6 +15,7 @@ def create_app() -> FastAPI:
 
     IMAGE_DIR.mkdir(exist_ok=True)
     app.mount("/api/images", StaticFiles(directory=str(IMAGE_DIR)), name="images")
+    app.mount("/images", StaticFiles(directory=str(IMAGE_DIR)), name="legacy-images")
 
     app.add_middleware(
         CORSMiddleware,

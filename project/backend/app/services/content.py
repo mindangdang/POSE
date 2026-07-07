@@ -253,12 +253,21 @@ async def delete_item_for_user(item_id: int, user_id: str, repos: Repositories):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+def _normalize_image_reference(image_path: str) -> Path:
+    normalized = str(image_path or "").strip().replace("\\", "/")
+    normalized = normalized.removeprefix("/api/images/")
+    normalized = normalized.removeprefix("/images/")
+    normalized = normalized.lstrip("/")
+    return Path(normalized)
+
+
 def resolve_image_path(filename: str) -> Path:
-    normal_path = Path(IMAGE_DIR) / filename
+    relative_path = _normalize_image_reference(filename)
+    normal_path = Path(IMAGE_DIR) / relative_path
     if normal_path.exists() and normal_path.is_file():
         return normal_path
 
-    fail_path = FAIL_IMAGE_DIR / filename
+    fail_path = FAIL_IMAGE_DIR / relative_path
     if fail_path.exists() and fail_path.is_file():
         return fail_path
 

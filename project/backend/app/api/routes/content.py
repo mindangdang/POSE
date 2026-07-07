@@ -97,9 +97,9 @@ async def delete_item(
 ):
     return await delete_item_for_user(item_id=item_id, user_id=str(current_user.get("sub")), repos=repos)
 
-@router.get("/images/{filename}")
-async def serve_image(filename: str):
-    return FileResponse(path=resolve_image_path(filename))
+@router.get("/images/{image_path:path}")
+async def serve_image(image_path: str):
+    return FileResponse(path=resolve_image_path(image_path))
 
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):

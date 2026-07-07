@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Instagram, Trash2, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 
+import { getDisplayImageUrl, getFallbackImageUrl } from '../../../lib/imageUrl';
 import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 
@@ -40,13 +41,7 @@ export function FeedItemCard({
     const itemTitle = getItemTitle(item);
     const isProcessing = item.category.trim().toUpperCase() === 'PROCESSING' || informs._source === 'feed_add';
 
-    // 이미지 URL 파싱 단순화
-    let imageUrl = FALLBACK_IMAGE;
-    if (item.image_url) {
-      imageUrl = item.image_url.startsWith('http') || item.image_url.startsWith('data:') || item.image_url.startsWith('//')
-        ? item.image_url
-        : `/api/images/${item.image_url}`;
-    }
+    const imageUrl = getDisplayImageUrl(item.image_url, (informs as Record<string, any>)?.local_image_url, FALLBACK_IMAGE);
 
     return {
       informsList: filteredInforms,
@@ -89,9 +84,9 @@ export function FeedItemCard({
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             if (item.image_url && !target.src.includes(item.image_url)) {
-              target.src = `/api/images/${item.image_url}`;
+              target.src = getDisplayImageUrl(undefined, item.image_url, FALLBACK_IMAGE);
             } else {
-              target.src = FALLBACK_IMAGE;
+              target.src = getFallbackImageUrl('No+Image');
             }
           }}
         />

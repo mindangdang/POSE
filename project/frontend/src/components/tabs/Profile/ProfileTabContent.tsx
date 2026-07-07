@@ -3,6 +3,7 @@ import { User, Zap, Heart, Compass, Loader2, Sparkles, Instagram, Lightbulb } fr
 import { useState } from 'react';
 
 import { apiJson } from '../../../lib/api';
+import { getDisplayImageUrl } from '../../../lib/imageUrl';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
 
@@ -399,13 +400,7 @@ function EmptyTasteState({
 }
 
 function getProfileImageUrl(item: SavedItem) {
-  if (item.image_url?.startsWith('http')) {
-    return item.image_url;
-  }
-  if (item.image_url) {
-    return `/api/images/${item.image_url}`;
-  }
-  return 'https://via.placeholder.com/400x500?text=No+Image';
+  return getDisplayImageUrl(item.image_url, undefined, 'https://via.placeholder.com/400x500?text=No+Image');
 }
 
 function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridProps) {
@@ -439,7 +434,7 @@ function RecentInspirationsGrid({ items, onSelectItem }: RecentInspirationsGridP
                   // parsing error ignored
                 }
                 if (localUrl && !target.src.includes(localUrl)) {
-                  target.src = `/api/images/${localUrl}`;
+                  target.src = getDisplayImageUrl(undefined, localUrl, 'https://via.placeholder.com/400x500?text=No+Image');
                 } else {
                   target.src = 'https://via.placeholder.com/400x500?text=No+Image';
                 }

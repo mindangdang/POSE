@@ -4,22 +4,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
 
 import { apiFetch } from '../../lib/api';
+import { getDisplayImageUrl } from '../../lib/imageUrl';
 import { getItemTitle, parseItemInforms } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
 
 type ItemDetailDialogProps = {
   item: SavedItem | null;
   onOpenChange: (open: boolean) => void;
-};
-
-// 중복되는 이미지 URL 파싱 로직을 외부 함수로 분리
-const getImageUrl = (imageUrl?: string, localImageUrl?: string) => {
-  if (!imageUrl) return 'https://via.placeholder.com/600x600?text=No+Image';
-  if (imageUrl.startsWith('http') || imageUrl.startsWith('data:') || imageUrl.startsWith('//')) {
-    return imageUrl.startsWith('//') ? `https:${imageUrl}` : imageUrl;
-  }
-  if (localImageUrl) return `/api/images/${localImageUrl}`;
-  return `/api/images/${imageUrl}`;
 };
 
 export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) {
@@ -43,7 +34,11 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
 
   // 이미지 URL 메모이제이션 (JSX와 useEffect에서 공통 사용)
   const displayImageUrl = useMemo(() => {
-    return getImageUrl(displayItem?.image_url, (facts as any)?.local_image_url);
+    return getDisplayImageUrl(
+      displayItem?.image_url,
+      (facts as any)?.local_image_url,
+      'https://via.placeholder.com/600x600?text=No+Image',
+    );
   }, [displayItem, facts]);
 
   const requestKey = useMemo(() => {
@@ -164,7 +159,11 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       const target = e.target as HTMLImageElement;
                       const localUrl = (facts as Record<string, any>)?.local_image_url as string | undefined;
                       if (localUrl && !target.src.includes(localUrl)) {
-                        target.src = `/api/images/${localUrl}`;
+                        target.src = getDisplayImageUrl(
+                          undefined,
+                          localUrl,
+                          'https://via.placeholder.com/600x600?text=No+Image',
+                        );
                       } else {
                         target.src = 'https://via.placeholder.com/600x600?text=No+Image';
                       }

@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Plus, ThumbsUp, ThumbsDown, Search, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 
+import { getDisplayImageUrl } from '../../../lib/imageUrl';
 import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 
@@ -57,7 +58,7 @@ export function SearchResultCard({
       <div className={`relative w-full ${aspectRatio} bg-muted rounded-2xl sm:rounded-3xl overflow-hidden`}>
         {item.image_url ? (
           <img
-            src={item.image_url}
+            src={getDisplayImageUrl(item.image_url, (facts as Record<string, any>)?.local_image_url)}
             alt={title}
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out"
             referrerPolicy="no-referrer"
@@ -65,7 +66,7 @@ export function SearchResultCard({
               const target = e.target as HTMLImageElement;
               const localUrl = facts?.local_image_url as string | undefined;
               if (localUrl && !target.src.includes(localUrl)) {
-                target.src = `/api/images/${localUrl}`;
+                target.src = getDisplayImageUrl(undefined, localUrl);
               } else if (!target.src.includes('placehold.co')) {
                 target.src = 'https://placehold.co/400x600?text=No+Image';
               } else {
