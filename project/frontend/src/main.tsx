@@ -16,3 +16,13 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     </GoogleOAuthProvider>
   </QueryClientProvider>
 );
+
+// Register the PWA service worker only in production builds so it
+// never interferes with the Vite dev server / HMR.
+if ((import.meta as any).env?.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* ignore registration errors */
+    });
+  });
+}
