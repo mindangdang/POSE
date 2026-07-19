@@ -27,17 +27,7 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                     );
                     """
                 )
-                await cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS taste_profile (
-                        id SERIAL PRIMARY KEY,
-                        user_id TEXT UNIQUE NOT NULL,
-                        summary TEXT,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-                    """
-                )
+
                 await conn.commit()
         print("DB 테이블 초기화 완료")
     except Exception as exc:

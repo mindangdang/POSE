@@ -5,11 +5,6 @@ from pydantic import BaseModel
 class UrlAnalyzeRequest(BaseModel):
     url: str
 
-
-class TasteUpdate(BaseModel):
-    summary: str
-
-
 class SearchRequest(BaseModel):
     query: str
     page: Optional[int] = 1

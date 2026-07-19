@@ -13,7 +13,3 @@ class Product(BaseModel):
     shop: Optional[str] = Field(description="쇼핑몰 출처", default=None)
     source_url: Optional[str] = Field(description="상품 정보 출처 URL", default=None)
 
-class TasteProfileResult(BaseModel):
-    persona: str = Field(description="유저의 취향과 페르소나를 한 문장으로 정의하는 타이틀")
-    unconscious_taste: str = Field(description="유저의 무의식적인 취향을 분석하는 텍스트 (2~3문장)")
-    recommendation: str = Field(description="유저의 취향에 정합하는 새로운 키워드 제시 및 실존하는 장소/물건 추천")
