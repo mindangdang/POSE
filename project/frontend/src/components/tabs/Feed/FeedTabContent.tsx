@@ -17,7 +17,6 @@ type FeedTabContentProps = {
   onSelectItem: (item: SavedItem) => void;
   onSearchSecondhand?: (title: string) => void;
   refreshItems: () => Promise<void>;
-  refreshTaste: () => Promise<void>;
 };
 
 export function FeedTabContent({
@@ -26,7 +25,6 @@ export function FeedTabContent({
   onSelectItem,
   onSearchSecondhand,
   refreshItems,
-  refreshTaste,
 }: FeedTabContentProps) {
   const { user } = useAuth();
   const [newUrl, setNewUrl] = useState("");
@@ -132,11 +130,7 @@ export function FeedTabContent({
 
             if (data.type === 'CRAWL_SUCCESS') {
               onItemsChange((prev) => [...(data.items || []), ...removePlaceholder(prev)]);
-              
-              await Promise.allSettled([
-                refreshItems?.(),
-                refreshTaste?.()
-              ]);
+              await refreshItems?.();
 
             } else if (data.type === 'CRAWL_ERROR') {
               alert(data.message || '데이터를 가져오는 데 실패했습니다.');
@@ -177,7 +171,7 @@ export function FeedTabContent({
       }
     };
     // 🌟 [의존성 수정] 빠져있던 refreshItems 함수를 채워주어 동기화 버그를 원천 차단합니다.
-  }, [user, onItemsChange, refreshItems, refreshTaste]);
+  }, [user, onItemsChange, refreshItems]);
 
   // 아이템 추가 Mutation
   const addItemMutation = useMutation({

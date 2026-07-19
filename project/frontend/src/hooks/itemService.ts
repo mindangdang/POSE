@@ -6,8 +6,7 @@ export async function saveItemToFeed(
   user: AppUser,
   item: SavedItem,
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>,
-  refreshItems: () => Promise<void>,
-  refreshTaste: () => Promise<void>
+  refreshItems: () => Promise<void>
 ): Promise<void> {
   try {
     await apiJson('/api/items/manual', {
@@ -29,7 +28,6 @@ export async function saveItemToFeed(
     onItemsChange((prev: SavedItem[]) => [{ ...item, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);
     void refreshItems();
     alert("피드에 저장되었습니다!");
-    await refreshTaste();
   } catch (error: any) {
     console.error(error);
     alert(error.message);

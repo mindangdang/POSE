@@ -28,7 +28,6 @@ import { saveItemToFeed } from '../../../hooks/itemService';
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
   refreshItems: () => Promise<void>;
-  refreshTaste: () => Promise<void>;
   searchSecondhandQuery?: string;
   searchSecondhandTrigger?: number;
 };
@@ -36,7 +35,6 @@ type SearchTabContentProps = {
 export function SearchTabContent({
   onItemsChange,
   refreshItems,
-  refreshTaste,
   searchSecondhandQuery,
   searchSecondhandTrigger,
 }: SearchTabContentProps) {
@@ -137,7 +135,7 @@ export function SearchTabContent({
   const handleSaveToFeed = async (e: React.MouseEvent, item: SavedItem) => {
     e.stopPropagation();
     if (!user) return;
-    await saveItemToFeed(user, item, onItemsChange, refreshItems, refreshTaste);
+    await saveItemToFeed(user, item, onItemsChange, refreshItems);
   };
 
   const handleAddShop = (newShop: Shop) => {

@@ -5,16 +5,13 @@ import { useAuth } from '../../hooks/useAuth';
 type HeaderProps = {
   onLogout: () => void;
   currentTab: string;
-  onTabChange: (tab: 'feed' | 'search' | 'profile') => void;
+  onTabChange: (tab: 'feed' | 'search') => void;
   onAboutClick?: () => void;
-  ambientColor?: string;
-  isAmbientActive?: boolean;
 };
 
 const categories = [
   { id: 'search', label: 'Window', hasDropdown: false },
   { id: 'feed', label: 'Closet', hasDropdown: false },
-  { id: 'profile', label: 'Notebook', hasDropdown: false },
 ];
 
 export function Header({
@@ -22,14 +19,9 @@ export function Header({
   currentTab,
   onTabChange,
   onAboutClick,
-  ambientColor,
-  isAmbientActive,
 }: HeaderProps) {
   const { user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // 조명 모드 시 텍스트에 적용할 미세한 색상 변조 스타일
-  const ambientTextStyle = isAmbientActive ? { color: ambientColor, filter: 'brightness(1.5) saturate(1.2)' } : {};
 
   return (
     <header className="sticky top-0 z-50 bg-black border-b border-white/10">
@@ -37,7 +29,7 @@ export function Header({
       <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-logo tracking-wide text-white transition-colors duration-1000" style={ambientTextStyle}>RoomShow</span>
+          <span className="text-2xl font-logo tracking-wide text-white transition-colors duration-1000">RoomShow</span>
         </a>
 
         {/* Center Navigation - Desktop */}
@@ -45,19 +37,17 @@ export function Header({
           {categories.map((category) => (
             <button
               key={category.id}
-              onClick={() => onTabChange(category.id as 'feed' | 'search' | 'profile')}
+              onClick={() => onTabChange(category.id as 'feed' | 'search')}
               className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
                 currentTab === category.id
                   ? 'text-white'
                   : 'text-white/60 hover:text-white'
               }`}
-              style={currentTab === category.id ? ambientTextStyle : {}}
             >
               {category.label}
               {currentTab === category.id && (
                 <span 
                   className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full transition-all duration-1000" 
-                  style={isAmbientActive ? { backgroundColor: ambientColor } : {}}
                 />
               )}
             </button>
@@ -74,7 +64,7 @@ export function Header({
               >
                 ABOUT
               </button>
-              <span className="text-xl font-logo text-white/40 mr-4 transition-all duration-1000" style={isAmbientActive ? { color: ambientColor, opacity: 0.6 } : {}}>
+              <span className="text-xl font-logo text-white/40 mr-4 transition-all duration-1000">
                 @{user.name || user.username || 'user'}
               </span>
               <button
@@ -110,7 +100,7 @@ export function Header({
               <button
                 key={category.id}
                 onClick={() => {
-                  onTabChange(category.id as 'feed' | 'search' | 'profile');
+                  onTabChange(category.id as 'feed' | 'search');
                   setIsMobileMenuOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${

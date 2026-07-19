@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
 import { FeedTabContent } from './components/tabs/Feed';
-import { ProfileTabContent } from './components/tabs/Profile';
 import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
-import { useTaste } from './hooks/useTaste';
 import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
 
@@ -31,23 +29,13 @@ const fontStyles = `
 function MainApp() {
   const { logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
-  const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
+  const [currentTab, setCurrentTab] = useState<'feed' | 'search'>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
   const [searchSecondhandTrigger, setSearchSecondhandTrigger] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  
-  // Ambient Light State
-  const [ambientColor, setAmbientColor] = useState('#000000');
-  const [isAmbientActive, setIsAmbientActive] = useState(false);
-
-  // 입력값이 없거나 기본값일 때 조명을 켜면 베이지색을 적용하는 로직
-  const effectiveAmbientColor = isAmbientActive && (ambientColor.trim() === '' || ambientColor === '#000000') 
-    ? '#F5F5DC' 
-    : ambientColor;
 
   const { items, setItems, refreshItems } = useItems();
-  const { taste, setTaste, refreshTaste } = useTaste();
 
   const handleLogout = () => {
     setIsLogoutModalOpen(false);
@@ -71,38 +59,7 @@ function MainApp() {
         currentTab={currentTab}
         onTabChange={setCurrentTab}
         onAboutClick={() => setIsAboutModalOpen(true)}
-        ambientColor={effectiveAmbientColor}
-        isAmbientActive={isAmbientActive}
       />
-
-      {/* Ambient Light Background Layer */}
-      <div className={`fixed inset-0 z-0 pointer-events-none transition-all duration-1000 ease-in-out ${isAmbientActive ? 'opacity-100' : 'opacity-0'}`}>
-        {/* Main Light Source - Radial Bloom */}
-        <div 
-          className="absolute inset-0"
-          style={{
-            background: `radial-gradient(circle at 50% -10%, ${effectiveAmbientColor} 0%, transparent 70%)`,
-            opacity: 0.2,
-          }}
-        />
-        {/* Soft Ambient Wash - Linear */}
-        <div 
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(to bottom, ${effectiveAmbientColor} 0%, transparent 100%)`,
-            opacity: 0.1,
-          }}
-        />
-        {/* Premium Noise Texture Layer */}
-        <div 
-          className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          }}
-        />
-        {/* Soft Glow Shadow */}
-        <div className="absolute inset-x-0 top-0 h-40" style={{ boxShadow: `0 -20px 100px 40px ${effectiveAmbientColor}22 inset` }} />
-      </div>
 
       <style>{fontStyles}</style>
 
@@ -120,7 +77,6 @@ function MainApp() {
               <SearchTabContent
                 onItemsChange={setItems}
                 refreshItems={refreshItems}
-                refreshTaste={refreshTaste}
                 searchSecondhandQuery={searchSecondhandQuery}
                 searchSecondhandTrigger={searchSecondhandTrigger}
               />
@@ -142,33 +98,10 @@ function MainApp() {
                 onSelectItem={setSelectedItem}
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
-                refreshTaste={refreshTaste}
               />
             </motion.div>
           )}
 
-          {currentTab === 'profile' && (
-            <motion.div
-              key="profile"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="max-w-[1400px] mx-auto px-4 lg:px-8 py-8"
-            >
-              <ProfileTabContent
-                items={items}
-                onGoToFeed={() => setCurrentTab('feed')}
-                onSelectItem={setSelectedItem}
-                onTasteChange={setTaste}
-                taste={taste}
-                ambientColor={ambientColor}
-                onAmbientColorChange={setAmbientColor}
-                isAmbientActive={isAmbientActive}
-                onAmbientToggle={() => setIsAmbientActive(!isAmbientActive)}
-              />
-            </motion.div>
-          )}
         </AnimatePresence>
       </main>
 
@@ -233,16 +166,12 @@ function MainApp() {
               <div className="space-y-6 text-foreground">
                   <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
                 <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5"></span>
+                  <span className="text-lg leading-none mt-1.5">🪟</span>
                     <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
                 </div>
                 <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5"></span>
+                  <span className="text-lg leading-none mt-1.5">📚</span>
                     <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
-                </div>
-                <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5"></span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Notebook (공책):</span> 수집된 취향을 분석하여 당신의 스타일 철학을 기록합니다. AI가 분석한 당신만의 스타일 DNA를 확인하세요.</p>
                 </div>
               </div>
               
@@ -366,10 +295,6 @@ export default function App() {
                   <div className="flex gap-3 items-start">
                     <span className="text-lg leading-none mt-1.5">📚</span>
                     <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">📓</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Notebook (공책):</span> 수집된 취향을 분석하여 당신의 스타일 철학을 기록합니다. AI가 분석한 당신만의 스타일 DNA를 확인하세요.</p>
                   </div>
                 </div>
                 
