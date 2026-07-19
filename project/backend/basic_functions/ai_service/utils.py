@@ -8,7 +8,6 @@ from psycopg.rows import dict_row
 from google import genai
 from google.genai import types
 from pathlib import Path
-from project.backend.app.schemas.response import TasteProfileResult 
 from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 
