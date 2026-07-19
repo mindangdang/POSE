@@ -4,6 +4,7 @@ import { Plus, Loader2, X, Check, Search, Shirt, Box, Wind, Footprints, Gem, Col
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
+import { trackEvent } from '../../../analytics';
 import { parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
@@ -188,7 +189,8 @@ export function FeedTabContent({
       });
       return { nextUrl, data };
     },
-    onSuccess: ({ data }) => {
+    onSuccess: ({ data, nextUrl }) => {
+      trackEvent('feed_item_add_succeeded', { input: nextUrl });
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         onItemsChange((prev) => [...data.data, ...prev]);
       }
@@ -232,6 +234,7 @@ export function FeedTabContent({
   const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newUrl || !user) return;
+    trackEvent('feed_item_add_submitted', { input: newUrl });
     try {
       await addItemMutation.mutateAsync({
         nextUrl: newUrl,
@@ -244,6 +247,7 @@ export function FeedTabContent({
 
   const handleDelete = async (id: number) => {
     if (!user) return;
+    trackEvent('feed_item_delete_clicked', { item_id: id });
     const shouldDelete = window.confirm('정말로 삭제하시겠습니까?');
     if (!shouldDelete) return;
     try {
@@ -254,6 +258,7 @@ export function FeedTabContent({
   };
 
   const handleSelectCategory = (category: string) => {
+    trackEvent('feed_category_selected', { category });
     setSelectedCategory(category);
     setCurrentFolder(null);
   };
@@ -281,7 +286,10 @@ export function FeedTabContent({
       {/* Add Item Button */}
       <div className="flex justify-end mb-1 sm:mb-2">
         <button
-          onClick={() => setIsAddPanelOpen(true)}
+          onClick={() => {
+            trackEvent('feed_add_panel_opened', { source: 'header_button' });
+            setIsAddPanelOpen(true);
+          }}
           className="flex items-center gap-1.5 sm:gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-widest hover:opacity-70 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -339,7 +347,10 @@ export function FeedTabContent({
                 key={item.item_id}
                 item={item}
                 onDelete={handleDelete}
-                onSelect={() => onSelectItem(item)}
+                onSelect={() => {
+                  trackEvent('feed_item_clicked', { item_id: item.item_id, title: item.title, category: item.category, source_url: item.source_url });
+                  onSelectItem(item);
+                }}
                 onSearchSecondhand={onSearchSecondhand}
               />
             ))}
@@ -353,7 +364,10 @@ export function FeedTabContent({
               <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
             </div>
             <button
-              onClick={() => setIsAddPanelOpen(true)}
+              onClick={() => {
+                trackEvent('feed_add_panel_opened', { source: 'empty_state' });
+                setIsAddPanelOpen(true);
+              }}
               className="flex items-center gap-2 pb-1 px-1 border-b-2 border-black text-black text-xs sm:text-sm font-bold uppercase tracking-wider hover:opacity-70 transition-opacity"
             >
               <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

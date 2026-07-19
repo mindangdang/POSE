@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { getDisplayImageUrl } from '../../../lib/imageUrl';
 import { getItemTitle, parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
+import { trackEvent } from '../../../analytics';
 
 type SearchResultCardProps = {
   item: SavedItem;
@@ -35,6 +36,7 @@ export function SearchResultCard({
     e.stopPropagation();
     setLiked(!liked);
     if (disliked) setDisliked(false);
+    trackEvent('search_result_feedback', { item_id: item.item_id, title, feedback: liked ? 'unlike' : 'like' });
     onLike?.(item);
   };
 
@@ -42,6 +44,7 @@ export function SearchResultCard({
     e.stopPropagation();
     setDisliked(!disliked);
     if (liked) setLiked(false);
+    trackEvent('search_result_feedback', { item_id: item.item_id, title, feedback: disliked ? 'undislike' : 'dislike' });
     onDislike?.(item);
   };
 
@@ -139,7 +142,10 @@ export function SearchResultCard({
               href={item.image_url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                trackEvent('search_result_source_clicked', { item_id: item.item_id, title, image_url: item.image_url });
+              }}
               className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit"
             >
               <ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source
