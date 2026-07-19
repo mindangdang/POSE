@@ -14,11 +14,11 @@ export function Header({ onLogout, onAboutClick }: HeaderProps) {
   const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
-      <div className="glass-panel mx-auto flex h-12 max-w-[1400px] items-center justify-between rounded-2xl px-4 sm:h-14 sm:px-5">
+    <header className="glass-strong sticky top-0 z-40 w-full border-b border-[var(--glass-hairline)]">
+      <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 sm:h-16 lg:px-8">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="font-logo text-xl tracking-wide text-foreground sm:text-2xl">
+          <span className="font-logo text-xl text-foreground sm:text-2xl">
             RoomShow
           </span>
         </a>

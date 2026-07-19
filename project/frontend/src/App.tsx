@@ -9,22 +9,24 @@ import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
 import type { TabKey } from './components/common/Header';
 
-// Add Logo Font
+// Refined gothic (sans-serif) type system based on Pretendard
 const fontStyles = `
-  @import url('https://api.fontshare.com/v2/css?f[]=new-title@400,700,800&display=swap');
-  @font-face {
-    font-family: 'Pretendard-Regular';
-    src: url('https://fastly.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
-    font-weight: 400;
-    font-style: normal;
+  .font-logo {
+    font-family: 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.035em;
   }
-  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
-  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
-  body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; }
-  .leather-header {
-    background-color: #080808;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    background-blend-mode: overlay;
+  .editorial-heading {
+    font-family: 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  body {
+    font-family: 'Pretendard Variable', 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-weight: 450;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 `;
 
@@ -237,11 +239,11 @@ export default function App() {
         <div className="ambient-backdrop" aria-hidden="true" />
 
         {/* Header */}
-        <header className="fixed top-3 left-0 right-0 z-50 px-3 sm:px-4">
-          <div className="glass-panel mx-auto flex h-12 max-w-[1400px] items-center justify-between rounded-2xl px-4 sm:h-14 sm:px-5">
-            <span className="text-xl sm:text-2xl font-logo tracking-wide text-foreground">RoomShow</span>
+        <header className="glass-strong fixed top-0 left-0 right-0 z-50 w-full border-b border-[var(--glass-hairline)]">
+          <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 sm:h-16 lg:px-8">
+            <span className="text-xl sm:text-2xl font-logo text-foreground">RoomShow</span>
             <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold">
-              <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-lg text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest">ABOUT</span>
+              <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-base text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest">ABOUT</span>
             </nav>
           </div>
         </header>
