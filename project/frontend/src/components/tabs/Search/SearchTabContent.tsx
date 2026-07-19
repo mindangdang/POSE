@@ -24,6 +24,7 @@ import {
   type Shop,
 } from './searchConfig';
 import { saveItemToFeed } from '../../../hooks/itemService';
+import { trackEvent } from '../../../analytics';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
@@ -97,6 +98,7 @@ export function SearchTabContent({
   }, [bottomRef]);
 
   const handleSecondhandSearch = useCallback(async (title: string) => {
+    trackEvent('search_secondhand_submitted', { title });
     setSearchMode("digging");
     setIsDetailedSearch(false);
     setSearchQuery(title);
@@ -119,6 +121,13 @@ export function SearchTabContent({
     } else {
       if (!searchQuery.trim() && !pastedFile) return;
     }
+    trackEvent('search_submitted', {
+      query: finalQuery,
+      mode: searchMode,
+      is_detailed: isDetailedSearch,
+      selected_shops: Array.from(selectedShopNames),
+      has_image: Boolean(pastedFile),
+    });
     await search(finalQuery);
   };
 
@@ -134,13 +143,30 @@ export function SearchTabContent({
     setSelectedShopNames(new Set());
   }, []);
 
+  const handleSelectItem = useCallback((item: SavedItem) => {
+    trackEvent('search_result_clicked', {
+      item_id: item.item_id,
+      title: item.title,
+      url: item.source_url,
+      category: item.category,
+    });
+    setSelectedItem(item);
+  }, []);
+
   const handleSaveToFeed = async (e: React.MouseEvent, item: SavedItem) => {
     e.stopPropagation();
     if (!user) return;
+    trackEvent('search_result_saved', {
+      item_id: item.item_id,
+      title: item.title,
+      url: item.source_url,
+      category: item.category,
+    });
     await saveItemToFeed(user, item, onItemsChange, refreshItems, refreshTaste);
   };
 
   const handleAddShop = (newShop: Shop) => {
+    trackEvent('shop_added', { name: newShop.name, url: newShop.url });
     setShops(prev => [newShop, ...prev]);
     setIsAddShopModalOpen(false);
   };
@@ -240,7 +266,7 @@ export function SearchTabContent({
           loadMore={loadMore}
           searchQuery={searchQuery}
           bottomRef={setBottomRef}
-          onSelectItem={setSelectedItem}
+          onSelectItem={handleSelectItem}
           onSaveItem={handleSaveToFeed}
           onSearchSecondhand={handleSecondhandSearch}
         />

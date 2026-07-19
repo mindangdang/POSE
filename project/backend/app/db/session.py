@@ -38,6 +38,21 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                     );
                     """
                 )
+                await cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS event_logs (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        user_id TEXT,
+                        session_id TEXT NOT NULL,
+                        event_name TEXT NOT NULL,
+                        properties JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        page TEXT,
+                        user_agent TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """
+                )
                 await conn.commit()
         print("DB 테이블 초기화 완료")
     except Exception as exc:

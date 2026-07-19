@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { trackEvent } from '../../../analytics';
 
 type FeedToolbarProps = {
   categories: string[];
@@ -50,6 +51,11 @@ export function FeedToolbar({
           placeholder="제목"
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && searchQuery.trim()) {
+              trackEvent('feed_search_submitted', { query: searchQuery });
+            }
+          }}
           className="w-full h-9 sm:h-10 pl-7 pr-2 bg-transparent border-b-2 border-black rounded-none text-xs sm:text-sm font-bold focus:outline-none placeholder:text-muted-foreground"
         />
       </div>

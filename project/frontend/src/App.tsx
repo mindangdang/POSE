@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
 import { FeedTabContent } from './components/tabs/Feed';
@@ -8,6 +8,7 @@ import { useItems } from './hooks/useItems';
 import { useTaste } from './hooks/useTaste';
 import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
+import { setAnalyticsUser, trackEvent } from './analytics';
 
 // Add Logo Font
 const fontStyles = `
@@ -29,7 +30,7 @@ const fontStyles = `
 `;
 
 function MainApp() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [currentTab, setCurrentTab] = useState<'feed' | 'search' | 'profile'>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
@@ -49,7 +50,16 @@ function MainApp() {
   const { items, setItems, refreshItems } = useItems();
   const { taste, setTaste, refreshTaste } = useTaste();
 
+  useEffect(() => {
+    setAnalyticsUser(user?.id);
+  }, [user?.id]);
+
+  useEffect(() => {
+    trackEvent('page_view', { tab: currentTab });
+  }, [currentTab]);
+
   const handleLogout = () => {
+    trackEvent('logout_confirmed');
     setIsLogoutModalOpen(false);
     logout();
   };
@@ -59,6 +69,7 @@ function MainApp() {
   };
 
   const handleSearchSecondhandFromFeed = (query: string) => {
+    trackEvent('feed_search_secondhand_clicked', { query });
     setSearchSecondhandQuery(query);
     setSearchSecondhandTrigger((prev) => prev + 1);
     setCurrentTab('search');
