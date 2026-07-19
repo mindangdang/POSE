@@ -9,7 +9,7 @@ export enum SearchState {
 }
 
 export const mergeUniqueResults = (prev: SavedItem[], incoming: SavedItem[]) => {
-  const existingUrls = new Set(prev.map(i => i.url).filter(Boolean));
-  const uniqueIncoming = incoming.filter((i: SavedItem) => !i.url || !existingUrls.has(i.url));
+  const existingIds = new Set(prev.map((item) => item.item_id));
+  const uniqueIncoming = incoming.filter((item: SavedItem) => !existingIds.has(item.item_id));
   return [...prev, ...uniqueIncoming];
 };

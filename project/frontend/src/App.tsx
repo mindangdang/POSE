@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
 import { FeedTabContent } from './components/tabs/Feed';
+import { VoteTabContent } from './components/tabs/Vote';
 import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
 import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
+import type { TabKey } from './components/common/Header';
 
 // Add Logo Font
 const fontStyles = `
@@ -29,7 +31,7 @@ const fontStyles = `
 function MainApp() {
   const { logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
-  const [currentTab, setCurrentTab] = useState<'feed' | 'search'>('search');
+  const [currentTab, setCurrentTab] = useState<TabKey>('search');
   const [searchSecondhandQuery, setSearchSecondhandQuery] = useState('');
   const [searchSecondhandTrigger, setSearchSecondhandTrigger] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -99,6 +101,19 @@ function MainApp() {
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
               />
+            </motion.div>
+          )}
+
+          {currentTab === 'vote' && (
+            <motion.div
+              key="vote"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="max-w-[1400px] mx-auto px-4 lg:px-8 py-8"
+            >
+              <VoteTabContent />
             </motion.div>
           )}
 

@@ -109,7 +109,7 @@ export function SearchResults({
           <AnimatePresence>
             {searchResults.map((item, index) => (
               <SearchResultCard
-                key={item.url || item.id}
+                key={item.item_id}
                 delay={0.03 * (index % 20)}
                 item={item}
                 onClick={() => onSelectItem(item)}

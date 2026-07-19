@@ -2,16 +2,19 @@ import { ChevronDown, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 
+export type TabKey = 'feed' | 'search' | 'vote';
+
 type HeaderProps = {
   onLogout: () => void;
-  currentTab: string;
-  onTabChange: (tab: 'feed' | 'search') => void;
+  currentTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
   onAboutClick?: () => void;
 };
 
 const categories = [
   { id: 'search', label: 'Window', hasDropdown: false },
   { id: 'feed', label: 'Closet', hasDropdown: false },
+  { id: 'vote', label: 'Vote', hasDropdown: false },
 ];
 
 export function Header({
@@ -37,7 +40,7 @@ export function Header({
           {categories.map((category) => (
             <button
               key={category.id}
-              onClick={() => onTabChange(category.id as 'feed' | 'search')}
+              onClick={() => onTabChange(category.id as TabKey)}
               className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
                 currentTab === category.id
                   ? 'text-white'
@@ -100,7 +103,7 @@ export function Header({
               <button
                 key={category.id}
                 onClick={() => {
-                  onTabChange(category.id as 'feed' | 'search');
+                  onTabChange(category.id as TabKey);
                   setIsMobileMenuOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${
