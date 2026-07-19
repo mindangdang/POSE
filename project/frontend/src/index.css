@@ -5,17 +5,63 @@
 @theme {
   --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Comfortaa", "Pretendard", ui-sans-serif, system-ui, cursive;
-  --color-background: #ffffff;
+  --color-background: #f4f4f6;
   --color-foreground: #1a1a1a;
-  --color-muted: #f5f5f5;
+  --color-muted: #eaeaee;
   --color-muted-foreground: #6b6b6b;
   --color-primary: #0d9488;
   --color-primary-foreground: #ffffff;
   --color-accent: #14b8a6;
   --color-accent-foreground: #ffffff;
-  --color-border: #e5e5e5;
+  --color-border: #e2e2e6;
   --color-card: #ffffff;
   --color-card-foreground: #1a1a1a;
+}
+
+/* Adaptive light/dark design tokens + liquid glass variables */
+:root {
+  color-scheme: light dark;
+
+  /* Liquid glass (light) */
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-hairline: rgba(15, 23, 42, 0.06);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.06);
+
+  /* Ambient backdrop tints so glass has something to refract */
+  --ambient-1: rgba(13, 148, 136, 0.14);
+  --ambient-2: rgba(20, 184, 166, 0.1);
+  --ambient-3: rgba(148, 163, 184, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0a0a0c;
+    --color-foreground: #f4f4f5;
+    --color-muted: #1b1b1f;
+    --color-muted-foreground: #a1a1aa;
+    --color-primary: #2dd4bf;
+    --color-primary-foreground: #04211d;
+    --color-accent: #5eead4;
+    --color-accent-foreground: #04211d;
+    --color-border: rgba(255, 255, 255, 0.1);
+    --color-card: #141417;
+    --color-card-foreground: #f4f4f5;
+
+    /* Liquid glass (dark) */
+    --glass-bg: rgba(28, 28, 34, 0.55);
+    --glass-bg-strong: rgba(30, 30, 38, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-hairline: rgba(255, 255, 255, 0.08);
+    --glass-highlight: rgba(255, 255, 255, 0.18);
+    --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+
+    --ambient-1: rgba(45, 212, 191, 0.18);
+    --ambient-2: rgba(14, 116, 144, 0.16);
+    --ambient-3: rgba(30, 41, 59, 0.5);
+  }
 }
 
 html {
@@ -25,36 +71,83 @@ html {
 
 body {
   color: var(--color-foreground);
+  background-color: var(--color-background);
   overflow-x: hidden;
+  /* iOS PWA safe areas */
+  padding-top: env(safe-area-inset-top);
 }
 
-/* Liquid Glass Effect */
+/* Safe-area helpers for the standalone (installed) PWA */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pb-safe-nav {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 6.5rem);
+}
+
+/* ============================================================
+   Liquid Glass system (adaptive light/dark)
+   ============================================================ */
 .glass {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-hairline);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1px solid var(--glass-hairline);
+}
+
+/* The signature liquid-glass panel: frosted fill, top highlight,
+   soft hairline border and depth shadow. */
+.glass-panel {
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: var(--glass-shadow);
+}
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    var(--glass-highlight) 0%,
+    transparent 45%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .glass-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
+  background: var(--glass-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-hairline);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Ambient backdrop so the glass has color/imagery to refract */
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 60rem at 12% -10%, var(--ambient-1), transparent 60%),
+    radial-gradient(50rem 50rem at 105% 15%, var(--ambient-2), transparent 55%),
+    radial-gradient(70rem 70rem at 50% 115%, var(--ambient-3), transparent 60%);
 }
 
 /* Grain Texture Overlay */

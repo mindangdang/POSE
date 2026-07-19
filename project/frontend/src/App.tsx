@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
+import { BottomTabBar, GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
 import { FeedTabContent } from './components/tabs/Feed';
 import { VoteTabContent } from './components/tabs/Vote';
 import { SearchTabContent } from './components/tabs/Search';
@@ -20,7 +20,7 @@ const fontStyles = `
   }
   .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
   .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
-  body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
+  body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; }
   .leather-header {
     background-color: #080808;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
@@ -55,7 +55,9 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans">
+    <div className="relative min-h-screen bg-background font-sans">
+      <div className="ambient-backdrop" aria-hidden="true" />
+
       <Header
         onLogout={handleLogoutClick}
         currentTab={currentTab}
@@ -65,7 +67,7 @@ function MainApp() {
 
       <style>{fontStyles}</style>
 
-      <main className="relative z-10">
+      <main className="relative z-10 pb-safe-nav">
         <AnimatePresence mode="wait">
           {currentTab === 'search' && (
             <motion.div
@@ -119,6 +121,8 @@ function MainApp() {
 
         </AnimatePresence>
       </main>
+
+      <BottomTabBar currentTab={currentTab} onTabChange={setCurrentTab} />
 
       <ItemDetailDialog
         item={selectedItem}
@@ -182,7 +186,7 @@ function MainApp() {
                   <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
                 <div className="flex gap-3 items-start">
                   <span className="text-lg leading-none mt-1.5">🪟</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾��니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
                 </div>
                 <div className="flex gap-3 items-start">
                   <span className="text-lg leading-none mt-1.5">📚</span>
@@ -228,15 +232,18 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-white font-sans relative">
+      <div className="min-h-screen bg-background font-sans relative">
         <style>{fontStyles}</style>
+        <div className="ambient-backdrop" aria-hidden="true" />
 
         {/* Header */}
-        <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 lg:px-12 h-14 sm:h-16 bg-black border-b border-white/10">
-          <span className="text-2xl font-logo tracking-wide text-white">RoomShow</span>
-          <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold text-white/60">
-            <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-xl hover:text-white transition-colors uppercase tracking-widest">ABOUT</span>
-          </nav>
+        <header className="fixed top-3 left-0 right-0 z-50 px-3 sm:px-4">
+          <div className="glass-panel mx-auto flex h-12 max-w-[1400px] items-center justify-between rounded-2xl px-4 sm:h-14 sm:px-5">
+            <span className="text-xl sm:text-2xl font-logo tracking-wide text-foreground">RoomShow</span>
+            <nav className="flex items-center gap-6 text-xs sm:text-sm font-bold">
+              <span onClick={() => setIsAboutModalOpen(true)} className="cursor-pointer font-logo text-lg text-muted-foreground hover:text-foreground transition-colors uppercase tracking-widest">ABOUT</span>
+            </nav>
+          </div>
         </header>
 
         {/* Hero Section */}

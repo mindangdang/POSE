@@ -1,5 +1,4 @@
-import { ChevronDown, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { Info, LogOut } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 export type TabKey = 'feed' | 'search' | 'vote';
@@ -11,143 +10,46 @@ type HeaderProps = {
   onAboutClick?: () => void;
 };
 
-const categories = [
-  { id: 'search', label: 'Window', hasDropdown: false },
-  { id: 'feed', label: 'Closet', hasDropdown: false },
-  { id: 'vote', label: 'Vote', hasDropdown: false },
-];
-
-export function Header({
-  onLogout,
-  currentTab,
-  onTabChange,
-  onAboutClick,
-}: HeaderProps) {
+export function Header({ onLogout, onAboutClick }: HeaderProps) {
   const { user } = useAuth();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-black border-b border-white/10">
-      {/* Main Header */}
-      <div className="flex items-center justify-between h-14 sm:h-16 px-4 lg:px-8 max-w-[1400px] mx-auto">
+    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
+      <div className="glass-panel mx-auto flex h-12 max-w-[1400px] items-center justify-between rounded-2xl px-4 sm:h-14 sm:px-5">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl font-logo tracking-wide text-white transition-colors duration-1000">RoomShow</span>
+          <span className="font-logo text-xl tracking-wide text-foreground sm:text-2xl">
+            RoomShow
+          </span>
         </a>
 
-        {/* Center Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => onTabChange(category.id as TabKey)}
-              className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
-                currentTab === category.id
-                  ? 'text-white'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              {category.label}
-              {currentTab === category.id && (
-                <span 
-                  className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full transition-all duration-1000" 
-                />
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* Right Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-4 lg:gap-6">
-          {user ? (
-            <>
-              <button
-                onClick={onAboutClick}
-                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 tracking-widest uppercase mr-4"
-              >
-                ABOUT
-              </button>
-              <span className="text-xl font-logo text-white/40 mr-4 transition-all duration-1000">
-                @{user.name || user.username || 'user'}
-              </span>
-              <button
-                onClick={onLogout}
-                className="text-xl font-logo text-white/60 hover:text-white transition-all duration-1000 uppercase tracking-widest"
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={onAboutClick} className="text-xl font-logo text-white/60 hover:text-white transition-colors tracking-widest uppercase">ABOUT</button>
-            </>
+        {/* Right actions */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {user && (
+            <span className="mr-1 hidden text-sm font-semibold text-muted-foreground sm:inline">
+              @{user.name || user.username || 'user'}
+            </span>
           )}
-        </nav>
 
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-white"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-      </div>
+          <button
+            onClick={onAboutClick}
+            aria-label="About RoomShow"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+          >
+            <Info className="h-5 w-5" />
+          </button>
 
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 right-0 bg-black border-b border-white/10 shadow-lg">
-          {/* Mobile Categories */}
-          <nav className="py-2">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  onTabChange(category.id as TabKey);
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${
-                  currentTab === category.id
-                    ? 'text-white bg-white/10'
-                    : 'text-white/60'
-                }`}
-              >
-                {category.label}
-                {category.hasDropdown && <ChevronDown className="w-4 h-4" />}
-              </button>
-            ))}
-          </nav>
-
-          {/* Mobile User Actions */}
-          <div className="border-t border-border p-4 space-y-2">
-            {user ? (
-              <>
-                <div className="text-sm font-medium text-foreground py-2">
-                  @{user.name || user.username || 'user'}
-                </div>
-                <button
-                  onClick={() => {
-                    onLogout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left text-sm font-medium text-muted-foreground py-2"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  Sign Up
-                </button>
-                <button className="w-full text-left text-sm font-medium text-muted-foreground py-2">
-                  Login
-                </button>
-              </>
-            )}
-          </div>
+          {user && (
+            <button
+              onClick={onLogout}
+              aria-label="Logout"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </header>
   );
 }

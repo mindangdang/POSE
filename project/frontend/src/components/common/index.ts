@@ -1,3 +1,4 @@
+export { BottomTabBar } from './BottomTabBar';
 export { GoogleLoginButton } from './GoogleLoginButton';
 export { Header } from './Header';
 export { ItemDetailDialog } from './ItemDetailDialog';
