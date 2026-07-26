@@ -12,6 +12,11 @@ export function parseItemInforms(item: SavedItem): ParsedFacts {
     is_available: item.is_available,
     shop: item.shop,
     source_url: item.source_url,
+    image_url: item.image_url,
+    image_vector: item.image_vector,
+    created_at: item.created_at,
+    likes: item.likes,
+    dislikes: item.dislikes
   };
 }
 

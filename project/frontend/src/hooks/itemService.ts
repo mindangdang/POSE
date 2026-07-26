@@ -14,6 +14,7 @@ export async function saveItemToFeed(
       body: JSON.stringify({
         item_id: item.item_id,
         user_id: user.id,
+        title: item.title,
         source_url: item.source_url,
         category: item.category,
         image_url: item.image_url,
@@ -21,7 +22,9 @@ export async function saveItemToFeed(
         price: item.price,
         brand: item.brand,
         is_available: item.is_available,
-        shop: item.shop
+        shop: item.shop,
+        likes: item.likes,
+        dislikes: item.dislikes
       })
     });
 

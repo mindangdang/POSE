@@ -32,6 +32,8 @@ def initialize_database():
             image_url TEXT,
             image_vector VECTOR(768), 
             shop TEXT,
+            likes TEXT,
+            dislikes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(source_url, title)
         );

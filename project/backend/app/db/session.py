@@ -11,20 +11,22 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                 await cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS saved_posts (
-                        item_id SERIAL PRIMARY KEY,
-                        user_id TEXT,
-                        source_url TEXT,
-                        title TEXT,
-                        price TEXT,
-                        brand TEXT,
-                        category TEXT,
-                        is_available TEXT,
-                        image_url TEXT,
-                        image_vector vector(768),
-                        shop TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(source_url, title)
-                    );
+                            item_id SERIAL PRIMARY KEY,
+                            user_id VARCHAR(50) NOT NULL,
+                            source_url TEXT,
+                            title TEXT,
+                            price TEXT,
+                            brand TEXT,
+                            category VARCHAR(20),
+                            is_available TEXT,
+                            image_url TEXT,
+                            image_vector VECTOR(768), 
+                            shop TEXT,
+                            likes TEXT,
+                            dislikes TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(source_url, title)
+                            );
                     """
                 )
 

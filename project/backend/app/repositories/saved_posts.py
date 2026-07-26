@@ -46,6 +46,8 @@ class SavedPostsRepository:
             image_url="AI가 열심히 정보를 추출하고 있어요",
             image_vector=None,
             shop=None,
+            likes=None,
+            dislikes=None,
             return_id=True,
         )
 
@@ -62,6 +64,8 @@ class SavedPostsRepository:
         brand: str | None = None,
         is_available: str | None = None,
         shop: str | None = None,
+        likes: str | None = None,
+        dislikes: str | None = None,
     ) -> int:
         '''검색결과 아이템을 피드에 저장하기 위한 메서드입니다.'''
         return await self._insert_item(
@@ -76,6 +80,8 @@ class SavedPostsRepository:
             image_url=image_url,
             image_vector=image_vector,
             shop=shop,
+            likes=likes,
+            dislikes=dislikes,
             return_id=False,
         )
 
@@ -92,6 +98,8 @@ class SavedPostsRepository:
         image_url: str,
         image_vector: str | None,
         shop: str | None,
+        likes: str | None,
+        dislikes: str | None,
         return_id: bool = False,
     ) -> int | None:
         '''DB에 아이템을 삽입하고 item_id를 반환하는 공통 메서드입니다.'''
@@ -111,6 +119,8 @@ class SavedPostsRepository:
             image_url,
             image_vector,
             shop,
+            likes,
+            dislikes,
         )
 
         if item_id is not None:
@@ -150,14 +160,14 @@ class SavedPostsRepository:
             async with self.conn.cursor() as cursor:
                 insert_query_with_id = """
                     INSERT INTO saved_posts 
-                    (item_id, user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (item_id, user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop, likes, dislikes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (source_url, title) DO NOTHING;
                 """
                 insert_query_without_id = """
                     INSERT INTO saved_posts 
-                    (user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop, likes, dislikes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (source_url, title) DO NOTHING;
                 """
                 batch_with_id = []
@@ -181,6 +191,8 @@ class SavedPostsRepository:
                     image_url = item.get("image_url") or item.get("local_path") or ""
                     vector_list = await _extract_vector_sync(image_url)
                     vector_str = str(vector_list) if vector_list else None
+                    likes = item.get("likes")
+                    dislikes = item.get("dislikes")
 
                     if item_id is not None:
                         batch_with_id.append((
@@ -195,6 +207,8 @@ class SavedPostsRepository:
                             image_url,
                             vector_str,
                             shop,
+                            likes,
+                            dislikes
                         ))
                     else:
                         batch_without_id.append((
@@ -208,6 +222,8 @@ class SavedPostsRepository:
                             image_url,
                             vector_str,
                             shop,
+                            likes,
+                            dislikes
                         ))
 
                 if batch_with_id:
@@ -241,6 +257,8 @@ class SavedPostsRepository:
                     image_url,
                     image_vector,
                     shop,
+                    likes,
+                    dislikes,
                     created_at
                 FROM saved_posts
                 WHERE user_id = %s

@@ -64,6 +64,8 @@ async def start_url_extraction(
                 "image_url": "",
                 "image_vector": None,
                 "shop": None,
+                "likes": None,
+                "dislikes": None,
                 "source_url": post_url,
             }
         ],
@@ -226,6 +228,8 @@ async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repos
             brand=payload.brand,
             is_available=payload.is_available,
             shop=payload.shop,
+            likes=payload.likes,
+            dislikes=payload.dislikes,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
