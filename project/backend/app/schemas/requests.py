@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 
@@ -22,3 +22,7 @@ class ManualItemCreate(BaseModel):
     brand: Optional[str] = None
     is_available: Optional[str] = None
     shop: Optional[str] = None
+
+
+class VoteRequest(BaseModel):
+    direction: Literal["like", "dislike"]

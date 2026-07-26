@@ -14,16 +14,18 @@ from typing import Optional
 
 from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
+from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest, VoteRequest
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.content import (
     delete_item_for_user,
     enqueue_pse_search,
+    get_random_item_for_user,
     list_items_for_user,
     resolve_image_path,
     save_manual_item as save_manual_item_for_user,
     search_with_lens,
     start_url_extraction,
+    vote_for_item,
 )
 from project.backend.app.services.websocket import get_websocket_manager
 
@@ -88,6 +90,29 @@ async def get_items(
     repos: Repositories = Depends(get_repos)
 ):
     return await list_items_for_user(user_id=str(current_user.get("sub")), repos=repos)
+
+
+@router.get("/vote/random")
+async def get_random_vote_item(
+    current_user: dict = Depends(get_current_user),
+    repos: Repositories = Depends(get_repos),
+):
+    return await get_random_item_for_user(user_id=str(current_user.get("sub")), repos=repos)
+
+
+@router.post("/vote/{item_id}/vote")
+async def vote_item(
+    item_id: int,
+    payload: VoteRequest,
+    current_user: dict = Depends(get_current_user),
+    repos: Repositories = Depends(get_repos),
+):
+    return await vote_for_item(
+        item_id=item_id,
+        user_id=str(current_user.get("sub")),
+        direction=payload.direction,
+        repos=repos,
+    )
 
 @router.delete("/items/{item_id}")
 async def delete_item(

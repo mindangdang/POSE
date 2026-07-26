@@ -240,7 +240,18 @@ class SavedPostsRepository:
     def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
         if item.get("image_vector") is not None:
             item["image_vector"] = str(item["image_vector"])
+        item["likes"] = SavedPostsRepository._coerce_vote_value(item.get("likes"))
+        item["dislikes"] = SavedPostsRepository._coerce_vote_value(item.get("dislikes"))
         return item
+
+    @staticmethod
+    def _coerce_vote_value(value: Any) -> int:
+        if value in (None, ""):
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     async def list_feed_items(self, user_id: str):
         async with self.conn.cursor(row_factory=dict_row) as cursor:
@@ -268,3 +279,63 @@ class SavedPostsRepository:
             )
             items = await cursor.fetchall()
             return jsonable_encoder([self._normalize_item(item) for item in items])
+
+    async def get_random_feed_item(self, user_id: str):
+        async with self.conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(
+                """
+                SELECT
+                    item_id,
+                    source_url,
+                    title,
+                    price,
+                    brand,
+                    category,
+                    is_available,
+                    image_url,
+                    image_vector,
+                    shop,
+                    likes,
+                    dislikes,
+                    created_at
+                FROM saved_posts
+                WHERE user_id = %s
+                ORDER BY RANDOM()
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            item = await cursor.fetchone()
+            return jsonable_encoder(self._normalize_item(item)) if item else None
+
+    async def increment_vote_count(self, item_id: int, user_id: str, direction: str):
+        if direction not in {"like", "dislike"}:
+            raise ValueError("direction must be either 'like' or 'dislike'")
+
+        vote_column = "likes" if direction == "like" else "dislikes"
+
+        async with self.conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(
+                f"""
+                UPDATE saved_posts
+                SET {vote_column} = (COALESCE(NULLIF({vote_column}, '')::int, 0) + 1)::text
+                WHERE item_id = %s AND user_id = %s
+                RETURNING
+                    item_id,
+                    source_url,
+                    title,
+                    price,
+                    brand,
+                    category,
+                    is_available,
+                    image_url,
+                    image_vector,
+                    shop,
+                    likes,
+                    dislikes,
+                    created_at
+                """,
+                (item_id, user_id),
+            )
+            item = await cursor.fetchone()
+            return jsonable_encoder(self._normalize_item(item)) if item else None

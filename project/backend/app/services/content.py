@@ -247,6 +247,30 @@ async def list_items_for_user(user_id: str, repos: Repositories):
         return []
 
 
+async def get_random_item_for_user(user_id: str, repos: Repositories):
+    try:
+        return await repos.saved_posts.get_random_feed_item(user_id)
+    except Exception as exc:
+        print(f"랜덤 조회 에러: {exc}")
+        return None
+
+
+async def vote_for_item(item_id: int, user_id: str, direction: str, repos: Repositories):
+    try:
+        voted_item = await repos.saved_posts.increment_vote_count(item_id, user_id, direction)
+        if voted_item is None:
+            raise HTTPException(status_code=404, detail="투표할 아이템을 찾을 수 없습니다.")
+
+        await repos.saved_posts.conn.commit()
+        return voted_item
+    except HTTPException:
+        await repos.saved_posts.conn.rollback()
+        raise
+    except Exception as exc:
+        await repos.saved_posts.conn.rollback()
+        raise HTTPException(status_code=500, detail=f"투표 처리 실패: {exc}") from exc
+
+
 async def delete_item_for_user(item_id: int, user_id: str, repos: Repositories):
     try:
         await repos.saved_posts.delete_by_id(item_id, user_id)

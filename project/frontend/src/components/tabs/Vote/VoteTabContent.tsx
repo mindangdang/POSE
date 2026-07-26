@@ -1,161 +1,111 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Heart, Plus, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { apiJson } from '../../../lib/api';
 import { getDisplayImageUrl } from '../../../lib/imageUrl';
 import type { SavedItem } from '../../../types/item';
+import { useAuth } from '../../../hooks/useAuth';
 
-type VoteItem = SavedItem & {
-  likeCount: number;
-  dislikeCount: number;
-};
-
-const buildImage = (title: string) =>
-  `https://placehold.co/900x1200/f3efe8/171717?text=${encodeURIComponent(title)}`;
-
-const initialVoteItems: VoteItem[] = [
-  {
-    item_id: 901,
-    title: 'Soft Line Trench Coat',
-    price: 189000,
-    brand: 'MUSE ROOM',
-    category: 'OUTER',
-    is_available: true,
-    image_url: buildImage('Soft Line Trench Coat'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/901',
-    created_at: '2026-07-01T00:00:00.000Z',
-    likeCount: 24,
-    dislikeCount: 3,
-  },
-  {
-    item_id: 902,
-    title: 'Cream Utility Jacket',
-    price: 156000,
-    brand: 'NEAR STUDIO',
-    category: 'JACKET',
-    is_available: true,
-    image_url: buildImage('Cream Utility Jacket'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/902',
-    created_at: '2026-07-02T00:00:00.000Z',
-    likeCount: 18,
-    dislikeCount: 5,
-  },
-  {
-    item_id: 903,
-    title: 'Wide Denim Slacks',
-    price: 84000,
-    brand: 'MONO FORM',
-    category: 'BOTTOM',
-    is_available: true,
-    image_url: buildImage('Wide Denim Slacks'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/903',
-    created_at: '2026-07-03T00:00:00.000Z',
-    likeCount: 31,
-    dislikeCount: 2,
-  },
-  {
-    item_id: 904,
-    title: 'Glossy Ballet Sneakers',
-    price: 121000,
-    brand: 'SOFT STEP',
-    category: 'SHOES',
-    is_available: true,
-    image_url: buildImage('Glossy Ballet Sneakers'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/904',
-    created_at: '2026-07-04T00:00:00.000Z',
-    likeCount: 12,
-    dislikeCount: 7,
-  },
-  {
-    item_id: 905,
-    title: 'Archive Shoulder Bag',
-    price: 143000,
-    brand: 'OBJECTIVE',
-    category: 'BAG',
-    is_available: true,
-    image_url: buildImage('Archive Shoulder Bag'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/905',
-    created_at: '2026-07-05T00:00:00.000Z',
-    likeCount: 27,
-    dislikeCount: 6,
-  },
-  {
-    item_id: 906,
-    title: 'Gloss Knit Cardigan',
-    price: 98000,
-    brand: 'SUNDAY ATELIER',
-    category: 'TOP',
-    is_available: true,
-    image_url: buildImage('Gloss Knit Cardigan'),
-    image_vector: null,
-    shop: 'demo',
-    source_url: 'https://example.com/items/906',
-    created_at: '2026-07-06T00:00:00.000Z',
-    likeCount: 20,
-    dislikeCount: 4,
-  },
-];
-
-type VoteDirection = -1 | 1;
+type VoteItem = SavedItem;
+type VoteDirection = 'like' | 'dislike';
 
 export function VoteTabContent() {
-  const [voteItems, setVoteItems] = useState<VoteItem[]>(initialVoteItems);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [swipeDirection, setSwipeDirection] = useState<VoteDirection>(1);
-  const [wishlistIds, setWishlistIds] = useState<Set<number>>(() => new Set([902, 905]));
+  const { user, isInitializing, loginAsGuest } = useAuth();
+  const [currentItem, setCurrentItem] = useState<VoteItem | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<-1 | 1>(1);
+  const [wishlistItems, setWishlistItems] = useState<VoteItem[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
 
-  const currentItem = currentIndex < voteItems.length ? voteItems[currentIndex] : null;
+  const loadRandomItem = useCallback(async () => {
+    if (!user) {
+      setCurrentItem(null);
+      return;
+    }
 
-  const wishlistItems = useMemo(
-    () => voteItems.filter((item) => wishlistIds.has(item.item_id)),
-    [voteItems, wishlistIds],
-  );
+    setIsLoading(true);
+    try {
+      const item = await apiJson<VoteItem | null>('/api/vote/random');
+      setCurrentItem(item);
+      if (!item) {
+        setStatusMessage('saved_posts에 투표할 아이템이 없습니다.');
+      }
+    } catch (error) {
+      console.error('Failed to load vote item:', error);
+      setCurrentItem(null);
+      setStatusMessage('투표 아이템을 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
-  const handleVote = (direction: VoteDirection) => {
-    if (!currentItem) return;
+  useEffect(() => {
+    void loadRandomItem();
+  }, [loadRandomItem]);
 
-    setSwipeDirection(direction);
-    setVoteItems((prev) =>
-      prev.map((item) => {
-        if (item.item_id !== currentItem.item_id) return item;
+  const handleVote = async (direction: VoteDirection) => {
+    if (!currentItem || !user || isVoting) return;
 
-        return direction === 1
-          ? { ...item, likeCount: item.likeCount + 1 }
-          : { ...item, dislikeCount: item.dislikeCount + 1 };
-      }),
-    );
-    setStatusMessage(direction === 1 ? '예뻐요로 투표했습니다.' : '별로에요로 투표했습니다.');
-    setCurrentIndex((prev) => prev + 1);
+    setSwipeDirection(direction === 'like' ? 1 : -1);
+    setIsVoting(true);
+
+    try {
+      await apiJson<VoteItem>(`/api/vote/${currentItem.item_id}/vote`, {
+        method: 'POST',
+        body: JSON.stringify({ direction }),
+      });
+
+      setStatusMessage(direction === 'like' ? '예뻐요로 투표했습니다.' : '별로에요로 투표했습니다.');
+      await loadRandomItem();
+    } catch (error) {
+      console.error('Vote failed:', error);
+      setStatusMessage('투표 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsVoting(false);
+    }
   };
 
   const handleAddToWishlist = () => {
     if (!currentItem) return;
 
-    setWishlistIds((prev) => {
-      if (prev.has(currentItem.item_id)) return prev;
-      const next = new Set(prev);
-      next.add(currentItem.item_id);
-      return next;
+    setWishlistItems((prev) => {
+      if (prev.some((item) => item.item_id === currentItem.item_id)) return prev;
+      return [currentItem, ...prev];
     });
     setStatusMessage('내 위시리스트에 추가했습니다.');
   };
 
   const handleRestart = () => {
-    setCurrentIndex(0);
     setSwipeDirection(1);
-    setStatusMessage('카드 덱을 처음부터 다시 봅니다.');
+    setStatusMessage('랜덤 카드 덱을 다시 불러옵니다.');
+    void loadRandomItem();
   };
+
+  if (!isInitializing && !user) {
+    return (
+      <div className="relative overflow-hidden rounded-[2rem] border border-black/10 bg-[#f7f1e6] px-4 py-6 shadow-[0_30px_120px_rgba(17,24,39,0.08)] sm:px-6 sm:py-8 lg:px-8">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.95),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(240,232,218,0.85),_transparent_38%)]" />
+        <div className="relative flex min-h-[560px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-black/15 bg-white/70 px-6 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-lg">
+            <Heart className="h-7 w-7" />
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground">로그인이 필요합니다</h2>
+          <p className="mt-3 max-w-sm text-sm leading-7 text-muted-foreground">
+            투표 탭은 현재 사용자의 saved_posts에서 랜덤 아이템을 불러옵니다. 게스트 로그인으로 바로 확인할 수 있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => void loginAsGuest()}
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black/85"
+          >
+            게스트로 시작하기
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-black/10 bg-[#f7f1e6] px-4 py-6 shadow-[0_30px_120px_rgba(17,24,39,0.08)] sm:px-6 sm:py-8 lg:px-8">
@@ -166,19 +116,19 @@ export function VoteTabContent() {
           <div className="max-w-2xl space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-black/45">Vote</p>
             <h1 className="editorial-heading text-3xl leading-tight text-foreground sm:text-4xl lg:text-5xl">
-              위시리스트 카드를 넘기며,
+              saved_posts에서
               <br />
-              취향에 투표하는 화면입니다.
+              랜덤하게 꺼낸 아이템에 투표합니다.
             </h1>
             <p className="max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
-              다른 유저의 카드 로딩은 아직 연결하지 않았습니다. 대신 현재 탭에서 스와이프, 예뻐요, 별로에요, 위시리스트 추가 흐름만 먼저 확인할 수 있습니다.
+              예뻐요 또는 별로에요를 누를 때마다 해당 아이템의 likes, dislikes 값이 1씩 증가합니다.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-foreground/70">
-            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-2">남은 카드 {Math.max(voteItems.length - currentIndex, 0)}개</span>
             <span className="rounded-full border border-black/10 bg-white/70 px-3 py-2">위시리스트 {wishlistItems.length}개</span>
-            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-2">데모 데이터</span>
+            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-2">랜덤 조회</span>
+            <span className="rounded-full border border-black/10 bg-white/70 px-3 py-2">likes / dislikes 업데이트</span>
           </div>
 
           <div className="relative mx-auto w-full max-w-[520px]">
@@ -208,13 +158,13 @@ export function VoteTabContent() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
 
-                    {wishlistIds.has(currentItem.item_id) && (
+                    {wishlistItems.some((item) => item.item_id === currentItem.item_id) && (
                       <div className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-black shadow-sm backdrop-blur-sm">
                         위시리스트에 있음
                       </div>
                     )}
 
-                    <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6 text-white">
+                    <div className="absolute bottom-0 left-0 right-0 p-5 text-white sm:p-6">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70">{currentItem.brand}</p>
@@ -228,7 +178,8 @@ export function VoteTabContent() {
 
                       <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
                         <span className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">{currentItem.category}</span>
-                        <span className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">{currentIndex + 1} / {voteItems.length}</span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">좋아요 {currentItem.likes ?? 0}</span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-sm">싫어요 {currentItem.dislikes ?? 0}</span>
                       </div>
                     </div>
                   </div>
@@ -244,9 +195,11 @@ export function VoteTabContent() {
                   <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-lg">
                     <Heart className="h-7 w-7" />
                   </div>
-                  <h2 className="text-2xl font-semibold text-foreground">모든 카드를 확인했습니다</h2>
+                  <h2 className="text-2xl font-semibold text-foreground">{isLoading ? '카드를 불러오는 중입니다' : '표시할 카드가 없습니다'}</h2>
                   <p className="mt-3 max-w-sm text-sm leading-7 text-muted-foreground">
-                    다시 보기를 누르면 카드 덱을 처음부터 다시 스와이프할 수 있습니다.
+                    {isLoading
+                      ? 'saved_posts에서 랜덤 아이템을 가져오고 있습니다.'
+                      : '저장된 아이템이 없거나 현재 계정에 연결된 데이터가 없습니다.'}
                   </p>
                   <button
                     type="button"
@@ -254,7 +207,7 @@ export function VoteTabContent() {
                     className="mt-6 inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black/85"
                   >
                     <RotateCcw className="h-4 w-4" />
-                    다시 보기
+                    다시 불러오기
                   </button>
                 </motion.div>
               )}
@@ -264,8 +217,8 @@ export function VoteTabContent() {
           <div className="mx-auto flex max-w-[520px] flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => handleVote(-1)}
-              disabled={!currentItem}
+              onClick={() => void handleVote('dislike')}
+              disabled={!currentItem || isVoting}
               className="inline-flex min-w-[132px] items-center justify-center gap-2 rounded-full border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ThumbsDown className="h-4 w-4 text-rose-500" />
@@ -274,16 +227,16 @@ export function VoteTabContent() {
             <button
               type="button"
               onClick={handleAddToWishlist}
-              disabled={!currentItem || wishlistIds.has(currentItem.item_id)}
+              disabled={!currentItem}
               className="inline-flex min-w-[176px] items-center justify-center gap-2 rounded-full bg-black px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5 hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
-              {currentItem && wishlistIds.has(currentItem.item_id) ? '위시리스트에 있음' : '내 위시 리스트에 추가하기'}
+              내 위시 리스트에 추가하기
             </button>
             <button
               type="button"
-              onClick={() => handleVote(1)}
-              disabled={!currentItem}
+              onClick={() => void handleVote('like')}
+              disabled={!currentItem || isVoting}
               className="inline-flex min-w-[132px] items-center justify-center gap-2 rounded-full border border-black/10 bg-white/80 px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ThumbsUp className="h-4 w-4 text-emerald-600" />
@@ -293,7 +246,7 @@ export function VoteTabContent() {
 
           <div className="mx-auto flex max-w-[520px] items-center justify-center gap-2 text-xs text-muted-foreground">
             <ChevronLeft className="h-4 w-4" />
-            버튼을 누를 때마다 카드가 다음 아이템으로 넘어갑니다.
+            버튼을 누를 때마다 다음 랜덤 아이템을 불러옵니다.
             <ChevronRight className="h-4 w-4" />
           </div>
 
@@ -341,11 +294,11 @@ export function VoteTabContent() {
                         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-700">
                             <ThumbsUp className="h-3 w-3" />
-                            예뻐요 {item.likeCount}
+                            예뻐요 {item.likes ?? 0}
                           </span>
                           <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-1 text-rose-700">
                             <ThumbsDown className="h-3 w-3" />
-                            별로에요 {item.dislikeCount}
+                            별로에요 {item.dislikes ?? 0}
                           </span>
                         </div>
                       </div>
@@ -363,7 +316,7 @@ export function VoteTabContent() {
           <div className="rounded-[1.75rem] border border-black/10 bg-black px-5 py-4 text-white shadow-[0_24px_60px_rgba(17,24,39,0.16)]">
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/55">Notes</p>
             <p className="mt-2 text-sm leading-6 text-white/80">
-              이 화면은 프론트엔드 전용 데모입니다. 실제 다른 유저 카드 피드는 이후 API가 연결되면 이 구조를 그대로 확장하면 됩니다.
+              랜덤 조회와 투표 카운터 갱신은 모두 backend/app/api/routes/content.py와 saved_posts 저장소를 통해 처리합니다.
             </p>
           </div>
         </aside>
