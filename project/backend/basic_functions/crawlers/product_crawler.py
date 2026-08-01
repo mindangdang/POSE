@@ -375,6 +375,7 @@ def parse_musinsa_html(soup):
             "image_url": json_data.get("thumbnailImageUrl"),
             "shop": "Musinsa",
             'is_available': not json_data.get("isOutOfStock"),
+            'gender': json_data.get("displayGenderText") or "UNKNOWN"
         }
     except Exception as e:
         print(f"[오류] 파싱 중 에러 발생: {e}")

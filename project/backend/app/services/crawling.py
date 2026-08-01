@@ -28,6 +28,7 @@ async def background_crawl_and_save(
             repos = get_repositories(conn)
             await repos.saved_posts.delete_by_id(item_id, user_id)
             await repos.saved_posts.insert_items_batch(user_id, post_url, extracted_items)
+            await repos.product_db.insert_items_batch(post_url, extracted_items)
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
 
@@ -83,6 +84,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     is_available = data.get("is_available", "Unknown")
     shop = data.get("source", "Unknown")
     category = data.get("category") or "PRODUCT"
+    gender = data.get("gender") or "UNKNOWN"
 
     return [
         {
@@ -93,6 +95,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "is_available": is_available,
             "image_url": raw_image_url or None,
             "shop": shop,
-            "source_url": post_url
+            "source_url": post_url,
+            'gender': gender
         }
     ]
