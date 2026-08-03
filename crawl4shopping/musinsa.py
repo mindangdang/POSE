@@ -270,3 +270,8 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
+'''
+python -m crawl4shopping.musinsa
+chromium --headless --disable-gpu --dump-dom https://www.google.com
+'''

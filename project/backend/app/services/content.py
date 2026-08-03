@@ -19,7 +19,7 @@ from project.backend.app.services.websocket import get_websocket_manager
 from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
 from project.backend.basic_functions.ai_service.utils import upload_generated_image
 from project.backend.basic_functions.crawlers.utils import fetch_image_task, normalize_url
-from project.backend.basic_functions.searching.utils import domain_map, fetch_from_single_site
+from project.backend.basic_functions.searching.utils import fetch_from_single_site
 
 FAIL_IMAGE_DIR = Path("project/backend/fail_images")
 FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ async def background_pse_search(
         model_semaphore = asyncio.Semaphore(4)
 
         print("여러 쇼핑몰 병렬 검색 및 실시간 전송 시작...")
-        target_domains = custom_domain_map if custom_domain_map is not None else domain_map
+        target_domains = custom_domain_map if custom_domain_map is not None else {"google.com": "구글"}
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             site_tasks = [

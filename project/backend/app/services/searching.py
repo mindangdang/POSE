@@ -28,7 +28,10 @@ async def process_site(user_id, manager, model_semaphore, serp_api_key, current_
     try:
         product_hierarchy_query = "(> products)"
         exclude_list_pages = "-inurl:search -inurl:category -inurl:snap"
-        final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
+        if not domain == "google.com":
+            final_query = f"{query} site:{domain} {product_hierarchy_query} {exclude_list_pages}"
+        else:
+            final_query = f"{query} {exclude_list_pages}"
         site_items = await fetch_from_single_site(client, final_query, domain, name, current_page, serp_api_key)
         ijn_val = (current_page - 1) // 3
         print(f"[DEBUG] '{name}' ({domain}) UI Page:{current_page} -> API ijn:{ijn_val} 결과:{len(site_items)}개")

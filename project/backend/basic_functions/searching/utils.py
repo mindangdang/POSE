@@ -2,14 +2,6 @@ import httpx
 import uuid
 from typing import Optional
 
-domain_map = {
-        "musinsa.com": "무신사",
-        "m.bunjang.co.kr" : "번개장터",
-        "fruitsfamily.com": "후루츠패밀리",
-        "zara.com": "자라",
-        "instagram.com": "인스타그램"
-    }
-
 async def fetch_from_single_site(
     client: httpx.AsyncClient, 
     query: str, 
