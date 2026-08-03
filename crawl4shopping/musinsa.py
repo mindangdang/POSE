@@ -1,58 +1,96 @@
 import asyncio
 import json
+import os
 import nodriver as uc
 from bs4 import BeautifulSoup
 import traceback
 from curl_cffi import requests as curl_requests
 import asyncpg
+from pgvector.asyncpg import register_vector
+from project.backend.basic_functions.utils import _extract_vector_sync, _extract_text_vector_sync
+from project.backend.app.manage.settings import get_settings
 
-# Neon DB 접속 정보
-neon_db_url = 'postgresql://neondb_owner:npg_Dro4bCcG1Ikd@ep-curly-base-aii29p7u-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require'
+neon_db_url = get_settings().neon_db_url
 
-def extract_records(items):
+if not neon_db_url:
+    raise ValueError(" .env 파일에 NEON_DB_URL이 설정되지 않았습니다. 접속 주소를 확인해주세요.")
+
+PROGRESS_FILE = "crawler_progress.json"
+
+def load_progress() -> set:
+    """이전 크롤링 진행 상태를 파일에서 불러옵니다."""
+    if os.path.exists(PROGRESS_FILE):
+        try:
+            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except Exception as e:
+            print(f"⚠️ 진행 상태 파일을 읽는 중 오류 발생: {e}. 새로 시작합니다.")
+            return set()
+    return set()
+
+def save_progress(completed_urls: set):
+    """현재까지 완료된 URL 목록을 파일에 저장합니다."""
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(list(completed_urls), f)
+
+async def extract_records(items):
     """API 응답 데이터를 DB 적재용 튜플 리스트로 변환"""
     records = []
     for item in items:
         source_url = item.get('goodsLinkUrl', None)
         title = item.get('goodsName')
-        title_vector = None
+        raw_title_vector = await _extract_text_vector_sync(title)
         price = str(item.get('price')) or str(item.get('normalPrice'))
         brand = item.get('brand')
         category = 'top'
         is_soldout = str(item.get('isSoldOut')) 
         image_url = item.get('thumbnail') or []
-        image_vector = None 
+        image_vector = await _extract_vector_sync(image_url)
         shop = 'musinsa'
         gender = item.get('displayGenderText')
 
+        if raw_title_vector and isinstance(raw_title_vector, list) and len(raw_title_vector) > 0 and isinstance(raw_title_vector[0], list):
+            title_vector = raw_title_vector[0]  # 2중 리스트인 경우 벗김
+        else:
+            title_vector = raw_title_vector
+
         records.append((
-            source_url, title, title_vector, price, brand, 
-            category, is_soldout, image_url, image_vector, shop, gender
+            source_url,    # $1
+            title,         # $2
+            price,         # $3
+            brand,         # $4
+            category,      # $5
+            is_soldout,    # $6
+            image_url,     # $7
+            image_vector,  # $8
+            shop,          # $9
+            gender,        # $10
+            title_vector   # $11
         ))
     return records
 
 async def db_worker(queue, pool):
     """소비자(Consumer): 큐에서 데이터를 꺼내어 DB에 비동기로 적재"""
+    # [수정됨] ON CONFLICT 기준을 title 단일로 변경 (DB에 UNIQUE 제약조건 필요)
     insert_query = """
         INSERT INTO product_db 
-        (source_url, title, title_vector, price, brand, category, is_soldout, image_url, image_vector, shop, gender)
+        (source_url, title, price, brand, category, is_soldout, image_url, image_vector, shop, gender, title_vector)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (source_url, title) DO NOTHING;
+        ON CONFLICT (title) DO NOTHING;
     """
     
     while True:
         batch_data = await queue.get()
         
-        # 종료 시그널(None)을 받으면 루프 종료
         if batch_data is None:
             queue.task_done()
             break
             
         try:
-            # 커넥션 풀에서 연결을 빌려와 executemany로 일괄 처리
             async with pool.acquire() as conn:
+                # [수정됨] register_vector는 pool 생성 시 setup에 위임했으므로 여기서 제거 (성능 대폭 향상)
                 await conn.executemany(insert_query, batch_data)
-            print(f"✅ DB 삽입 완료: {len(batch_data)}건 처리됨")
+            print(f"✅ DB 삽입 완료: {len(batch_data)}건 시도 (중복 제외 삽입됨)")
         except Exception as e:
             print(f"❌ DB 처리 중 에러 발생: {e}")
         finally:
@@ -77,7 +115,6 @@ async def crawler_worker(url, queue):
         browser = await uc.start(config=config)
     except Exception:
         traceback.print_exc()
-        # 크롤러 실패 시 DB 워커도 종료되도록 None 전달
         await queue.put(None)
         raise
 
@@ -122,8 +159,7 @@ async def crawler_worker(url, queue):
         await queue.put(None)
         return
 
-    # 1페이지 데이터 가공 및 큐에 전송
-    records = extract_records(items)
+    records = await extract_records(items)
     print(f"📥 [페이지 1] 수집 완료: {len(records)}개 -> DB 큐에 전송")
     await queue.put(records)
     
@@ -161,12 +197,10 @@ async def crawler_worker(url, queue):
             if not new_items:
                 break
                 
-            # 데이터 가공 후 DB 큐에 전송 (메모리에 누적하지 않음)
-            records = extract_records(new_items)
+            records = await extract_records(new_items)
             total_collected += len(records)
             print(f"📥 [페이지 {page_count}] {len(records)}개 수집 -> DB 큐에 전송")
             
-            # 큐가 꽉 차 있으면 DB 적재가 끝날 때까지 대기하게 됨 (Backpressure 역할)
             await queue.put(records)
 
             next_url = response_json["data"].get("pagination", {}).get("nextPageUrl")
@@ -178,42 +212,61 @@ async def crawler_worker(url, queue):
             traceback.print_exc()
             break
 
-    # 크롤링 루프 종료 후 소비자에게 종료 시그널 전달
     await queue.put(None)
-    print(f"\n🎉 [크롤링 완료] 총 {total_collected}개 상품 수집 완료. DB 잔여 작업 대기 중...")
+    print(f"\n🎉 [크롤링 완료] 단일 카테고리 총 {total_collected}개 상품 수집 완료. DB 잔여 작업 대기 중...")
+
+url_list = [
+    "https://www.musinsa.com/category/001001/goods?gf=A",
+    "https://www.musinsa.com/category/001002/goods?gf=A",
+    "https://www.musinsa.com/category/001010/goods?gf=A",
+    "https://www.musinsa.com/category/001003/goods?gf=A",
+    "https://www.musinsa.com/category/001011/goods?gf=A",
+    "https://www.musinsa.com/category/001006/goods?gf=A",
+    "https://www.musinsa.com/category/001005/goods?gf=A",
+    "https://www.musinsa.com/category/001008/goods?gf=A",
+    "https://www.musinsa.com/category/001004/goods?gf=A"
+]
+
+async def init_db_connection(conn):
+    """커넥션 풀이 생성될 때 최초 1회만 벡터 타입을 등록하기 위한 setup 함수"""
+    await register_vector(conn)
 
 async def main():
-    target_url = "https://www.musinsa.com/category/001003/goods?gf=A" # 피케/카라티
-    
-    # 큐 사이즈 제한 설정: 큐에 최대 5페이지 분량의 데이터만 대기 가능. 
-    # 크롤링이 DB 적재보다 너무 빠를 경우 메모리 폭발을 방지합니다.
-    queue = asyncio.Queue(maxsize=5)
-    
     print("🔌 DB 커넥션 풀 생성 중...")
-    # asyncpg 커넥션 풀 생성 (min_size, max_size로 연결 수 관리)
-    pool = await asyncpg.create_pool(neon_db_url, min_size=1, max_size=10)
+    # [수정됨] setup 매개변수를 이용해 커넥션 맺을 때 벡터 타입을 한번만 등록하도록 최적화
+    pool = await asyncpg.create_pool(
+        neon_db_url, 
+        min_size=1, 
+        max_size=10, 
+        setup=init_db_connection
+    )
     
+    # 진행 상태 로드
+    completed_urls = load_progress()
+    print(f"📊 현재까지 완료된 카테고리 수: {len(completed_urls)} / {len(url_list)}")
+
     try:
-        # 크롤러(생산자)와 DB 처리(소비자)를 동시에 실행
-        crawler_task = asyncio.create_task(crawler_worker(target_url, queue))
-        db_task = asyncio.create_task(db_worker(queue, pool))
-        
-        # 두 태스크가 모두 끝날 때까지 대기
-        await asyncio.gather(crawler_task, db_task)
-        print("✅ 모든 프로세스가 성공적으로 종료되었습니다.")
-        
+        for index, target_url in enumerate(url_list, start=1):
+            if target_url in completed_urls:
+                print(f"⏭️  [{index}/{len(url_list)}] 이미 처리된 URL입니다. 건너뜁니다: {target_url}")
+                continue
+                
+            print(f"\n▶️ [{index}/{len(url_list)}] 작업을 시작합니다: {target_url}")
+            queue = asyncio.Queue(maxsize=5)
+            
+            crawler_task = asyncio.create_task(crawler_worker(target_url, queue))
+            db_task = asyncio.create_task(db_worker(queue, pool))
+            
+            await asyncio.gather(crawler_task, db_task)
+            
+            # 크롤러와 DB 적재가 정상 종료되면 progress 업데이트
+            completed_urls.add(target_url)
+            save_progress(completed_urls)
+            print(f"✅ [{index}/{len(url_list)}] 처리가 성공적으로 종료되어 상태를 저장했습니다.\n")
+            
     finally:
-        # 종료 시 커넥션 풀 닫기
         await pool.close()
         print("🔌 DB 커넥션 풀 종료됨.")
 
 if __name__ == '__main__':
     asyncio.run(main())
-
-'''
-google-chrome \
---headless \
---no-sandbox \
---disable-gpu \
-about:blank
-'''
