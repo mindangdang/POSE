@@ -9,9 +9,9 @@ from typing import Optional
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
-from project.backend.basic_functions.utils import _extract_vector_sync
+from project.backend.basic_functions.utils import _extract_text_vector_sync, _extract_vector_sync
 from project.backend.app.manage.settings import IMAGE_DIR, get_settings
-from project.backend.app.repositories import Repositories
+from project.backend.app.repositories import Repositories, get_repositories
 from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.services.crawling import background_crawl_and_save
 from project.backend.app.services.searching import process_site
@@ -72,6 +72,53 @@ async def start_url_extraction(
     }
 
 
+async def stream_product_db_search_results(
+    app: FastAPI,
+    user_id: str,
+    query: str,
+    current_page: int,
+    limit: int = 20,
+):
+    """검색어 텍스트 임베딩으로 product_db title_vector 유사 상품을 스트리밍합니다."""
+    manager = get_websocket_manager(app)
+    query_vector = await _extract_text_vector_sync(query)
+    if query_vector and isinstance(query_vector[0], list):
+        query_vector = query_vector[0]
+
+    if not query_vector:
+        print(f"[DEBUG] product_db 검색 스킵: query='{query}' 텍스트 임베딩 실패")
+        return
+
+    pool = getattr(app.state, "db_pool", None)
+    if pool is None or pool.closed:
+        print("[DEBUG] product_db 검색 스킵: DB 풀이 초기화되지 않았습니다.")
+        return
+
+    conn = None
+    try:
+        conn = await pool.getconn()
+        repos = get_repositories(conn)
+        product_items = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+        print(f"[DEBUG] product_db title_vector 검색 결과:{len(product_items)}개")
+
+        if not manager:
+            return
+
+        for item in product_items:
+            payload = {
+                "type": "SEARCH_SUCCESS",
+                "results": [item],
+                "is_append": True,
+                "page": current_page,
+            }
+            await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
+    except Exception as exc:
+        print(f"product_db 벡터 검색 에러: {exc}")
+    finally:
+        if conn is not None:
+            await pool.putconn(conn)
+
+
 async def background_pse_search(
     app: FastAPI,
     user_id: str,
@@ -110,6 +157,11 @@ async def background_pse_search(
                 )
                 for domain, name in target_domains.items()
             ]
+            site_tasks.append(
+                asyncio.create_task(
+                    stream_product_db_search_results(app, user_id, query, current_page)
+                )
+            )
             await asyncio.gather(*site_tasks, return_exceptions=True)
 
         print("모든 쇼핑몰 검색 및 스트리밍 완료.")

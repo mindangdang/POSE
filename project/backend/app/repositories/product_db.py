@@ -89,6 +89,53 @@ class ProductDBRepository:
             print(f"DB 저장 중 에러 발생: {e}")
             raise e
 
+
+    async def search_by_title_vector(
+        self,
+        query_vector: list[float],
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """title_vector cosine similarity 기준으로 product_db 상품을 조회합니다."""
+        if not query_vector:
+            return []
+
+        vector_str = str(query_vector)
+        async with self.conn.cursor() as cursor:
+            await cursor.execute(
+                """
+                SELECT
+                    item_id,
+                    source_url,
+                    title,
+                    price,
+                    brand,
+                    category,
+                    is_soldout AS is_available,
+                    image_url,
+                    image_vector,
+                    shop,
+                    gender,
+                    1 - (title_vector <=> %s::vector) AS similarity
+                FROM product_db
+                WHERE title_vector IS NOT NULL
+                ORDER BY title_vector <=> %s::vector
+                LIMIT %s;
+                """,
+                (vector_str, vector_str, limit),
+            )
+            rows = await cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+
+        results = []
+        for row in rows:
+            item = self._normalize_item(dict(zip(columns, row)))
+            item["item_id"] = str(item.get("item_id"))
+            item["likes"] = None
+            item["dislikes"] = None
+            item["search_source"] = "product_db"
+            results.append(item)
+        return results
+
     @staticmethod
     def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
         if item.get("image_vector") is not None:
