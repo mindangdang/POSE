@@ -4,6 +4,7 @@ import { Plus, Loader2, X, Check, Search, Shirt, Box, Wind, Footprints, Gem, Col
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
+import { trackEvent } from '../../../lib/analytics';
 import { parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
@@ -207,6 +208,7 @@ export function FeedTabContent({
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete item');
+      void trackEvent({ action: 'REMOVE_WISHLIST', entityType: 'WISHLIST_ITEM', entityId: id });
       return id;
     },
     onMutate: async ({ id }) => {
@@ -333,8 +335,13 @@ export function FeedTabContent({
                 key={item.item_id}
                 item={item}
                 onDelete={handleDelete}
-                onSelect={() => onSelectItem(item)}
+                onSelect={() => {
+                  void trackEvent({ action: 'CLICK_ITEM', entityType: 'WISHLIST_ITEM', entityId: item.item_id, metadata: { title: item.title } });
+                  onSelectItem(item);
+                }}
                 onSearchSecondhand={onSearchSecondhand}
+                onLike={(likedItem) => void trackEvent({ action: 'LIKE', entityType: 'WISHLIST_ITEM', entityId: likedItem.item_id, metadata: { title: likedItem.title } })}
+                onDislike={(dislikedItem) => void trackEvent({ action: 'DISLIKE', entityType: 'WISHLIST_ITEM', entityId: dislikedItem.item_id, metadata: { title: dislikedItem.title } })}
               />
             ))}
           </motion.div>

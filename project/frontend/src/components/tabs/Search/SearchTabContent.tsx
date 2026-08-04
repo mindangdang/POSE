@@ -24,6 +24,7 @@ import {
   type Shop,
 } from './searchConfig';
 import { saveItemToFeed } from '../../../hooks/itemService';
+import { trackEvent } from '../../../lib/analytics';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
@@ -117,6 +118,16 @@ export function SearchTabContent({
     } else {
       if (!searchQuery.trim() && !pastedFile) return;
     }
+    void trackEvent({
+      action: 'SEARCH',
+      entityType: 'SITE',
+      metadata: {
+        mode: searchMode,
+        query: finalQuery,
+        selected_shops: Array.from(selectedShopNames),
+        is_detailed_search: isDetailedSearch,
+      },
+    });
     await search(finalQuery);
   };
 
@@ -135,6 +146,12 @@ export function SearchTabContent({
   const handleSaveToFeed = async (e: React.MouseEvent, item: SavedItem) => {
     e.stopPropagation();
     if (!user) return;
+    void trackEvent({
+      action: 'SAVE_WISHLIST',
+      entityType: 'SEARCH_RESULT',
+      entityId: item.item_id,
+      metadata: { title: item.title, source_url: item.source_url, shop: item.shop },
+    });
     await saveItemToFeed(user, item, onItemsChange, refreshItems);
   };
 
@@ -238,9 +255,15 @@ export function SearchTabContent({
           loadMore={loadMore}
           searchQuery={searchQuery}
           bottomRef={setBottomRef}
-          onSelectItem={setSelectedItem}
+          onSelectItem={(item) => {
+            void trackEvent({ action: 'CLICK_ITEM', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } });
+            setSelectedItem(item);
+          }}
           onSaveItem={handleSaveToFeed}
           onSearchSecondhand={handleSecondhandSearch}
+          onLikeItem={(item) => void trackEvent({ action: 'LIKE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } })}
+          onDislikeItem={(item) => void trackEvent({ action: 'DISLIKE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } })}
+          onPurchaseClick={(item) => void trackEvent({ action: 'CLICK_PURCHASE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title, url: item.image_url } })}
         />
       </motion.div>
 

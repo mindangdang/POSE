@@ -1,5 +1,6 @@
-from typing import Literal, Optional
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Any, Literal, Optional
+from pydantic import BaseModel, Field
 
 
 class UrlAnalyzeRequest(BaseModel):
@@ -26,3 +27,21 @@ class ManualItemCreate(BaseModel):
 
 class VoteRequest(BaseModel):
     direction: Literal["like", "dislike"]
+
+
+class EventLogCreate(BaseModel):
+    action: Literal[
+        "SEARCH",
+        "LIKE",
+        "DISLIKE",
+        "SAVE_WISHLIST",
+        "REMOVE_WISHLIST",
+        "CLICK_PURCHASE",
+        "CLICK_ITEM",
+        "VOTE_PRETTY",
+        "VOTE_UGLY",
+    ]
+    entity_type: Literal["SEARCH_RESULT", "VOTING_ITEM", "WISHLIST_ITEM", "SITE"]
+    entity_id: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)

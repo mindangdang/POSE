@@ -21,6 +21,9 @@ type SearchResultsProps = {
   onSelectItem: (item: SavedItem) => void;
   onSaveItem: (e: React.MouseEvent, item: SavedItem) => void | Promise<void>;
   onSearchSecondhand: (title: string) => Promise<void>;
+  onLikeItem?: (item: SavedItem) => void;
+  onDislikeItem?: (item: SavedItem) => void;
+  onPurchaseClick?: (item: SavedItem) => void;
 };
 
 export function SearchResults({
@@ -38,6 +41,9 @@ export function SearchResults({
   onSelectItem,
   onSaveItem,
   onSearchSecondhand,
+  onLikeItem,
+  onDislikeItem,
+  onPurchaseClick,
 }: SearchResultsProps) {
   if (!(displayActivity || searchResults.length > 0)) {
     return null;
@@ -115,6 +121,9 @@ export function SearchResults({
                 onClick={() => onSelectItem(item)}
                 onSave={onSaveItem}
                 onSearchSecondhand={onSearchSecondhand}
+                onLike={onLikeItem}
+                onDislike={onDislikeItem}
+                onPurchaseClick={onPurchaseClick}
               />
             ))}
           </AnimatePresence>

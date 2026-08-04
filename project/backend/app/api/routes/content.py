@@ -14,7 +14,7 @@ from typing import Optional
 
 from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest, VoteRequest
+from project.backend.app.schemas.requests import EventLogCreate, ManualItemCreate, SearchRequest, UrlAnalyzeRequest, VoteRequest
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.content import (
     delete_item_for_user,
@@ -30,6 +30,19 @@ from project.backend.app.services.content import (
 from project.backend.app.services.websocket import get_websocket_manager
 
 router = APIRouter()
+
+
+@router.post("/events")
+async def log_user_event(
+    payload: EventLogCreate,
+    current_user: dict = Depends(get_current_user),
+    repos: Repositories = Depends(get_repos),
+):
+    event_id = await repos.event_logs.create(
+        user_id=str(current_user.get("sub")),
+        event=payload,
+    )
+    return {"status": "success", "event_id": event_id}
 
 @router.post("/crawl_product")
 async def extract_and_save_url(

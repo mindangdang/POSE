@@ -10,6 +10,27 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
             async with conn.cursor() as cursor:
                 await cursor.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS event_logs (
+                            id SERIAL PRIMARY KEY,
+                            user_id VARCHAR(50) NOT NULL,
+                            action VARCHAR(50) NOT NULL,
+                            entity_type VARCHAR(50) NOT NULL,
+                            entity_id TEXT,
+                            metadata JSONB DEFAULT '{}'::jsonb,
+                            occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            );
+                    """
+                )
+                await cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_event_logs_user_action ON event_logs (user_id, action);"
+                )
+                await cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_event_logs_entity ON event_logs (entity_type, entity_id);"
+                )
+
+                await cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS saved_posts (
                             item_id SERIAL PRIMARY KEY,
                             user_id VARCHAR(50) NOT NULL,
