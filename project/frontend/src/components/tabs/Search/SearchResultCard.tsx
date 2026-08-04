@@ -14,6 +14,7 @@ type SearchResultCardProps = {
   onSearchSecondhand?: (title: string) => void;
   onLike?: (item: SavedItem) => void;
   onDislike?: (item: SavedItem) => void;
+  onPurchaseClick?: (item: SavedItem) => void;
 };
 
 export function SearchResultCard({
@@ -24,6 +25,7 @@ export function SearchResultCard({
   onSearchSecondhand,
   onLike,
   onDislike,
+  onPurchaseClick,
 }: SearchResultCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemInforms(item);
@@ -139,7 +141,10 @@ export function SearchResultCard({
               href={item.image_url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPurchaseClick?.(item);
+              }}
               className="inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs text-muted-foreground hover:text-black transition-colors w-fit"
             >
               <ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> View Source

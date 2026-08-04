@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Heart, Plus, RotateCcw, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Plus, RotateCcw, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiJson } from '../../../lib/api';
+import { trackEvent } from '../../../lib/analytics';
 import { getDisplayImageUrl } from '../../../lib/imageUrl';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
@@ -57,6 +58,12 @@ export function VoteTabContent() {
         body: JSON.stringify({ direction }),
       });
 
+      void trackEvent({
+        action: direction === 'like' ? 'VOTE_PRETTY' : 'VOTE_UGLY',
+        entityType: 'VOTING_ITEM',
+        entityId: currentItem.item_id,
+        metadata: { title: currentItem.title },
+      });
       setStatusMessage(direction === 'like' ? '예뻐요로 투표했습니다.' : '별로에요로 투표했습니다.');
       await loadRandomItem();
     } catch (error) {
@@ -74,7 +81,24 @@ export function VoteTabContent() {
       if (prev.some((item) => item.item_id === currentItem.item_id)) return prev;
       return [currentItem, ...prev];
     });
+    void trackEvent({
+      action: 'SAVE_WISHLIST',
+      entityType: 'VOTING_ITEM',
+      entityId: currentItem.item_id,
+      metadata: { title: currentItem.title },
+    });
     setStatusMessage('내 위시리스트에 추가했습니다.');
+  };
+
+  const handleRemoveFromWishlist = (item: VoteItem) => {
+    setWishlistItems((prev) => prev.filter((wishlistItem) => wishlistItem.item_id !== item.item_id));
+    void trackEvent({
+      action: 'REMOVE_WISHLIST',
+      entityType: 'WISHLIST_ITEM',
+      entityId: item.item_id,
+      metadata: { title: item.title },
+    });
+    setStatusMessage('위시리스트에서 삭제했습니다.');
   };
 
   const handleRestart = () => {
@@ -288,7 +312,14 @@ export function VoteTabContent() {
                             <p className="truncate text-[10px] font-bold uppercase tracking-[0.22em] text-black/45">{item.brand}</p>
                             <h4 className="truncate text-sm font-semibold text-foreground">{item.title}</h4>
                           </div>
-                          <Heart className="mt-0.5 h-4 w-4 shrink-0 text-black" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromWishlist(item)}
+                            className="mt-0.5 rounded-full p-1 text-black/60 transition-colors hover:bg-black/10 hover:text-black"
+                            aria-label="위시리스트에서 삭제"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
