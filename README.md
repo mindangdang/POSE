@@ -10,6 +10,6 @@ User preference based Digging Web with AI.
 
 -backend: typing 'just backend' to terminal
 
--frontend: typing 'just frontend' to another terminal
+-frontend: typing 'just frontend' to another terminal. if you're a first time, run "cd project/frontend npm install"
 
 -gpu_server: typing 'just gpu_server' to another terminal (Before turn on the server, if you never have downloaded model or runnig code, then go to download.py)
