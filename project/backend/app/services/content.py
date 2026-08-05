@@ -6,7 +6,7 @@ import re
 import traceback
 from pathlib import Path
 from typing import Optional
-
+from deep_translator import GoogleTranslator
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from project.backend.basic_functions.utils import _extract_text_vector_sync, _extract_vector_sync
@@ -78,10 +78,11 @@ async def stream_product_db_search_results(
     query: str,
     current_page: int,
     limit: int = 20,
-):
+): # TODO: 사이트 선택시 그 사이트의 상품만 가져오게 
     """검색어 텍스트 임베딩으로 product_db title_vector 유사 상품을 스트리밍합니다."""
     manager = get_websocket_manager(app)
-    query_vector = await _extract_text_vector_sync(query)
+    translated_query = GoogleTranslator(source='auto', target='en').translate(query)
+    query_vector = await _extract_text_vector_sync(translated_query)
     if query_vector and isinstance(query_vector[0], list):
         query_vector = query_vector[0]
 
