@@ -11,16 +11,16 @@ import type { TabKey } from './components/common/Header';
 
 // Add Logo Font
 const fontStyles = `
-  @import url('https://api.fontshare.com/v2/css?f[]=new-title@400,700,800&display=swap');
+  @import url('https://api.fontshare.com/v2/css?f[]=satoshi@500,700,900&f[]=new-title@400,700,800&display=swap');
   @font-face {
     font-family: 'Pretendard-Regular';
     src: url('https://fastly.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
     font-weight: 400;
     font-style: normal;
   }
-  .font-logo { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
-  .editorial-heading { font-family: 'New Title', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.01em; }
-  body { font-family: 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background-color: #ffffff; color: #000000; }
+  .font-logo { font-family: 'New Title', 'Satoshi', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 700; letter-spacing: 0.02em; }
+  .editorial-heading { font-family: 'Satoshi', 'Pretendard-Regular', ui-sans-serif, system-ui, sans-serif; font-weight: 900; letter-spacing: -0.045em; }
+  body { font-family: 'Satoshi', 'Pretendard-Regular', ui-sans-serif, system-ui, -apple-system, sans-serif; font-weight: 500; background: radial-gradient(circle at 10% 0%, rgba(214, 245, 255, 0.9), transparent 28%), radial-gradient(circle at 90% 10%, rgba(255, 220, 245, 0.85), transparent 26%), #f7f8fb; color: #101014; }
   .leather-header {
     background-color: #080808;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
@@ -55,7 +55,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_12%_0%,rgba(210,245,255,0.9),transparent_30%),radial-gradient(circle_at_92%_8%,rgba(255,220,245,0.82),transparent_28%),linear-gradient(180deg,#fbfcff_0%,#f1f4f8_100%)] font-sans">
       <Header
         onLogout={handleLogoutClick}
         currentTab={currentTab}
