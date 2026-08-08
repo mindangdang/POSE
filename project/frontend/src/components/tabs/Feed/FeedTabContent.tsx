@@ -1,14 +1,16 @@
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Loader2, X, Check, Search, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Plus, X, Shirt, Box, Wind, Footprints, Gem, Columns2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch, apiJson } from '../../../lib/api';
 import { trackEvent } from '../../../lib/analytics';
 import { parseItemInforms } from '../../../lib/iteminform';
 import type { SavedItem } from '../../../types/item';
 import { useAuth } from '../../../hooks/useAuth';
+import { saveItemToFeed } from '../../../hooks/itemService';
 import { FeedClosetFolders } from './FeedClosetFolders';
+import { FeedAddItemModal } from './FeedAddItemModal';
 import { FeedItemCard } from './FeedItemCard';
 import { FeedToolbar } from './FeedToolbar';
 
@@ -28,25 +30,10 @@ export function FeedTabContent({
   refreshItems,
 }: FeedTabContentProps) {
   const { user } = useAuth();
-  const [newUrl, setNewUrl] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>('FOLDER');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
-  const [isAddButtonSuccess, setIsAddButtonSuccess] = useState(false);
-  const [sessionId, setSessionId] = useState('');
   const [searchQuery, setSearchQuery] = useState("");
-  const addSuccessTimeout = useRef<number | null>(null);
-
-  // 컴포넌트 언마운트 시 타이머 클리어
-  useEffect(() => {
-    return () => {
-      if (addSuccessTimeout.current) {
-        window.clearTimeout(addSuccessTimeout.current);
-      }
-    };
-  }, []);
-
-  const isFeedAddItem = (item: SavedItem) => parseItemInforms(item)?._source === 'feed_add';
 
   const categories = useMemo(() => ['FOLDER', 'All'], []);
 
@@ -59,7 +46,6 @@ export function FeedTabContent({
     [items, selectedCategory]
   );
 
-  // 🌟 [버그 수정] 옷장 UI 조건식 매칭을 위해 폴더 카테고리명을 애초에 소문자로 포맷팅하여 수집합니다.
   const folders = useMemo(() => {
     const subs = new Set<string>();
     filteredItems.forEach((item) => {
@@ -76,7 +62,6 @@ export function FeedTabContent({
     if (selectedCategory === 'All') {
       baseItems = filteredItems;
     } else if (selectedCategory === 'FOLDER') {
-      // 🌟 [안전장치] 폴더 검사 시 소문자 비교 처리로 버그 예방
       baseItems = currentFolder ? filteredItems.filter((item) => item.category?.toLowerCase() === currentFolder) : [];
     } else {
       baseItems = filteredItems.filter((item) => item.category === selectedCategory);
@@ -101,9 +86,6 @@ export function FeedTabContent({
 
     return baseItems;
   }, [filteredItems, currentFolder, selectedCategory, searchQuery]);
-
-  // 🌟 [삭제 완료] 무한 루프 및 강제 리다이렉션을 유발하던 selectedCategory 추적 이펙트를 제거했습니다.
-  // 탭 전환 시 상위나 다른 경로에서 상태를 관리하도록 핸들러에서 직접 리셋하는 편이 안전합니다.
 
   // 웹소켓 이펙트
   useEffect(() => {
@@ -171,35 +153,7 @@ export function FeedTabContent({
         window.clearTimeout(reconnectTimeout);
       }
     };
-    // 🌟 [의존성 수정] 빠져있던 refreshItems 함수를 채워주어 동기화 버그를 원천 차단합니다.
   }, [user, onItemsChange, refreshItems]);
-
-  // 아이템 추가 Mutation
-  const addItemMutation = useMutation({
-    mutationFn: async ({ nextUrl, userId }: { nextUrl: string; userId: string | number }) => {
-      const data = await apiJson<any>('/api/crawl_product', {
-        method: 'POST',
-        body: JSON.stringify({ url: nextUrl, user_id: userId })
-      });
-      return { nextUrl, data };
-    },
-    onSuccess: ({ data }) => {
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        onItemsChange((prev) => [...data.data, ...prev]);
-      }
-      setNewUrl("");
-      
-      setIsAddButtonSuccess(true);
-      addSuccessTimeout.current = window.setTimeout(() => {
-        setIsAddButtonSuccess(false);
-        setIsAddPanelOpen(false);
-      }, 1500);
-    },
-    onError: (error: Error) => {
-      console.error(error);
-      alert(`분석 요청 중 오류가 발생했습니다: ${error.message}`);
-    },
-  });
 
   // 아이템 삭제 Mutation
   const deleteItemMutation = useMutation({
@@ -225,17 +179,24 @@ export function FeedTabContent({
     },
   });
 
-  const handleAddItem = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!newUrl || !user) return;
-    try {
-      await addItemMutation.mutateAsync({
-        nextUrl: newUrl,
-        userId: user.id,
-      });
-    } catch (err) {
-      // 오류는 Mutation onError에서 처리됨
-    }
+  const handleSelectAddItem = async (item: SavedItem) => {
+    if (!user) return;
+
+    void trackEvent({
+      action: 'SAVE_WISHLIST',
+      entityType: 'SEARCH_RESULT',
+      entityId: item.item_id,
+      metadata: { title: item.title, source_url: item.source_url, shop: item.shop },
+    });
+
+    await saveItemToFeed(user, item, onItemsChange, refreshItems);
+  };
+
+  const handleRequestCrawl = async (url: string) => {
+    await apiJson('/api/crawl_product', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   };
 
   const handleDelete = async (id: number) => {
@@ -348,7 +309,7 @@ export function FeedTabContent({
         </AnimatePresence>
 
         {/* Empty State for All tab */}
-        {selectedCategory === 'All' && items.length === 0 && !addItemMutation.isPending && (
+        {selectedCategory === 'All' && items.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-muted flex items-center justify-center mb-4 sm:mb-6">
               <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
@@ -374,93 +335,12 @@ export function FeedTabContent({
         )}
       </div>
 
-      {/* Add Item Modal */}
-      <AnimatePresence>
-        {isAddPanelOpen && (
-          <>
-            <motion.div
-              key="add-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-              onClick={() => setIsAddPanelOpen(false)}
-            />
-            <motion.div
-              key="add-popup"
-              initial={{ opacity: 0, scale: 0.96, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            >
-              <div className="w-full max-w-md rounded-2xl sm:rounded-3xl bg-background p-6 sm:p-8 shadow-2xl border border-border">
-                <div className="flex items-center justify-between mb-6 sm:mb-8">
-                  <h3 className="editorial-heading text-xl sm:text-2xl text-foreground">추가하기</h3>
-                  <button
-                    onClick={() => setIsAddPanelOpen(false)}
-                    className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleAddItem} className="space-y-4 sm:space-y-5">
-                  <div>
-                    <label className="block text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 sm:mb-2">
-                      URL 혹은 상품이름
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="https://... 또는 상품명 입력"
-                      value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      className="w-full h-10 sm:h-12 px-3 sm:px-4 bg-muted rounded-xl text-xs sm:text-sm font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black/20"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={addItemMutation.isPending || (!newUrl && !isAddButtonSuccess)}
-                    className={`w-full h-10 sm:h-12 flex items-center justify-center rounded-full text-xs sm:text-sm font-semibold transition-all ${
-                      isAddButtonSuccess
-                        ? 'bg-green-600 text-white'
-                        : 'bg-black text-white hover:opacity-90 disabled:opacity-50'
-                    }`}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.span
-                        key={addItemMutation.isPending ? 'pending' : isAddButtonSuccess ? 'success' : 'idle'}
-                        initial={{ opacity: 0, y: 3 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -3 }}
-                        transition={{ duration: 0.12, ease: 'easeOut' }}
-                        className="flex items-center gap-2"
-                      >
-                        {addItemMutation.isPending ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Adding...
-                          </>
-                        ) : isAddButtonSuccess ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Added!
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4" />
-                            Add Item
-                          </>
-                        )}
-                      </motion.span>
-                    </AnimatePresence>
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <FeedAddItemModal
+        isOpen={isAddPanelOpen}
+        onClose={() => setIsAddPanelOpen(false)}
+        onSelectItem={handleSelectAddItem}
+        onRequestCrawl={handleRequestCrawl}
+      />
     </motion.div>
   );
 }

@@ -10,9 +10,9 @@ class SavedPostsRepository:
     conn: Any
 
     _INSERT_COLUMNS = (
-        "user_id, source_url, category, title, price, brand, is_available, image_url, image_vector, shop"
+        "user_id, source_url, category, title, price, brand, is_available, image_url, image_vector, shop, likes, dislikes"
     )
-    _INSERT_PLACEHOLDERS = ", ".join(["%s"] * 10)
+    _INSERT_PLACEHOLDERS = ", ".join(["%s"] * 12)
     _BASE_INSERT_QUERY = f"INSERT INTO saved_posts ({_INSERT_COLUMNS}) VALUES ({_INSERT_PLACEHOLDERS})"
 
     async def delete_by_id(self, item_id: int, user_id: str) -> None:

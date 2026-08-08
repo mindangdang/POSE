@@ -9,23 +9,26 @@ export async function saveItemToFeed(
   refreshItems: () => Promise<void>
 ): Promise<void> {
   try {
+    const payload = {
+      ...(typeof item.item_id === 'number' && Number.isFinite(item.item_id)
+        ? { item_id: item.item_id }
+        : {}),
+      title: item.title,
+      source_url: item.source_url,
+      category: item.category,
+      image_url: item.image_url,
+      image_vector: item.image_vector,
+      price: item.price,
+      brand: item.brand,
+      is_available: item.is_available,
+      shop: item.shop,
+      likes: item.likes,
+      dislikes: item.dislikes,
+    };
+
     await apiJson('/api/items/manual', {
       method: 'POST',
-      body: JSON.stringify({
-        item_id: item.item_id,
-        user_id: user.id,
-        title: item.title,
-        source_url: item.source_url,
-        category: item.category,
-        image_url: item.image_url,
-        image_vector: item.image_vector,
-        price: item.price,
-        brand: item.brand,
-        is_available: item.is_available,
-        shop: item.shop,
-        likes: item.likes,
-        dislikes: item.dislikes
-      })
+      body: JSON.stringify(payload)
     });
 
     onItemsChange((prev: SavedItem[]) => [{ ...item, id: Date.now(), created_at: new Date().toISOString() }, ...prev]);

@@ -3,6 +3,7 @@ from typing import Any
 from project.backend.basic_functions.utils import _extract_vector_sync
 
 
+
 @dataclass(slots=True)
 class ProductDBRepository:
     conn: Any
@@ -122,6 +123,58 @@ class ProductDBRepository:
                 LIMIT %s;
                 """,
                 (vector_str, vector_str, limit),
+            )
+            rows = await cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+
+        results = []
+        for row in rows:
+            item = self._normalize_item(dict(zip(columns, row)))
+            item["item_id"] = str(item.get("item_id"))
+            item["likes"] = None
+            item["dislikes"] = None
+            item["search_source"] = "product_db"
+            results.append(item)
+        return results
+
+    async def search_by_title_text(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """title 텍스트가 일치하거나 유사한 product_db 상품을 조회합니다."""
+        normalized_query = (query or "").strip()
+        if not normalized_query:
+            return []
+
+        like_query = f"%{normalized_query}%"
+        async with self.conn.cursor() as cursor:
+            await cursor.execute(
+                """
+                SELECT
+                    item_id,
+                    source_url,
+                    title,
+                    price,
+                    brand,
+                    category,
+                    is_soldout AS is_available,
+                    image_url,
+                    image_vector,
+                    shop,
+                    gender,
+                    CASE
+                        WHEN lower(title) = lower(%s) THEN 0
+                        WHEN lower(title) LIKE lower(%s) || '%%' THEN 1
+                        WHEN lower(title) LIKE '%%' || lower(%s) || '%%' THEN 2
+                        ELSE 3
+                    END AS text_rank
+                FROM product_db
+                WHERE lower(title) LIKE lower(%s)
+                ORDER BY text_rank, created_at DESC
+                LIMIT %s;
+                """,
+                (normalized_query, normalized_query, normalized_query, like_query, limit),
             )
             rows = await cursor.fetchall()
             columns = [desc[0] for desc in cursor.description]

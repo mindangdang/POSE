@@ -120,6 +120,61 @@ async def stream_product_db_search_results(
             await pool.putconn(conn)
 
 
+async def search_product_db_by_title(
+    app: FastAPI,
+    query: str,
+    limit: int = 12,
+):
+    normalized_query = (query or "").strip()
+    if not normalized_query:
+        return []
+
+    pool = getattr(app.state, "db_pool", None)
+    if pool is None or pool.closed:
+        print("[DEBUG] product_db title search skipped: DB pool is not initialized.")
+        return []
+
+    translated_query = normalized_query
+    try:
+        translated_query = GoogleTranslator(source='auto', target='en').translate(normalized_query) or normalized_query
+    except Exception:
+        translated_query = normalized_query
+
+    conn = None
+    try:
+        query_vector = await _extract_text_vector_sync(translated_query)
+        if query_vector and isinstance(query_vector[0], list):
+            query_vector = query_vector[0]
+
+        conn = await pool.getconn()
+        repos = get_repositories(conn)
+
+        text_matches = await repos.product_db.search_by_title_text(normalized_query, limit=limit)
+        vector_matches = []
+        if query_vector:
+            vector_matches = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+
+        merged: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for item in text_matches + vector_matches:
+            item_id = str(item.get("item_id") or "")
+            if not item_id or item_id in seen_ids:
+                continue
+            seen_ids.add(item_id)
+            merged.append(item)
+            if len(merged) >= limit:
+                break
+
+        return merged
+    except Exception as exc:
+        print(f"product_db title search error: {exc}")
+        return []
+    finally:
+        if conn is not None:
+            await pool.putconn(conn)
+
+
 async def background_pse_search(
     app: FastAPI,
     user_id: str,
@@ -268,7 +323,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repos
         vector_source = image_url or normalized_image_url
         vector_list = await _extract_vector_sync(vector_source) if vector_source else None
         vector_str = str(vector_list) if vector_list else None
-
+        
         await repos.saved_posts.create_manual_item(
             item_id=getattr(payload, "item_id", None),
             user_id=str(user_id),

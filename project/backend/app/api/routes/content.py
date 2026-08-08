@@ -21,6 +21,7 @@ from project.backend.app.services.content import (
     enqueue_pse_search,
     get_random_item_for_user,
     list_items_for_user,
+    search_product_db_by_title,
     resolve_image_path,
     save_manual_item as save_manual_item_for_user,
     search_with_lens,
@@ -59,6 +60,21 @@ async def extract_and_save_url(
         repos=repos,
         user_id=str(current_user.get("sub")),
     )
+
+
+@router.get("/product_db/search")
+async def search_product_db(
+    query: str,
+    request: Request,
+    limit: int = 12,
+    current_user: dict = Depends(get_current_user),
+):
+    results = await search_product_db_by_title(app=request.app, query=query, limit=limit)
+    return {
+        "success": True,
+        "results": results,
+        "count": len(results),
+    }
 
 ######################################################################################
 

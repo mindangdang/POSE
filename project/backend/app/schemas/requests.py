@@ -14,15 +14,18 @@ class SearchRequest(BaseModel):
 
 
 class ManualItemCreate(BaseModel):
-    user_id: str | int
+    item_id: int | None = None
+    user_id: str | int | None = None
     category: str
     source_url: Optional[str] = None
     image_url: Optional[str] = ""
     title: Optional[str] = None
-    price: Optional[str] = None
+    price: str | int | float | None = None
     brand: Optional[str] = None
-    is_available: Optional[str] = None
+    is_available: bool | str | None = None
     shop: Optional[str] = None
+    likes: int | str | None = None
+    dislikes: int | str | None = None
 
 
 class VoteRequest(BaseModel):
