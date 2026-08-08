@@ -16,7 +16,7 @@ class SearchRequest(BaseModel):
 class ManualItemCreate(BaseModel):
     user_id: str | int
     category: str
-    url: str
+    source_url: Optional[str] = None
     image_url: Optional[str] = ""
     title: Optional[str] = None
     price: Optional[str] = None

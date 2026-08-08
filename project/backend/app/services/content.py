@@ -272,7 +272,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repos
         await repos.saved_posts.create_manual_item(
             item_id=getattr(payload, "item_id", None),
             user_id=str(user_id),
-            source_url=payload.url,
+            source_url=payload.source_url,
             category=payload.category,
             title=payload.title,
             image_url=image_url,
