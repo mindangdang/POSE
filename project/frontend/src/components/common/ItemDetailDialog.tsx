@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ExternalLink, X, Sparkles, Loader2 } from 'lucide-react';
+import { ExternalLink, X, Sparkles, Loader2, Plus } from 'lucide-react';
 
 import { apiFetch } from '../../lib/api';
 import { getDisplayImageUrl } from '../../lib/imageUrl';
@@ -19,9 +19,11 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
   const lastRequestedItemKey = useRef<string>('');
   const [similarItems, setSimilarItems] = useState<any[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
 
   useEffect(() => {
     setViewedItem(item);
+    setIsWishlisted(false);
   }, [item]);
 
   const displayItem = viewedItem || item;
@@ -149,7 +151,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
             >
               <div className="bg-background w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] border border-border">
                 {/* Image Section */}
-                <div className="md:w-1/2 bg-muted flex items-center justify-center overflow-hidden p-6">
+                <div className="md:w-1/2 bg-muted flex flex-col items-center justify-center gap-4 overflow-hidden p-6">
                   <img
                     src={displayImageUrl}
                     alt={displayItem.category}
@@ -169,6 +171,14 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
                       }
                     }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setIsWishlisted(true)}
+                    className={`flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-bold transition-colors ${isWishlisted ? 'bg-pink-500 text-white' : 'bg-black text-white hover:bg-black/85'}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {isWishlisted ? '위시리스트에 추가됨' : '위시리스트에 추가하기'}
+                  </button>
                 </div>
 
                 {/* Content Section */}

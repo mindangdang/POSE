@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Heart, Plus } from 'lucide-react';
+import { useState } from 'react';
 import { getDisplayImageUrl, getFallbackImageUrl } from '../../lib/imageUrl';
 import { getItemTitle, parseItemInforms } from '../../lib/iteminform';
 import type { SavedItem } from '../../types/item';
@@ -12,6 +13,7 @@ type ProductGridProps = {
   onSaveItem?: (item: SavedItem) => void;
   onDeleteItem?: (id: number) => void;
   showSaveButton?: boolean;
+  isSaved?: boolean;
 };
 
 export function ProductGrid({
@@ -23,6 +25,8 @@ export function ProductGrid({
   onDeleteItem,
   showSaveButton = false,
 }: ProductGridProps) {
+  const [savedIds, setSavedIds] = useState<number[]>([]);
+
   if (items.length === 0) {
     return null;
   }
@@ -49,7 +53,8 @@ export function ProductGrid({
               key={item.item_id}
               item={item}
               onSelect={() => onSelectItem(item)}
-              onSave={onSaveItem ? () => onSaveItem(item) : undefined}
+              onSave={onSaveItem ? () => { onSaveItem(item); setSavedIds((prev) => (prev.includes(item.item_id) ? prev : [...prev, item.item_id])); } : undefined}
+              isSaved={savedIds.includes(item.item_id)}
               onDelete={onDeleteItem ? () => onDeleteItem(item.item_id) : undefined}
               showSaveButton={showSaveButton}
             />
@@ -66,9 +71,10 @@ type ProductCardProps = {
   onSave?: () => void;
   onDelete?: () => void;
   showSaveButton?: boolean;
+  isSaved?: boolean;
 };
 
-function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: ProductCardProps) {
+function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton, isSaved = false }: ProductCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemInforms(item);
   const priceInfo = facts?.price_info;
@@ -115,10 +121,10 @@ function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton }: Produ
         {showSaveButton && onSave && (
           <button
             onClick={handleSave}
-            className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-background/90 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-background shadow-sm"
+            className={`absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full transition-all duration-200 shadow-sm ${isSaved ? 'bg-pink-500 text-white opacity-100' : 'bg-background/90 opacity-0 group-hover:opacity-100 hover:bg-background text-foreground'}`}
             aria-label="Save to feed"
           >
-            <Plus className="w-4 h-4 text-foreground" />
+            <Plus className="w-4 h-4" />
           </button>
         )}
 
