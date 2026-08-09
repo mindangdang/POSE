@@ -1,4 +1,4 @@
-import { ChevronDown, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -11,16 +11,8 @@ type HeaderProps = {
   onAboutClick?: () => void;
 };
 
-const categories = [
-  { id: 'search', label: 'Window', hasDropdown: false },
-  { id: 'feed', label: 'Closet', hasDropdown: false },
-  { id: 'vote', label: 'Vote', hasDropdown: false },
-];
-
 export function Header({
   onLogout,
-  currentTab,
-  onTabChange,
   onAboutClick,
 }: HeaderProps) {
   const { user } = useAuth();
@@ -34,28 +26,6 @@ export function Header({
         <a href="/" className="flex items-center gap-2 shrink-0">
           <span className="text-2xl font-logo tracking-wide text-white transition-colors duration-1000">RoomShow</span>
         </a>
-
-        {/* Center Navigation - Desktop */}
-        <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => onTabChange(category.id as TabKey)}
-              className={`relative text-lg font-logo tracking-widest uppercase transition-all duration-1000 ${
-                currentTab === category.id
-                  ? 'text-white'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              {category.label}
-              {currentTab === category.id && (
-                <span 
-                  className="absolute -bottom-[19px] sm:-bottom-[21px] left-0 right-0 h-0.5 bg-white rounded-full transition-all duration-1000" 
-                />
-              )}
-            </button>
-          ))}
-        </nav>
 
         {/* Right Navigation - Desktop */}
         <nav className="hidden md:flex items-center gap-4 lg:gap-6">
@@ -97,27 +67,6 @@ export function Header({
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 right-0 bg-black border-b border-white/10 shadow-lg">
-          {/* Mobile Categories */}
-          <nav className="py-2">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  onTabChange(category.id as TabKey);
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-4 py-3 font-logo text-lg uppercase tracking-widest ${
-                  currentTab === category.id
-                    ? 'text-white bg-white/10'
-                    : 'text-white/60'
-                }`}
-              >
-                {category.label}
-                {category.hasDropdown && <ChevronDown className="w-4 h-4" />}
-              </button>
-            ))}
-          </nav>
-
           {/* Mobile User Actions */}
           <div className="border-t border-border p-4 space-y-2">
             {user ? (
