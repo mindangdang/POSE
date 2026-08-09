@@ -50,12 +50,12 @@ export function ProductGrid({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {items.map((item) => (
             <ProductCard
-              key={item.item_id}
+              key={item.product_id}
               item={item}
               onSelect={() => onSelectItem(item)}
-              onSave={onSaveItem ? () => { onSaveItem(item); setSavedIds((prev) => (prev.includes(item.item_id) ? prev : [...prev, item.item_id])); } : undefined}
-              isSaved={savedIds.includes(item.item_id)}
-              onDelete={onDeleteItem ? () => onDeleteItem(item.item_id) : undefined}
+              onSave={onSaveItem ? () => { onSaveItem(item); setSavedIds((prev) => (prev.includes(item.product_id) ? prev : [...prev, item.product_id])); } : undefined}
+              isSaved={savedIds.includes(item.product_id)}
+              onDelete={onDeleteItem ? () => onDeleteItem(item.product_id) : undefined}
               showSaveButton={showSaveButton}
             />
           ))}

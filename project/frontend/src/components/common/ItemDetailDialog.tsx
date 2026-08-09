@@ -47,7 +47,7 @@ export function ItemDetailDialog({ item, onOpenChange }: ItemDetailDialogProps) 
     if (!displayItem) return '';
     const image = displayItem.image_url || '';
     const source = displayItem.source_url || '';
-    const id = displayItem.item_id ?? '';
+    const id = displayItem.product_id ?? '';
     return `${id}:${image}:${source}`;
   }, [displayItem]);
 

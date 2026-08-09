@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import time
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -30,21 +31,19 @@ async def start_url_extraction(
     app: FastAPI,
     background_tasks: BackgroundTasks,
     repos: Repositories,
-    user_id: str,
+    user_id: int,
 ):
     post_url = payload.url
 
 
-    try:
-        new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
-    except Exception as exc:
-        await repos.saved_posts.conn.rollback()
-        raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {exc}") from exc
+    # Processing rows do not belong in the normalized saved_posts join table.
+    # A negative transient ID is only used to reconcile the websocket response.
+    placeholder_id = -time.time_ns()
 
     background_tasks.add_task(
         background_crawl_and_save,
         app,
-        new_item_id,
+        placeholder_id,
         user_id,
         post_url,
     )
@@ -52,15 +51,15 @@ async def start_url_extraction(
     return {
         "success": True,
         "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
-        "item_id": new_item_id,
+        "product_id": placeholder_id,
         "data": [
             {   
-                "item_id": new_item_id,
+                "product_id": placeholder_id,
                 "title": "PROCESSING",
                 "price": None,
                 "brand": None,
                 "category": "PROCESSING",
-                "is_available": None,
+                "is_soldout": None,
                 "image_url": "",
                 "image_vector": None,
                 "shop": None,
@@ -74,7 +73,7 @@ async def start_url_extraction(
 
 async def stream_product_db_search_results(
     app: FastAPI,
-    user_id: str,
+    user_id: int,
     query: str,
     current_page: int,
     limit: int = 20,
@@ -158,10 +157,10 @@ async def search_product_db_by_title(
         seen_ids: set[str] = set()
 
         for item in text_matches + vector_matches:
-            item_id = str(item.get("item_id") or "")
-            if not item_id or item_id in seen_ids:
+            product_id = str(item.get("product_id") or "")
+            if not product_id or product_id in seen_ids:
                 continue
-            seen_ids.add(item_id)
+            seen_ids.add(product_id)
             merged.append(item)
             if len(merged) >= limit:
                 break
@@ -177,7 +176,7 @@ async def search_product_db_by_title(
 
 async def background_pse_search(
     app: FastAPI,
-    user_id: str,
+    user_id: int,
     query: str,
     page: Optional[int],
     custom_domain_map: Optional[dict] = None,
@@ -311,7 +310,7 @@ async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) ->
     return await upload_generated_image(generated_image_bytes)
 
 
-async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repositories):
+async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repositories):
     try:
         normalized_image_url = normalize_url(payload.image_url)
         if normalized_image_url.startswith(("http://", "https://")):
@@ -324,28 +323,36 @@ async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repos
         vector_list = await _extract_vector_sync(vector_source) if vector_source else None
         vector_str = str(vector_list) if vector_list else None
         
-        await repos.saved_posts.create_manual_item(
-            item_id=getattr(payload, "item_id", None),
-            user_id=str(user_id),
-            source_url=payload.source_url,
-            category=payload.category,
-            title=payload.title,
-            image_url=image_url,
-            image_vector=vector_str,
-            price=payload.price,
-            brand=payload.brand,
-            is_available=payload.is_available,
-            shop=payload.shop,
-            likes=payload.likes,
-            dislikes=payload.dislikes,
+        product_id = payload.product_id
+        if product_id is None or not await repos.product_db.exists(product_id):
+            product_id = await repos.product_db.insert_item(
+                payload.source_url or image_url or payload.title or "manual",
+                {
+                    "title": payload.title,
+                    "price": payload.price,
+                    "brand": payload.brand,
+                    "category": payload.category,
+                    "is_soldout": payload.is_soldout,
+                    "image_url": image_url,
+                    "image_vector": vector_str,
+                    "shop": payload.shop,
+                },
+            )
+
+        await repos.saved_posts.create(
+            product_id=product_id,
+            user_id=user_id,
+            likes=int(payload.likes or 0),
+            dislikes=int(payload.dislikes or 0),
         )
+        await repos.saved_posts.conn.commit()
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
         await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc
 
 
-async def list_items_for_user(user_id: str, repos: Repositories):
+async def list_items_for_user(user_id: int, repos: Repositories):
     try:
         items = await repos.saved_posts.list_feed_items(user_id)
         print(f"프론트로 보내는 아이템 수: {len(items)}")
@@ -355,7 +362,7 @@ async def list_items_for_user(user_id: str, repos: Repositories):
         return []
 
 
-async def get_random_item_for_user(user_id: str, repos: Repositories):
+async def get_random_item_for_user(user_id: int, repos: Repositories):
     try:
         return await repos.saved_posts.get_random_feed_item(user_id)
     except Exception as exc:
@@ -363,9 +370,9 @@ async def get_random_item_for_user(user_id: str, repos: Repositories):
         return None
 
 
-async def vote_for_item(item_id: int, user_id: str, direction: str, repos: Repositories):
+async def vote_for_item(product_id: int, user_id: int, direction: str, repos: Repositories):
     try:
-        voted_item = await repos.saved_posts.increment_vote_count(item_id, user_id, direction)
+        voted_item = await repos.saved_posts.increment_vote_count(product_id, user_id, direction)
         if voted_item is None:
             raise HTTPException(status_code=404, detail="투표할 아이템을 찾을 수 없습니다.")
 
@@ -379,9 +386,9 @@ async def vote_for_item(item_id: int, user_id: str, direction: str, repos: Repos
         raise HTTPException(status_code=500, detail=f"투표 처리 실패: {exc}") from exc
 
 
-async def delete_item_for_user(item_id: int, user_id: str, repos: Repositories):
+async def delete_item_for_user(product_id: int, user_id: int, repos: Repositories):
     try:
-        await repos.saved_posts.delete_by_id(item_id, user_id)
+        await repos.saved_posts.delete_by_id(product_id, user_id)
         await repos.saved_posts.conn.commit()
         return {"success": True}
     except Exception as exc:

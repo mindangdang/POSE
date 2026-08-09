@@ -189,7 +189,7 @@ export function FeedAddItemModal({
 
                           return (
                             <motion.button
-                              key={item.item_id}
+                              key={item.product_id}
                               type="button"
                               whileHover={{ y: -1 }}
                               onClick={() => void handleSelectItem(item)}

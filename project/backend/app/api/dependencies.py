@@ -18,9 +18,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        try:
+            payload["sub"] = int(user_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication credentials",
+            ) from exc
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")

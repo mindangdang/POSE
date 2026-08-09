@@ -11,7 +11,7 @@ from project.backend.app.schemas.requests import EventLogCreate
 class EventLogsRepository:
     conn: Any
 
-    async def create(self, *, user_id: str, event: EventLogCreate) -> int | None:
+    async def create(self, *, user_id: int, event: EventLogCreate) -> int | None:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """

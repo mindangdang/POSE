@@ -4,6 +4,8 @@ requests
 python-dotenv
 psycopg[pool,binary]
 pgvector==0.2.5
+SQLAlchemy>=2.0,<2.1
+alembic>=1.17,<2
 fastapi
 pydantic-settings
 beautifulsoup4

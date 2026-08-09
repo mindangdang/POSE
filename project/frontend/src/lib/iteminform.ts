@@ -4,12 +4,12 @@ type ParsedFacts = Record<string, unknown>;
 
 export function parseItemInforms(item: SavedItem): ParsedFacts {
   return {
-    item_id: item.item_id,
+    product_id: item.product_id,
     title: item.title,
     price: item.price,
     brand: item.brand,
     category: item.category,
-    is_available: item.is_available,
+    is_soldout: item.is_soldout,
     shop: item.shop,
     source_url: item.source_url,
     image_url: item.image_url,

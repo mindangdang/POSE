@@ -50,15 +50,16 @@ async def upload_generated_image(image_bytes: bytes) -> str:
     print(f"업로드 완료! 퍼블릭 URL: {public_url}")
     return public_url
 
-async def fetch_user_data_from_neon(user_id: str):
+async def fetch_user_data_from_neon(user_id: int):
     try:
         async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
                 query = """
-                    SELECT category, title, image_url,image_vector
-                    FROM saved_posts
-                    WHERE user_id = %s
-                    ORDER BY created_at DESC
+                    SELECT p.category, p.title, p.image_url, p.image_vector
+                    FROM saved_posts AS sp
+                    JOIN product_db AS p ON p.id = sp.product_id
+                    WHERE sp.user_id = %s
+                    ORDER BY sp.created_at DESC
                     LIMIT 10;
                 """
                 await cur.execute(query, (user_id,))
@@ -95,4 +96,3 @@ async def get_image_bytes(url_or_filename: str) -> bytes | None:
         return None
 
     return await asyncio.to_thread(read_local)
-

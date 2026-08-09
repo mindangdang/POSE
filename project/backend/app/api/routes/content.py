@@ -40,7 +40,7 @@ async def log_user_event(
     repos: Repositories = Depends(get_repos),
 ):
     event_id = await repos.event_logs.create(
-        user_id=str(current_user.get("sub")),
+        user_id=int(current_user["sub"]),
         event=payload,
     )
     return {"status": "success", "event_id": event_id}
@@ -58,7 +58,7 @@ async def extract_and_save_url(
         app=request.app,
         background_tasks=background_tasks,
         repos=repos,
-        user_id=str(current_user.get("sub")),
+        user_id=int(current_user["sub"]),
     )
 
 
@@ -89,7 +89,7 @@ async def run_serpapi_search(
         payload=payload,
         app=request.app,
         background_tasks=background_tasks,
-        user_id=str(current_user.get("sub")),
+        user_id=int(current_user["sub"]),
     )
 
 @router.post("/lens")
@@ -107,7 +107,7 @@ async def save_manual_item(
 ):
     return await save_manual_item_for_user(
         payload=payload,
-        user_id=str(current_user.get("sub")),
+        user_id=int(current_user["sub"]),
         repos=repos,
     )
     
@@ -118,7 +118,7 @@ async def get_items(
     current_user: dict = Depends(get_current_user), 
     repos: Repositories = Depends(get_repos)
 ):
-    return await list_items_for_user(user_id=str(current_user.get("sub")), repos=repos)
+    return await list_items_for_user(user_id=int(current_user["sub"]), repos=repos)
 
 
 @router.get("/vote/random")
@@ -126,37 +126,41 @@ async def get_random_vote_item(
     current_user: dict = Depends(get_current_user),
     repos: Repositories = Depends(get_repos),
 ):
-    return await get_random_item_for_user(user_id=str(current_user.get("sub")), repos=repos)
+    return await get_random_item_for_user(user_id=int(current_user["sub"]), repos=repos)
 
 
-@router.post("/vote/{item_id}/vote")
+@router.post("/vote/{product_id}/vote")
 async def vote_item(
-    item_id: int,
+    product_id: int,
     payload: VoteRequest,
     current_user: dict = Depends(get_current_user),
     repos: Repositories = Depends(get_repos),
 ):
     return await vote_for_item(
-        item_id=item_id,
-        user_id=str(current_user.get("sub")),
+        product_id=product_id,
+        user_id=int(current_user["sub"]),
         direction=payload.direction,
         repos=repos,
     )
 
-@router.delete("/items/{item_id}")
+@router.delete("/items/{product_id}")
 async def delete_item(
-    item_id: int, 
+    product_id: int,
     current_user: dict = Depends(get_current_user), 
     repos: Repositories = Depends(get_repos)
 ):
-    return await delete_item_for_user(item_id=item_id, user_id=str(current_user.get("sub")), repos=repos)
+    return await delete_item_for_user(
+        product_id=product_id,
+        user_id=int(current_user["sub"]),
+        repos=repos,
+    )
 
 @router.get("/images/{image_path:path}")
 async def serve_image(image_path: str):
     return FileResponse(path=resolve_image_path(image_path))
 
 @router.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
     manager = get_websocket_manager(websocket.app)
     await manager.connect(websocket, user_id)
     try:

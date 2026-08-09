@@ -21,21 +21,18 @@ def initialize_database():
         print(" saved_posts 테이블 생성 중...")
         create_table_query = """
         CREATE TABLE IF NOT EXISTS saved_posts (
-            item_id SERIAL PRIMARY KEY,
-            user_id VARCHAR(50) NOT NULL,
-            source_url TEXT,
-            title TEXT,
-            price TEXT,
-            brand TEXT,
-            category VARCHAR(20),
-            is_available TEXT,
-            image_url TEXT,
-            image_vector VECTOR(768), 
-            shop TEXT,
-            likes TEXT,
-            dislikes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(source_url, title)
+            product_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            likes INTEGER NOT NULL DEFAULT 0,
+            dislikes INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, product_id),
+            CONSTRAINT fk_saved_posts_product_id_product_db
+                FOREIGN KEY (product_id) REFERENCES product_db(id)
+                ON DELETE CASCADE,
+            CONSTRAINT fk_saved_posts_user_id_users
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE CASCADE
         );
         """
         cursor.execute(create_table_query)

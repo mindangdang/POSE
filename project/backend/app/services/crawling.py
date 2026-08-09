@@ -7,11 +7,11 @@ from project.backend.app.repositories import get_repositories
 
 async def background_crawl_and_save(
     app: FastAPI,
-    item_id: int,
-    user_id: str,
+    placeholder_id: int,
+    user_id: int,
     post_url: str,
 ):
-    print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {item_id})")
+    print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {placeholder_id})")
     manager = getattr(app.state, "websocket_manager", None)
 
     try:
@@ -25,9 +25,11 @@ async def background_crawl_and_save(
 
         async with app.state.db_pool.connection() as conn:
             repos = get_repositories(conn)
-            await repos.saved_posts.delete_by_id(item_id, user_id)
-            await repos.saved_posts.insert_items_batch(user_id, post_url, extracted_items)
-            await repos.product_db.insert_items_batch(post_url, extracted_items)
+            product_ids = await repos.product_db.insert_items_batch(post_url, extracted_items)
+            await repos.saved_posts.insert_items_batch(
+                user_id=user_id,
+                product_ids=product_ids,
+            )
             await conn.commit()
             print("[백그라운드] 작업 및 DB 저장 완료")
 
@@ -39,7 +41,7 @@ async def background_crawl_and_save(
         if manager:
             payload = {
                 "type": "CRAWL_SUCCESS",
-                "placeholder_id": item_id,
+                "placeholder_id": placeholder_id,
                 "items": new_items,
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
@@ -51,17 +53,17 @@ async def background_crawl_and_save(
         try:
             async with app.state.db_pool.connection() as conn:
                 repos = get_repositories(conn)
-                await repos.saved_posts.delete_by_id(item_id,user_id)
+                await repos.saved_posts.delete_by_id(placeholder_id, user_id)
                 await conn.commit()
-                print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
+                print(f"[백그라운드] 에러로 인해 임시 아이템({placeholder_id}) 삭제 완료")
 
         except Exception as db_exc:
-            print(f"[백그라운드] 임시 아이템({item_id}) 삭제 실패: {db_exc}")
+            print(f"[백그라운드] 임시 아이템({placeholder_id}) 삭제 실패: {db_exc}")
 
         if manager:
             payload = {
                 "type": "CRAWL_ERROR",
-                "placeholder_id": item_id,
+                "placeholder_id": placeholder_id,
                 "message": "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
@@ -79,7 +81,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
     brand = data.get("brand", "Unknown")
     title = data.get("title", "Unknown")
-    is_available = data.get("is_available", "Unknown")
+    is_soldout = data.get("is_soldout")
     shop = data.get("source", "Unknown")
     category = data.get("category") or "PRODUCT"
     gender = data.get("gender") or "UNKNOWN"
@@ -90,7 +92,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
             "price": f"{data.get('price', '')} {data.get('currency', '')}".strip() or None,
             "brand": brand,
             "category": category,
-            "is_available": is_available,
+            "is_soldout": is_soldout if isinstance(is_soldout, bool) else None,
             "image_url": raw_image_url or None,
             "shop": shop,
             "source_url": post_url,

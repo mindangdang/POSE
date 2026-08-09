@@ -149,7 +149,7 @@ export function SearchTabContent({
     void trackEvent({
       action: 'SAVE_WISHLIST',
       entityType: 'SEARCH_RESULT',
-      entityId: item.item_id,
+      entityId: item.product_id,
       metadata: { title: item.title, source_url: item.source_url, shop: item.shop },
     });
     await saveItemToFeed(user, item, onItemsChange, refreshItems);
@@ -256,14 +256,14 @@ export function SearchTabContent({
           searchQuery={searchQuery}
           bottomRef={setBottomRef}
           onSelectItem={(item) => {
-            void trackEvent({ action: 'CLICK_ITEM', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } });
+            void trackEvent({ action: 'CLICK_ITEM', entityType: 'SEARCH_RESULT', entityId: item.product_id, metadata: { title: item.title } });
             setSelectedItem(item);
           }}
           onSaveItem={handleSaveToFeed}
           onSearchSecondhand={handleSecondhandSearch}
-          onLikeItem={(item) => void trackEvent({ action: 'LIKE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } })}
-          onDislikeItem={(item) => void trackEvent({ action: 'DISLIKE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title } })}
-          onPurchaseClick={(item) => void trackEvent({ action: 'CLICK_PURCHASE', entityType: 'SEARCH_RESULT', entityId: item.item_id, metadata: { title: item.title, url: item.image_url } })}
+          onLikeItem={(item) => void trackEvent({ action: 'LIKE', entityType: 'SEARCH_RESULT', entityId: item.product_id, metadata: { title: item.title } })}
+          onDislikeItem={(item) => void trackEvent({ action: 'DISLIKE', entityType: 'SEARCH_RESULT', entityId: item.product_id, metadata: { title: item.title } })}
+          onPurchaseClick={(item) => void trackEvent({ action: 'CLICK_PURCHASE', entityType: 'SEARCH_RESULT', entityId: item.product_id, metadata: { title: item.title, url: item.image_url } })}
         />
       </motion.div>
 
