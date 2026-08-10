@@ -77,11 +77,12 @@ type ProductCardProps = {
 function ProductCard({ item, onSelect, onSave, onDelete, showSaveButton, isSaved = false }: ProductCardProps) {
   const title = getItemTitle(item);
   const facts = parseItemInforms(item);
-  const priceInfo = facts?.price_info;
-  const priceText =
-    typeof priceInfo === 'string' || typeof priceInfo === 'number'
-      ? String(priceInfo)
-      : undefined;
+  const priceText = item.price == null
+    ? undefined
+    : new Intl.NumberFormat('ko-KR', {
+        style: 'currency',
+        currency: item.currency || 'KRW',
+      }).format(item.price);
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();

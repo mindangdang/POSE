@@ -17,8 +17,8 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                             entity_type VARCHAR(50) NOT NULL,
                             entity_id TEXT,
                             metadata JSONB DEFAULT '{}'::jsonb,
-                            occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             CONSTRAINT fk_event_logs_user_id_users
                                 FOREIGN KEY (user_id) REFERENCES users(id)
                                 ON DELETE SET NULL
@@ -39,7 +39,7 @@ async def init_db(db_pool: AsyncConnectionPool) -> None:
                             user_id INTEGER NOT NULL,
                             likes INTEGER NOT NULL DEFAULT 0,
                             dislikes INTEGER NOT NULL DEFAULT 0,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             PRIMARY KEY (user_id, product_id),
                             CONSTRAINT fk_saved_posts_product_id_product_db
                                 FOREIGN KEY (product_id) REFERENCES product_db(id)

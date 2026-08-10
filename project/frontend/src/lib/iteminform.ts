@@ -7,6 +7,7 @@ export function parseItemInforms(item: SavedItem): ParsedFacts {
     product_id: item.product_id,
     title: item.title,
     price: item.price,
+    currency: item.currency,
     brand: item.brand,
     category: item.category,
     is_soldout: item.is_soldout,

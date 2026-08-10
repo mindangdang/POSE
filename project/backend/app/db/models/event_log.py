@@ -46,12 +46,12 @@ class EventLog(Base):
         server_default=text("'{}'::jsonb"),
     )
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.current_timestamp(),
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         nullable=False,
         server_default=func.current_timestamp(),
     )

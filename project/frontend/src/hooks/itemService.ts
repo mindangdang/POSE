@@ -19,6 +19,7 @@ export async function saveItemToFeed(
       image_url: item.image_url,
       image_vector: item.image_vector,
       price: item.price,
+      currency: item.currency,
       brand: item.brand,
       is_soldout: item.is_soldout,
       shop: item.shop,

@@ -33,6 +33,9 @@ class Product(Base):
     title: Mapped[str] = mapped_column(Text)
     title_vector: Mapped[list[float] | None] = mapped_column(Vector(768))
     price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="KRW"
+    )
     brand: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(20))
     is_soldout: Mapped[bool | None] = mapped_column(Boolean)
@@ -49,7 +52,7 @@ class Product(Base):
     )
     gender: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         server_default=func.current_timestamp(),
     )
     saved_posts: Mapped[list["SavedPost"]] = relationship(

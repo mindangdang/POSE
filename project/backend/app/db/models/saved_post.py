@@ -42,7 +42,7 @@ class SavedPost(Base):
     likes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     dislikes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         server_default=func.current_timestamp(),
     )
     user: Mapped["User"] = relationship(back_populates="saved_posts")

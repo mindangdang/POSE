@@ -89,7 +89,8 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     return [
         {
             "title": title,
-            "price": f"{data.get('price', '')} {data.get('currency', '')}".strip() or None,
+            "price": data.get("price"),
+            "currency": data.get("currency") or "KRW",
             "brand": brand,
             "category": category,
             "is_soldout": is_soldout if isinstance(is_soldout, bool) else None,

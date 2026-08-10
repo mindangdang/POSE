@@ -57,6 +57,7 @@ async def start_url_extraction(
                 "product_id": placeholder_id,
                 "title": "PROCESSING",
                 "price": None,
+                "currency": "KRW",
                 "brand": None,
                 "category": "PROCESSING",
                 "is_soldout": None,
@@ -330,6 +331,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
                 {
                     "title": payload.title,
                     "price": payload.price,
+                    "currency": payload.currency,
                     "brand": payload.brand,
                     "category": payload.category,
                     "is_soldout": payload.is_soldout,

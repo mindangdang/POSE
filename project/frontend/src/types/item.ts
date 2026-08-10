@@ -2,6 +2,7 @@ export interface SavedItem {
   product_id: number;
   title: string;
   price: number | null;
+  currency: string;
   brand: string | null;
   category: string;
   is_soldout: boolean | null;

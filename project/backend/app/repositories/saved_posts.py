@@ -14,6 +14,7 @@ class SavedPostsRepository:
         p.source_url,
         p.title,
         p.price,
+        p.currency,
         p.brand,
         p.category,
         p.is_soldout,

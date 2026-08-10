@@ -217,7 +217,12 @@ export function FeedAddItemModal({
                                   </span>
                                 </div>
                                 <p className="mt-2 text-xs font-medium text-muted-foreground line-clamp-2">
-                                  {item.price ? `${item.price}원` : '가격 정보 없음'}
+                                  {item.price == null
+                                    ? '가격 정보 없음'
+                                    : new Intl.NumberFormat('ko-KR', {
+                                        style: 'currency',
+                                        currency: item.currency || 'KRW',
+                                      }).format(item.price)}
                                 </p>
                               </div>
                             </motion.button>

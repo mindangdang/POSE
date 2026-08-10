@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -25,7 +25,7 @@ class EventLogsRepository:
                     event.entity_type,
                     event.entity_id,
                     Jsonb(event.metadata or {}),
-                    event.timestamp or datetime.utcnow(),
+                    event.timestamp or datetime.now(timezone.utc),
                 ),
             )
             row = await cursor.fetchone()

@@ -67,12 +67,13 @@ class ProductDBRepository:
             await cursor.execute(
                 """
                 INSERT INTO product_db (
-                    source_url, title, price, brand, category, is_soldout,
+                    source_url, title, price, currency, brand, category, is_soldout,
                     image_url, image_vector, shop_id, gender
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url, title) DO UPDATE SET
                     price = EXCLUDED.price,
+                    currency = EXCLUDED.currency,
                     brand = EXCLUDED.brand,
                     category = EXCLUDED.category,
                     is_soldout = EXCLUDED.is_soldout,
@@ -86,6 +87,7 @@ class ProductDBRepository:
                     source_url,
                     item.get("title") or "Unknown",
                     self._get_price(item.get("price")),
+                    self._get_currency(item.get("currency")),
                     item.get("brand") or "UNKNOWN",
                     item.get("category") or "PRODUCT",
                     self._get_is_soldout(item),
@@ -125,7 +127,7 @@ class ProductDBRepository:
             await cursor.execute(
                 """
                 SELECT
-                    p.id AS product_id, source_url, title, price, brand, category,
+                    p.id AS product_id, source_url, title, price, currency, brand, category,
                     is_soldout, image_url, image_vector, s.name AS shop, gender,
                     1 - (title_vector <=> %s::vector) AS similarity
                 FROM product_db AS p
@@ -155,7 +157,7 @@ class ProductDBRepository:
             await cursor.execute(
                 """
                 SELECT
-                    p.id AS product_id, source_url, title, price, brand, category,
+                    p.id AS product_id, source_url, title, price, currency, brand, category,
                     is_soldout, image_url, image_vector, s.name AS shop, gender,
                     CASE
                         WHEN lower(title) = lower(%s) THEN 0
@@ -182,6 +184,16 @@ class ProductDBRepository:
             return "UNKNOWN"
         normalized = value.strip().lower()
         return ProductDBRepository._SHOP_ALIASES.get(normalized, "UNKNOWN")
+
+    @staticmethod
+    def _get_currency(value: Any) -> str:
+        if not isinstance(value, str):
+            return "KRW"
+        normalized = value.strip().upper()
+        aliases = {"₩": "KRW", "KRW": "KRW", "$": "USD", "USD": "USD", "¥": "JPY", "JPY": "JPY", "€": "EUR", "EUR": "EUR"}
+        if normalized in aliases:
+            return aliases[normalized]
+        return normalized if re.fullmatch(r"[A-Z]{3}", normalized) else "KRW"
 
     @staticmethod
     def _get_price(value: Any) -> Decimal | None:

@@ -67,13 +67,13 @@ async def google_auth(request: GoogleAuthRequest, conn=Depends(get_db_connection
     async with conn.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
             """
-            INSERT INTO users (user_id, email, name, profile_image)
+            INSERT INTO users (oauth_user_id, email, name, profile_image)
             VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id) DO UPDATE SET
+            ON CONFLICT (oauth_user_id) DO UPDATE SET
                 email = EXCLUDED.email,
                 name = EXCLUDED.name,
                 profile_image = EXCLUDED.profile_image
-            RETURNING id, user_id, email, name, profile_image
+            RETURNING id, oauth_user_id, email, name, profile_image
             """,
             (oauth_user_id, email, name, picture),
         )
@@ -89,10 +89,10 @@ async def guest_auth(conn=Depends(get_db_connection)):
     async with conn.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
             """
-            INSERT INTO users (user_id, email, name, profile_image)
+            INSERT INTO users (oauth_user_id, email, name, profile_image)
             VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id, user_id, email, name, profile_image
+            ON CONFLICT (oauth_user_id) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id, oauth_user_id, email, name, profile_image
             """,
             ("guest", "guest@pose.local", "Guest", None),
         )
@@ -112,7 +112,7 @@ async def get_current_user_info(
     async with conn.cursor(row_factory=dict_row) as cursor:
         await cursor.execute(
             """
-            SELECT id, user_id, email, name, profile_image
+            SELECT id, oauth_user_id, email, name, profile_image
             FROM users
             WHERE id = %s
             """,
