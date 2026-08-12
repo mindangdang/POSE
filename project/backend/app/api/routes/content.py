@@ -14,7 +14,7 @@ from typing import Optional
 
 from project.backend.app.manage.database import get_repos
 from project.backend.app.repositories import Repositories
-from project.backend.app.schemas.requests import EventLogCreate, ManualItemCreate, SearchRequest, UrlAnalyzeRequest, VoteRequest
+from project.backend.app.schemas.requests import EventLogCreate, ManualItemCreate, SearchRequest, UrlAnalyzeRequest
 from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.content import (
     delete_item_for_user,
@@ -26,7 +26,6 @@ from project.backend.app.services.content import (
     save_manual_item as save_manual_item_for_user,
     search_with_lens,
     start_url_extraction,
-    vote_for_item,
 )
 from project.backend.app.services.websocket import get_websocket_manager
 
@@ -128,20 +127,6 @@ async def get_random_vote_item(
 ):
     return await get_random_item_for_user(user_id=int(current_user["sub"]), repos=repos)
 
-
-@router.post("/vote/{product_id}/vote")
-async def vote_item(
-    product_id: int,
-    payload: VoteRequest,
-    current_user: dict = Depends(get_current_user),
-    repos: Repositories = Depends(get_repos),
-):
-    return await vote_for_item(
-        product_id=product_id,
-        user_id=int(current_user["sub"]),
-        direction=payload.direction,
-        repos=repos,
-    )
 
 @router.delete("/items/{product_id}")
 async def delete_item(

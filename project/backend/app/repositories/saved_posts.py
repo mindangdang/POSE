@@ -22,8 +22,6 @@ class SavedPostsRepository:
         p.image_vector,
         s.name AS shop,
         p.gender,
-        sp.likes,
-        sp.dislikes,
         sp.created_at
     """
 
@@ -32,17 +30,15 @@ class SavedPostsRepository:
         *,
         user_id: int,
         product_id: int,
-        likes: int = 0,
-        dislikes: int = 0,
     ) -> None:
         async with self.conn.cursor() as cursor:
             await cursor.execute(
                 """
-                INSERT INTO saved_posts (user_id, product_id, likes, dislikes)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO saved_posts (user_id, product_id)
+                VALUES (%s, %s)
                 ON CONFLICT (user_id, product_id) DO NOTHING
                 """,
-                (user_id, product_id, likes, dislikes),
+                (user_id, product_id),
             )
 
     async def insert_items_batch(
@@ -112,32 +108,6 @@ class SavedPostsRepository:
             )
             item = await cursor.fetchone()
         return jsonable_encoder(self._normalize_item(item)) if item else None
-
-    async def increment_vote_count(
-        self,
-        product_id: int,
-        user_id: int,
-        direction: str,
-    ) -> dict[str, Any] | None:
-        if direction not in {"like", "dislike"}:
-            raise ValueError("direction must be either 'like' or 'dislike'")
-
-        vote_column = "likes" if direction == "like" else "dislikes"
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                f"""
-                UPDATE saved_posts
-                SET {vote_column} = {vote_column} + 1
-                WHERE product_id = %s AND user_id = %s
-                RETURNING product_id
-                """,
-                (product_id, user_id),
-            )
-            updated = await cursor.fetchone()
-
-        if not updated:
-            return None
-        return await self._get_joined_item(product_id=product_id, user_id=user_id)
 
     async def _get_joined_item(
         self,

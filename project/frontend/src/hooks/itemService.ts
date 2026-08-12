@@ -23,8 +23,6 @@ export async function saveItemToFeed(
       brand: item.brand,
       is_soldout: item.is_soldout,
       shop: item.shop,
-      likes: item.likes,
-      dislikes: item.dislikes,
     };
 
     await apiJson('/api/items/manual', {

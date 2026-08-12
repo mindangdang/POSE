@@ -25,14 +25,6 @@ class ManualItemCreate(BaseModel):
     brand: Optional[str] = None
     is_soldout: bool | None = None
     shop: Optional[str] = None
-    likes: int | None = None
-    dislikes: int | None = None
-
-
-class VoteRequest(BaseModel):
-    direction: Literal["like", "dislike"]
-
-
 class EventLogCreate(BaseModel):
     action: Literal[
         "SEARCH",

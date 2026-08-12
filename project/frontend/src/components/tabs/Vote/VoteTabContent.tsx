@@ -78,8 +78,8 @@ export function VoteTabContent({ items, userPosts, onCreatePost, composerSignal 
       imageUrl: item.image_url,
       item,
       comments: [],
-      likes: item.likes ?? 0,
-      dislikes: item.dislikes ?? 0,
+      likes: 0,
+      dislikes: 0,
     })),
     [items],
   );

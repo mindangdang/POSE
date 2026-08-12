@@ -12,7 +12,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,10 +25,9 @@ if TYPE_CHECKING:
 
 class Product(Base):
     __tablename__ = "product_db"
-    __table_args__ = (UniqueConstraint("source_url", "title"),)
 
     id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True)
-    source_url: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str] = mapped_column(Text, unique=True)
     title: Mapped[str] = mapped_column(Text)
     title_vector: Mapped[list[float] | None] = mapped_column(Vector(768))
     price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))

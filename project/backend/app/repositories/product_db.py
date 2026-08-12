@@ -71,7 +71,8 @@ class ProductDBRepository:
                     image_url, image_vector, shop_id, gender
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (source_url, title) DO UPDATE SET
+                ON CONFLICT (source_url) DO UPDATE SET
+                    title = EXCLUDED.title,
                     price = EXCLUDED.price,
                     currency = EXCLUDED.currency,
                     brand = EXCLUDED.brand,
@@ -227,7 +228,5 @@ class ProductDBRepository:
         if item.get("image_vector") is not None:
             item["image_vector"] = str(item["image_vector"])
         item["product_id"] = str(item.get("product_id"))
-        item["likes"] = None
-        item["dislikes"] = None
         item["search_source"] = "product_db"
         return item

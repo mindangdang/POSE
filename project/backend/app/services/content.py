@@ -64,8 +64,6 @@ async def start_url_extraction(
                 "image_url": "",
                 "image_vector": None,
                 "shop": None,
-                "likes": None,
-                "dislikes": None,
                 "source_url": post_url,
             }
         ],
@@ -344,8 +342,6 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
         await repos.saved_posts.create(
             product_id=product_id,
             user_id=user_id,
-            likes=int(payload.likes or 0),
-            dislikes=int(payload.dislikes or 0),
         )
         await repos.saved_posts.conn.commit()
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
@@ -370,22 +366,6 @@ async def get_random_item_for_user(user_id: int, repos: Repositories):
     except Exception as exc:
         print(f"랜덤 조회 에러: {exc}")
         return None
-
-
-async def vote_for_item(product_id: int, user_id: int, direction: str, repos: Repositories):
-    try:
-        voted_item = await repos.saved_posts.increment_vote_count(product_id, user_id, direction)
-        if voted_item is None:
-            raise HTTPException(status_code=404, detail="투표할 아이템을 찾을 수 없습니다.")
-
-        await repos.saved_posts.conn.commit()
-        return voted_item
-    except HTTPException:
-        await repos.saved_posts.conn.rollback()
-        raise
-    except Exception as exc:
-        await repos.saved_posts.conn.rollback()
-        raise HTTPException(status_code=500, detail=f"투표 처리 실패: {exc}") from exc
 
 
 async def delete_item_for_user(product_id: int, user_id: int, repos: Repositories):

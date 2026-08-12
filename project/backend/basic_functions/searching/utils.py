@@ -60,8 +60,6 @@ async def fetch_from_single_site(
                 "shop": shop,
                 "source_url": item.get("link", ""),
                 "image_vector": None,
-                "likes": None,
-                "dislikes": None
             })
         return results
 

@@ -11,6 +11,4 @@ export interface SavedItem {
   shop: string;
   source_url: string;
   created_at: string;
-  likes: number | null;
-  dislikes: number | null;
 }

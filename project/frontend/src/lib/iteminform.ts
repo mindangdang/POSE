@@ -16,8 +16,6 @@ export function parseItemInforms(item: SavedItem): ParsedFacts {
     image_url: item.image_url,
     image_vector: item.image_vector,
     created_at: item.created_at,
-    likes: item.likes,
-    dislikes: item.dislikes
   };
 }
 

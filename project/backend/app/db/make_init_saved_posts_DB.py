@@ -23,8 +23,6 @@ def initialize_database():
         CREATE TABLE IF NOT EXISTS saved_posts (
             product_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
-            likes INTEGER NOT NULL DEFAULT 0,
-            dislikes INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (user_id, product_id),
             CONSTRAINT fk_saved_posts_product_id_product_db

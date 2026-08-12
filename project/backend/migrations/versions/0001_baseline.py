@@ -75,7 +75,7 @@ def upgrade() -> None:
     op.create_table(
         "product_db",
         sa.Column("id", sa.Integer(), sa.Identity(), primary_key=True),
-        sa.Column("source_url", sa.Text(), nullable=False),
+        sa.Column("source_url", sa.Text(), nullable=False, unique=True),
         sa.Column("title", sa.Text(), nullable=False),
         sa.Column("title_vector", Vector(768)),
         sa.Column("price", sa.Numeric(12, 2)),
@@ -99,15 +99,12 @@ def upgrade() -> None:
             name="fk_product_db_shop_id_shops",
             ondelete="RESTRICT",
         ),
-        sa.UniqueConstraint("source_url", "title"),
     )
 
     op.create_table(
         "saved_posts",
         sa.Column("product_id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("likes", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("dislikes", sa.Integer(), nullable=False, server_default="0"),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
