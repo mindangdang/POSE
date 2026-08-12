@@ -5,10 +5,9 @@ from pathlib import Path
 from typing import Sequence
 
 import httpx
-from google import genai
-from google.genai import types
-
-from project.backend.app.manage.resilience import with_llm_resilience
+from project.backend.basic_functions.utils import _extract_text_vector_sync
+import numpy as np
+from deep_translator import GoogleTranslator
 from project.backend.app.manage.settings import get_settings
 
 FAKE_HEADERS = {
@@ -35,7 +34,6 @@ def _normalize_image_url(raw_url: str | None) -> str:
     if normalized_image_url.startswith("//"):
         normalized_image_url = f"https:{normalized_image_url}"
     return normalized_image_url
-
 
 async def _download_single_image(client: httpx.AsyncClient, url: str, save_dir: Path) -> str | None:
     try:
@@ -88,3 +86,53 @@ async def fetch_image_task(image_url, IMAGE_DIR) -> str:
         print(f"[백그라운드] 이미지 다운로드 실패, 원본 URL 유지: {normalized_url[:120]}")
     return ""
 
+CATEGORY_LIST = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
+_CATEGORY_VECTORS = {cat: None for cat in CATEGORY_LIST}
+
+def text_translate(text: str, target_lang: str = 'en') -> str:
+    try:
+        translated_text = GoogleTranslator(source='auto', target=target_lang).translate(text)
+        return translated_text
+    except Exception as e:
+        print(f"Translation failed, using original text: {e}")
+        return text
+    
+async def get_clean_category(title_vec:list) -> str:
+    global _CATEGORY_VECTORS
+    
+    def cosine_similarity(vec1, vec2):
+        if vec1 is None or vec2 is None:
+            return 0.0
+        vec1 = np.array(vec1).flatten()
+        vec2 = np.array(vec2).flatten()
+        
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+            
+        return np.dot(vec1, vec2) / (norm1 * norm2)
+        
+    best_category = None
+    best_score = -1
+
+    for category_name in CATEGORY_LIST:
+        if _CATEGORY_VECTORS[category_name] is None:
+            raw_cat_vec = await _extract_text_vector_sync(category_name)
+            if raw_cat_vec is not None:
+                _CATEGORY_VECTORS[category_name] = np.array(raw_cat_vec)
+            else:
+                print(f"[경고] 카테고리 '{category_name}'의 벡터 추출 실패. 건너뜁니다.")
+                continue
+        
+        vec = _CATEGORY_VECTORS[category_name]
+        if vec is None:
+            continue
+
+        score = cosine_similarity(title_vec, vec)
+
+        if score > best_score:
+            best_score = score
+            best_category = category_name
+
+    return best_category if best_category else "unknown"

@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
-from project.backend.basic_functions.utils import _extract_vector_sync
-
-
+from project.backend.basic_functions.utils import _extract_vector_batch, _extract_text_vector_batch
+from project.backend.basic_functions.crawlers.utils import text_translate, get_clean_category
 
 @dataclass(slots=True)
 class ProductDBRepository:
@@ -43,13 +42,14 @@ class ProductDBRepository:
                             item_id = None
 
                     title = item.get("title", "Unknown")
+                    title_vec = await _extract_text_vector_batch([text_translate(title, 'en')])
                     price = item.get("price")
                     brand = item.get("brand") or "UNKNOWN"
-                    category = item.get("category") or "PRODUCT"
+                    category = get_clean_category(title_vec[0]) if title_vec else "PRODUCT"
                     is_available = str(item.get("is_available", "Unknown"))
                     shop = item.get("shop") or "UNKNOWN"
                     image_url = item.get("image_url") or item.get("local_path") or ""
-                    vector_list = await _extract_vector_sync(image_url)
+                    vector_list = await _extract_vector_batch(image_url)
                     vector_str = str(vector_list) if vector_list else None
                     gender = item.get("gender") or "UNKNOWN"
 

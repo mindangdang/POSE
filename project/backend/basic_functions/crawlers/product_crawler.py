@@ -9,15 +9,8 @@ import time
 import random
 import asyncio
 import nodriver as uc
-import os
 import tldextract
 from project.backend.app.manage.settings import get_settings
-from project.backend.basic_functions.utils import _extract_text_vector_sync
-import numpy as np
-from deep_translator import GoogleTranslator
-
-CATEGORY_LIST = ['outer', 'top', 'bottom', 'shoes', 'accessories', 'jewelry']
-_CATEGORY_VECTORS = {cat: None for cat in CATEGORY_LIST}
 
 def _clone_product_info():
     return {
@@ -63,62 +56,6 @@ def get_source_site_name(url: str) -> str | None:
         return extracted.domain or None
     except Exception:
         return None
-
-async def get_clean_category(title: str, category: str) -> str:
-    global _CATEGORY_VECTORS
-    
-    def cosine_similarity(vec1, vec2):
-        if vec1 is None or vec2 is None:
-            return 0.0
-        vec1 = np.array(vec1).flatten()
-        vec2 = np.array(vec2).flatten()
-        
-        norm1 = np.linalg.norm(vec1)
-        norm2 = np.linalg.norm(vec2)
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-            
-        return np.dot(vec1, vec2) / (norm1 * norm2)
-    
-    try:
-        translated_title = GoogleTranslator(source='auto', target='en').translate(title)
-        translated_category = GoogleTranslator(source='auto', target='en').translate(category) if category else ""
-    except Exception as e:
-        print(f"Translation failed, using original text: {e}")
-        translated_title = title
-        translated_category = category
-
-    combined_text = f"{translated_title} {translated_category}".strip().lower()
-    
-    raw_query_vec = await _extract_text_vector_sync(combined_text)
-    if raw_query_vec is None:
-        print("[경고] 검색 텍스트의 벡터를 추출하지 못했습니다. 기본값 'unknown'을 반환합니다.")
-        return "unknown"
-        
-    query_vec = np.array(raw_query_vec)
-    best_category = None
-    best_score = -1
-
-    for category_name in CATEGORY_LIST:
-        if _CATEGORY_VECTORS[category_name] is None:
-            raw_cat_vec = await _extract_text_vector_sync(category_name)
-            if raw_cat_vec is not None:
-                _CATEGORY_VECTORS[category_name] = np.array(raw_cat_vec)
-            else:
-                print(f"[경고] 카테고리 '{category_name}'의 벡터 추출 실패. 건너뜁니다.")
-                continue
-        
-        vec = _CATEGORY_VECTORS[category_name]
-        if vec is None:
-            continue
-
-        score = cosine_similarity(query_vec, vec)
-
-        if score > best_score:
-            best_score = score
-            best_category = category_name
-
-    return best_category if best_category else "unknown"
 
 def merge_product_info(*results):
     merged = {}
@@ -422,12 +359,6 @@ async def product_crawler(url):
         if final_result is not None:
             print(f"[성공] HTML 파싱 완료")
             final_result['shop'] = shop_name
-            clean_category = await get_clean_category(final_result.get('title') or '', final_result.get('category') or '')
-            title_val = final_result.get('title')
-            category_val = final_result.get('category')
-            if title_val and category_val:
-                clean_category = await get_clean_category(title_val, category_val)
-                final_result['category'] = clean_category
             return final_result
     else:
         print("[최종 실패] 모든 재시도가 실패했으며 HTML을 가져오지 못했습니다.")
