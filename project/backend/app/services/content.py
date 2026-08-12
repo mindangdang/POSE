@@ -30,7 +30,6 @@ async def start_url_extraction(
     payload: UrlAnalyzeRequest,
     app: FastAPI,
     background_tasks: BackgroundTasks,
-    repos: Repositories,
     user_id: int,
 ):
     post_url = payload.url
@@ -117,17 +116,12 @@ async def stream_product_db_search_results(
 
 
 async def search_product_db_by_title(
-    app: FastAPI,
+    repos: Repositories,
     query: str,
     limit: int = 12,
 ):
     normalized_query = (query or "").strip()
     if not normalized_query:
-        return []
-
-    session_factory = getattr(app.state, "db_session_factory", None)
-    if session_factory is None:
-        print("[DEBUG] product_db title search skipped: DB session factory is missing.")
         return []
 
     translated_query = normalized_query
@@ -141,16 +135,14 @@ async def search_product_db_by_title(
         if query_vector and isinstance(query_vector[0], list):
             query_vector = query_vector[0]
 
-        async with session_factory() as session:
-            repos = get_repositories(session)
-            text_matches = await repos.product_db.search_by_title_text(
-                normalized_query, limit=limit
+        text_matches = await repos.product_db.search_by_title_text(
+            normalized_query, limit=limit
+        )
+        vector_matches = []
+        if query_vector:
+            vector_matches = await repos.product_db.search_by_title_vector(
+                query_vector, limit=limit
             )
-            vector_matches = []
-            if query_vector:
-                vector_matches = await repos.product_db.search_by_title_vector(
-                    query_vector, limit=limit
-                )
 
         merged: list[dict] = []
         seen_ids: set[str] = set()

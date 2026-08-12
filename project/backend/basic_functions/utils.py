@@ -1,11 +1,12 @@
-import os
 import httpx
 from project.backend.app.manage.settings import get_settings
 
 GPU_SERVER_URL = get_settings().gpu_server_url
 
 if not GPU_SERVER_URL:
-    raise ValueError(" .env 파일에 NEON_DB_URL이 설정되지 않았습니다. 접속 주소를 확인해주세요.")
+    raise ValueError(
+        ".env 파일에 GPU_SERVER_URL이 설정되지 않았습니다. 접속 주소를 확인해주세요."
+    )
 
 async def _extract_vector_sync(image_url: str):
     payload = {"image_url": image_url}
@@ -41,6 +42,5 @@ async def _extract_text_vector_sync(text: str):
     except Exception as e:
         print(f"GPU 서버 통신 에러: {e}")
         return
-
 
 

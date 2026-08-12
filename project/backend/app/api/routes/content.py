@@ -49,14 +49,12 @@ async def extract_and_save_url(
     payload: UrlAnalyzeRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    repos: Repositories = Depends(get_repos),
     current_user: dict = Depends(get_current_user)
 ):
     return await start_url_extraction(
         payload=payload,
         app=request.app,
         background_tasks=background_tasks,
-        repos=repos,
         user_id=int(current_user["sub"]),
     )
 
@@ -64,11 +62,15 @@ async def extract_and_save_url(
 @router.get("/product_db/search")
 async def search_product_db(
     query: str,
-    request: Request,
     limit: int = 12,
+    repos: Repositories = Depends(get_repos),
     current_user: dict = Depends(get_current_user),
 ):
-    results = await search_product_db_by_title(app=request.app, query=query, limit=limit)
+    results = await search_product_db_by_title(
+        repos=repos,
+        query=query,
+        limit=limit,
+    )
     return {
         "success": True,
         "results": results,
