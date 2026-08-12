@@ -19,7 +19,6 @@ from project.backend.app.api.dependencies import get_current_user
 from project.backend.app.services.content import (
     delete_item_for_user,
     enqueue_pse_search,
-    get_random_item_for_user,
     list_items_for_user,
     search_product_db_by_title,
     resolve_image_path,
@@ -119,14 +118,6 @@ async def get_items(
     repos: Repositories = Depends(get_repos)
 ):
     return await list_items_for_user(user_id=int(current_user["sub"]), repos=repos)
-
-
-@router.get("/vote/random")
-async def get_random_vote_item(
-    current_user: dict = Depends(get_current_user),
-    repos: Repositories = Depends(get_repos),
-):
-    return await get_random_item_for_user(user_id=int(current_user["sub"]), repos=repos)
 
 
 @router.delete("/items/{product_id}")

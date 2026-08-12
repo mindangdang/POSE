@@ -2,7 +2,7 @@ import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 
-export type TabKey = 'feed' | 'search' | 'vote';
+export type TabKey = 'feed' | 'search';
 
 type HeaderProps = {
   onLogout: () => void;

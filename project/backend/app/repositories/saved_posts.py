@@ -94,13 +94,3 @@ class SavedPostsRepository:
         )
         rows = (await self.session.execute(statement)).mappings().all()
         return [SavedProductDTO.from_row(row) for row in rows]
-
-    async def get_random_feed_item(self, user_id: int) -> SavedProductDTO | None:
-        statement = (
-            self._joined_statement()
-            .where(SavedPost.user_id == user_id)
-            .order_by(func.random())
-            .limit(1)
-        )
-        row = (await self.session.execute(statement)).mappings().one_or_none()
-        return SavedProductDTO.from_row(row) if row else None

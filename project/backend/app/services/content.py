@@ -296,14 +296,6 @@ async def list_items_for_user(user_id: int, repos: Repositories):
         return []
 
 
-async def get_random_item_for_user(user_id: int, repos: Repositories):
-    try:
-        return await repos.saved_posts.get_random_feed_item(user_id)
-    except Exception as exc:
-        print(f"랜덤 조회 에러: {exc}")
-        return None
-
-
 async def delete_item_for_user(product_id: int, user_id: int, repos: Repositories):
     try:
         await repos.saved_posts.delete_by_id(product_id, user_id)

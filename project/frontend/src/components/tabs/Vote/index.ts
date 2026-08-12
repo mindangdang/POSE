@@ -1,1 +1,0 @@
-export { VoteTabContent } from './VoteTabContent';
