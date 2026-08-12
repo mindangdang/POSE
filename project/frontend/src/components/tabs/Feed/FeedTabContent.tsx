@@ -13,7 +13,6 @@ import { FeedClosetFolders } from './FeedClosetFolders';
 import { FeedAddItemModal } from './FeedAddItemModal';
 import { FeedItemCard } from './FeedItemCard';
 import { FeedToolbar } from './FeedToolbar';
-import type { CommunityPost } from '../Vote/VoteTabContent';
 
 type FeedTabContentProps = {
   items: SavedItem[];
@@ -21,7 +20,6 @@ type FeedTabContentProps = {
   onSelectItem: (item: SavedItem) => void;
   onSearchSecondhand?: (title: string) => void;
   refreshItems: () => Promise<void>;
-  userPosts?: CommunityPost[];
 };
 
 export function FeedTabContent({
@@ -30,7 +28,6 @@ export function FeedTabContent({
   onSelectItem,
   onSearchSecondhand,
   refreshItems,
-  userPosts = [],
 }: FeedTabContentProps) {
   const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('FOLDER');
@@ -257,24 +254,6 @@ export function FeedTabContent({
         onSelectCategory={handleSelectCategory}
         onSearchQueryChange={setSearchQuery}
       />
-
-      {userPosts.length > 0 && (
-        <section className="mb-6 rounded-[1.5rem] border border-black/10 bg-[#f7f1e6] p-4">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-black/45">My Posts</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {userPosts.map((post) => (
-              <article key={post.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                {post.imageUrl && <img src={post.imageUrl} alt={post.title} className="h-36 w-full object-cover" />}
-                <div className="p-4">
-                  <h3 className="font-bold text-foreground">{post.title}</h3>
-                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">{post.body}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* Items Grid */}
       <div className="flex-1">
         <AnimatePresence mode="wait">

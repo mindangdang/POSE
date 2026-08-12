@@ -14,7 +14,7 @@ Before rebuilding production:
 
 1. Preserve a backup or Neon restore point even when the old data is disposable.
 2. Create an empty Neon branch and run `alembic upgrade head` there.
-3. Start the application against that branch and test crawl, save, feed, vote,
+3. Start the application against that branch and test crawl, save, feed,
    product deletion, and user deletion behavior.
 4. Only after validation, reset production through the provider's explicit
    database/branch workflow and run `alembic upgrade head` against the empty DB.

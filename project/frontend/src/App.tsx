@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GoogleLoginButton, Header, ItemDetailDialog } from './components/common';
-import { Archive, PlusCircle, Search, Vote } from 'lucide-react';
+import { Archive, Search } from 'lucide-react';
 import { FeedTabContent } from './components/tabs/Feed';
-import { VoteTabContent } from './components/tabs/Vote';
 import { SearchTabContent } from './components/tabs/Search';
 import { useItems } from './hooks/useItems';
 import { useAuth } from './hooks/useAuth';
 import type { SavedItem } from './types/item';
 import type { TabKey } from './components/common/Header';
-import type { CommunityPost } from './components/tabs/Vote/VoteTabContent';
 
 // Add Logo Font
 const fontStyles = `
@@ -38,40 +36,9 @@ function MainApp() {
   const [searchSecondhandTrigger, setSearchSecondhandTrigger] = useState(0);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const [composerSignal, setComposerSignal] = useState(0);
-  const [userPosts, setUserPosts] = useState<CommunityPost[]>(() => {
-    try {
-      return JSON.parse(window.localStorage.getItem('roomshow-user-posts') || '[]') as CommunityPost[];
-    } catch {
-      return [];
-    }
-  });
 
   const { items, setItems, refreshItems } = useItems();
 
-  useEffect(() => {
-    window.localStorage.setItem('roomshow-user-posts', JSON.stringify(userPosts));
-  }, [userPosts]);
-
-  const handleCreatePost = (post: Omit<CommunityPost, 'id' | 'author' | 'comments' | 'likes' | 'dislikes'>) => {
-    setUserPosts((prev) => [
-      {
-        ...post,
-        id: `user-${Date.now()}`,
-        author: user?.name || user?.username || 'me',
-        comments: [],
-        likes: 0,
-        dislikes: 0,
-      },
-      ...prev,
-    ]);
-    setCurrentTab('feed');
-  };
-
-  const handleOpenComposer = () => {
-    setCurrentTab('vote');
-    setComposerSignal((prev) => prev + 1);
-  };
 
   const handleLogout = () => {
     setIsLogoutModalOpen(false);
@@ -134,21 +101,7 @@ function MainApp() {
                 onSelectItem={setSelectedItem}
                 onSearchSecondhand={handleSearchSecondhandFromFeed}
                 refreshItems={refreshItems}
-                userPosts={userPosts}
               />
-            </motion.div>
-          )}
-
-          {currentTab === 'vote' && (
-            <motion.div
-              key="vote"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="max-w-[1400px] mx-auto px-4 lg:px-8 py-8"
-            >
-              <VoteTabContent items={items} userPosts={userPosts} onCreatePost={handleCreatePost} composerSignal={composerSignal} />
             </motion.div>
           )}
 
@@ -159,7 +112,6 @@ function MainApp() {
         {[
           { id: 'search' as TabKey, label: 'Window', icon: Search },
           { id: 'feed' as TabKey, label: 'Closet', icon: Archive },
-          { id: 'vote' as TabKey, label: 'Vote', icon: Vote },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -170,10 +122,6 @@ function MainApp() {
             {label}
           </button>
         ))}
-        <button onClick={handleOpenComposer} className="flex min-w-[92px] flex-col items-center rounded-full bg-[#f7f1e6] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-black hover:text-white">
-          <PlusCircle className="mb-1 h-4 w-4" />
-          게시물 올리기
-        </button>
       </nav>
 
       <ItemDetailDialog
