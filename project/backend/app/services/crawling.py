@@ -80,7 +80,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
 
     raw_image_url = data.get("image_url", "")
     normalized_url = normalize_url(raw_image_url)
-    local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
+    #local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
     brand = data.get("brand", "Unknown")
     title = data.get("title", "Unknown")
     is_soldout = data.get("is_soldout")

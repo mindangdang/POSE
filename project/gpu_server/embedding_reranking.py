@@ -98,6 +98,8 @@ class FashionSiglipReRankingPipeline:
         self._is_initialized = True
         print(f"시스템 초기화 완료. (동작 환경: {self.device})")
 
+###############################################################################################################
+
     def preprocess_image(self, img: Image.Image) -> Image.Image:
         """디스크 경로가 아닌, 메모리 상의 PIL 객체를 직접 받아 정규화합니다."""
         img = img.convert("RGBA")
@@ -120,7 +122,6 @@ class FashionSiglipReRankingPipeline:
         
         return img_vec[0].tolist()
 
-    
     def encode_text(self, text: str) -> torch.Tensor:
         """쿼리 텍스트를 SigLIP 텍스트 임베딩으로 인코딩"""
         with torch.no_grad():
@@ -130,3 +131,42 @@ class FashionSiglipReRankingPipeline:
 
     def calculate_cosine_similarity(self, vec1: torch.Tensor, vec2: torch.Tensor) -> float:
         return F.cosine_similarity(vec1, vec2, dim=1).item()
+
+    def get_image_vectors(self, imgs: list[Image.Image]) -> list[list[float]]:
+        """다중 이미지(Batch)를 받아 Image Vector 리스트를 반환합니다. (DB 저장용)"""
+        if not imgs:
+            return []
+
+        clean_imgs = [self.preprocess_image(img) for img in imgs]
+        
+        # 2. 개별 이미지를 텐서로 변환 후, 병합하여 배치 차원(Batch Dimension) 생성
+        # self.preprocess() 결과인 [C, H, W] 텐서들을 묶어 [B, C, H, W] 형태의 단일 텐서로 만듦
+        tensor_list = [self.preprocess(img) for img in clean_imgs]
+        batch_input = torch.stack(tensor_list).to(self.device)
+        
+        if self.device == "cuda":
+            batch_input = batch_input.to(torch.bfloat16)
+
+        # 3. 추론 모드(메모리 누수 방지 및 연산 속도 향상)
+        with torch.no_grad():
+            image_features = self.model.encode_image(batch_input)
+            img_vecs = F.normalize(image_features, p=2, dim=1)
+        
+        # [B, D] 형태의 텐서를 파이썬 list[list[float]] 형태로 변환하여 반환
+        return img_vecs.tolist()
+
+    
+    def encode_texts(self, texts: list[str]) -> torch.Tensor:
+        """다중 쿼리 텍스트(Batch)를 SigLIP 텍스트 임베딩으로 인코딩"""
+        if not texts:
+            # 빈 리스트 입력 시 현재 디바이스에 맞는 빈 텐서 반환
+            return torch.empty((0,)).to(self.device)
+
+        # 추론 모드 적용
+        with torch.no_grad():
+            # CLIP/SigLIP 토크나이저는 기본적으로 리스트(list[str]) 입력을 지원하며
+            # 자동으로 [B, Context_Length] 형태의 텐서 또는 딕셔너리를 반환함
+            text_inputs = self.tokenizer(texts).to(self.device)
+            text_vectors = F.normalize(self.model.encode_text(text_inputs), p=2, dim=1)
+            
+        return text_vectors

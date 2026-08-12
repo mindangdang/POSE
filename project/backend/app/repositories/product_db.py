@@ -12,6 +12,8 @@ from project.backend.app.db.models.shop import Shop
 from project.backend.app.schemas.products import ProductSearchDTO
 from project.backend.basic_functions.utils import _extract_vector_sync
 
+from project.backend.basic_functions.utils import _extract_vector_batch, _extract_text_vector_batch
+from project.backend.basic_functions.crawlers.utils import text_translate, get_clean_category
 
 @dataclass(slots=True)
 class ProductDBRepository:

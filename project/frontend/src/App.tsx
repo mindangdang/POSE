@@ -234,17 +234,15 @@ function MainApp() {
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="space-y-6 text-foreground">
-                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
-                <div className="flex gap-3 items-start">
-                  <span className="text-lg leading-none mt-1.5">🪟</span>
+                <div className="space-y-6 text-foreground font-semibold">
+                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 형용할 수 없는 나라는 사람을 표현하는 취향의 공간입니다. "</p>
+                  <div className="flex gap-3 items-start">
                     <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 내 취향이 담긴 것들을 기록하고 공유하며 향유하세요.</p>
+                  </div>
                 </div>
-                <div className="flex gap-3 items-start">
-                  <span className="text-lg leading-none mt-1.5">📚</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
-                </div>
-              </div>
               
               <div className="mt-8 border-t border-foreground" />
               <button 
@@ -358,14 +356,12 @@ export default function App() {
                   </button>
                 </div>
                 <div className="space-y-6 text-foreground font-semibold">
-                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 나의 취향이 가장 온전히 머무는 우주입니다."</p>
+                  <p className="text-sm font-medium text-muted-foreground italic mb-4">"내 방은 형용할 수 없는 나라는 사람을 표현하는 취향의 공간입니다. "</p>
                   <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">🪟</span>
                     <p className="text-sm leading-relaxed"><span className="font-bold">Window (창문):</span> 방 안에서 세상을 바라보며 새로운 영감을 찾습니다. AI 검색을 통해 당신이 꿈꾸는 스타일을 발견하세요.</p>
                   </div>
                   <div className="flex gap-3 items-start">
-                    <span className="text-lg leading-none mt-1.5">📚</span>
-                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 당신이 발견한 소중한 조각들을 서재에 차곡차곡 쌓아둡니다. 나를 형용하는 것들로 채워진 당신만의 컬렉션입니다.</p>
+                    <p className="text-sm leading-relaxed"><span className="font-bold">Closet (책장):</span> 내 취향이 담긴 것들을 기록하고 공유하며 향유하세요.</p>
                   </div>
                 </div>
                 
