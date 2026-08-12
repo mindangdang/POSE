@@ -3,12 +3,18 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
+from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from project.backend.app.db.models.product import Product
+from project.backend.app.db.models.shop import Shop
 from project.backend.basic_functions.utils import _extract_vector_sync
 
 
 @dataclass(slots=True)
 class ProductDBRepository:
-    conn: Any
+    session: AsyncSession
 
     _SHOP_ALIASES = {
         "fruitsfamily": "FRUITS FAMILY",
@@ -35,85 +41,90 @@ class ProductDBRepository:
         "zara": "ZARA",
     }
 
+    @staticmethod
+    def _columns():
+        return (
+            Product.id.label("product_id"),
+            Product.source_url,
+            Product.title,
+            Product.price,
+            Product.currency,
+            Product.brand,
+            Product.category,
+            Product.is_soldout,
+            Product.image_url,
+            Product.image_vector,
+            Shop.name.label("shop"),
+            Product.gender,
+        )
+
     async def exists(self, product_id: int) -> bool:
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                "SELECT 1 FROM product_db WHERE id = %s",
-                (product_id,),
+        return await self.session.get(Product, product_id) is not None
+
+    async def _shop_id(self, shop_value: Any) -> int:
+        shop_name = self._canonical_shop_name(shop_value)
+        shop_id = await self.session.scalar(select(Shop.id).where(Shop.name == shop_name))
+        if shop_id is None:
+            shop_id = await self.session.scalar(
+                select(Shop.id).where(Shop.name == "UNKNOWN")
             )
-            return await cursor.fetchone() is not None
+        if shop_id is None:
+            raise RuntimeError("The required UNKNOWN shop seed is missing")
+        return int(shop_id)
 
     async def insert_item(self, source_url: str, item: dict[str, Any]) -> int:
         image_url = item.get("image_url") or item.get("local_path") or ""
-        vector_list = item.get("image_vector")
-        if vector_list is None and image_url:
-            vector_list = await _extract_vector_sync(image_url)
-        vector_value = str(vector_list) if vector_list else None
+        vector_value = item.get("image_vector")
+        if vector_value is None and image_url:
+            vector_value = await _extract_vector_sync(image_url)
 
-        async with self.conn.cursor() as cursor:
-            shop_name = self._canonical_shop_name(item.get("shop"))
-            await cursor.execute(
-                "SELECT id FROM shops WHERE name = %s",
-                (shop_name,),
+        values = {
+            "source_url": source_url,
+            "title": item.get("title") or "Unknown",
+            "price": self._get_price(item.get("price")),
+            "currency": self._get_currency(item.get("currency")),
+            "brand": item.get("brand") or "UNKNOWN",
+            "category": item.get("category") or "PRODUCT",
+            "is_soldout": self._get_is_soldout(item),
+            "image_url": image_url,
+            "image_vector": vector_value,
+            "shop_id": await self._shop_id(item.get("shop")),
+            "gender": item.get("gender") or "UNKNOWN",
+        }
+        excluded = insert(Product).excluded
+        statement = (
+            insert(Product)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=[Product.source_url],
+                set_={
+                    "title": excluded.title,
+                    "price": excluded.price,
+                    "currency": excluded.currency,
+                    "brand": excluded.brand,
+                    "category": excluded.category,
+                    "is_soldout": excluded.is_soldout,
+                    "image_url": excluded.image_url,
+                    "image_vector": func.coalesce(
+                        excluded.image_vector, Product.image_vector
+                    ),
+                    "shop_id": excluded.shop_id,
+                    "gender": excluded.gender,
+                },
             )
-            shop_row = await cursor.fetchone()
-            if not shop_row:
-                await cursor.execute("SELECT id FROM shops WHERE name = 'UNKNOWN'")
-                shop_row = await cursor.fetchone()
-            if not shop_row:
-                raise RuntimeError("The required UNKNOWN shop seed is missing")
-            shop_id = int(shop_row[0])
-
-            await cursor.execute(
-                """
-                INSERT INTO product_db (
-                    source_url, title, price, currency, brand, category, is_soldout,
-                    image_url, image_vector, shop_id, gender
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (source_url) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    price = EXCLUDED.price,
-                    currency = EXCLUDED.currency,
-                    brand = EXCLUDED.brand,
-                    category = EXCLUDED.category,
-                    is_soldout = EXCLUDED.is_soldout,
-                    image_url = EXCLUDED.image_url,
-                    image_vector = COALESCE(EXCLUDED.image_vector, product_db.image_vector),
-                    shop_id = EXCLUDED.shop_id,
-                    gender = EXCLUDED.gender
-                RETURNING id
-                """,
-                (
-                    source_url,
-                    item.get("title") or "Unknown",
-                    self._get_price(item.get("price")),
-                    self._get_currency(item.get("currency")),
-                    item.get("brand") or "UNKNOWN",
-                    item.get("category") or "PRODUCT",
-                    self._get_is_soldout(item),
-                    image_url,
-                    vector_value,
-                    shop_id,
-                    item.get("gender") or "UNKNOWN",
-                ),
-            )
-            row = await cursor.fetchone()
-        if not row:
-            raise RuntimeError("Product insert did not return an id")
-        return int(row[0])
+            .returning(Product.id)
+        )
+        return int((await self.session.scalars(statement)).one())
 
     async def insert_items_batch(
         self,
         source_url: str,
         extracted_items: list[dict[str, Any]],
     ) -> list[int]:
-        product_ids = []
-        for item in extracted_items:
-            product_ids.append(
-                await self.insert_item(item.get("source_url") or source_url, item)
-            )
-        return product_ids
+        return [
+            await self.insert_item(item.get("source_url") or source_url, item)
+            for item in extracted_items
+        ]
 
     async def search_by_title_vector(
         self,
@@ -122,27 +133,16 @@ class ProductDBRepository:
     ) -> list[dict[str, Any]]:
         if not query_vector:
             return []
-
-        vector_str = str(query_vector)
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    p.id AS product_id, source_url, title, price, currency, brand, category,
-                    is_soldout, image_url, image_vector, s.name AS shop, gender,
-                    1 - (title_vector <=> %s::vector) AS similarity
-                FROM product_db AS p
-                JOIN shops AS s ON s.id = p.shop_id
-                WHERE title_vector IS NOT NULL
-                ORDER BY p.title_vector <=> %s::vector
-                LIMIT %s
-                """,
-                (vector_str, vector_str, limit),
-            )
-            rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-
-        return [self._normalize_search_item(dict(zip(columns, row))) for row in rows]
+        distance = Product.title_vector.cosine_distance(query_vector)
+        statement = (
+            select(*self._columns(), (1 - distance).label("similarity"))
+            .join(Shop, Shop.id == Product.shop_id)
+            .where(Product.title_vector.is_not(None))
+            .order_by(distance)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [self._normalize_search_item(row) for row in rows]
 
     async def search_by_title_text(
         self,
@@ -152,49 +152,43 @@ class ProductDBRepository:
         normalized_query = (query or "").strip()
         if not normalized_query:
             return []
-
-        like_query = f"%{normalized_query}%"
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    p.id AS product_id, source_url, title, price, currency, brand, category,
-                    is_soldout, image_url, image_vector, s.name AS shop, gender,
-                    CASE
-                        WHEN lower(title) = lower(%s) THEN 0
-                        WHEN lower(title) LIKE lower(%s) || '%%' THEN 1
-                        WHEN lower(title) LIKE '%%' || lower(%s) || '%%' THEN 2
-                        ELSE 3
-                    END AS text_rank
-                FROM product_db AS p
-                JOIN shops AS s ON s.id = p.shop_id
-                WHERE lower(title) LIKE lower(%s)
-                ORDER BY text_rank, created_at DESC
-                LIMIT %s
-                """,
-                (normalized_query, normalized_query, normalized_query, like_query, limit),
-            )
-            rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-
-        return [self._normalize_search_item(dict(zip(columns, row))) for row in rows]
+        lowered_title = func.lower(Product.title)
+        lowered_query = normalized_query.lower()
+        text_rank = case(
+            (lowered_title == lowered_query, 0),
+            (lowered_title.like(f"{lowered_query}%"), 1),
+            (lowered_title.like(f"%{lowered_query}%"), 2),
+            else_=3,
+        ).label("text_rank")
+        statement = (
+            select(*self._columns(), text_rank)
+            .join(Shop, Shop.id == Product.shop_id)
+            .where(lowered_title.like(f"%{lowered_query}%"))
+            .order_by(text_rank, Product.created_at.desc())
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [self._normalize_search_item(row) for row in rows]
 
     @staticmethod
     def _canonical_shop_name(value: Any) -> str:
         if not isinstance(value, str):
             return "UNKNOWN"
-        normalized = value.strip().lower()
-        return ProductDBRepository._SHOP_ALIASES.get(normalized, "UNKNOWN")
+        return ProductDBRepository._SHOP_ALIASES.get(value.strip().lower(), "UNKNOWN")
 
     @staticmethod
     def _get_currency(value: Any) -> str:
         if not isinstance(value, str):
             return "KRW"
         normalized = value.strip().upper()
-        aliases = {"₩": "KRW", "KRW": "KRW", "$": "USD", "USD": "USD", "¥": "JPY", "JPY": "JPY", "€": "EUR", "EUR": "EUR"}
-        if normalized in aliases:
-            return aliases[normalized]
-        return normalized if re.fullmatch(r"[A-Z]{3}", normalized) else "KRW"
+        aliases = {
+            "₩": "KRW", "KRW": "KRW", "$": "USD", "USD": "USD",
+            "¥": "JPY", "JPY": "JPY", "€": "EUR", "EUR": "EUR",
+        }
+        return aliases.get(
+            normalized,
+            normalized if re.fullmatch(r"[A-Z]{3}", normalized) else "KRW",
+        )
 
     @staticmethod
     def _get_price(value: Any) -> Decimal | None:
@@ -207,9 +201,7 @@ class ProductDBRepository:
                 return None
         if not isinstance(value, str):
             return None
-
-        normalized = value.strip().replace(",", "")
-        match = re.search(r"-?\d+(?:\.\d+)?", normalized)
+        match = re.search(r"-?\d+(?:\.\d+)?", value.strip().replace(",", ""))
         if not match:
             return None
         try:
@@ -219,14 +211,13 @@ class ProductDBRepository:
 
     @staticmethod
     def _get_is_soldout(item: dict[str, Any]) -> bool | None:
-        if isinstance(item.get("is_soldout"), bool):
-            return item["is_soldout"]
-        return None
+        value = item.get("is_soldout")
+        return value if isinstance(value, bool) else None
 
     @staticmethod
-    def _normalize_search_item(item: dict[str, Any]) -> dict[str, Any]:
-        if item.get("image_vector") is not None:
-            item["image_vector"] = str(item["image_vector"])
-        item["product_id"] = str(item.get("product_id"))
-        item["search_source"] = "product_db"
-        return item
+    def _normalize_search_item(item: Any) -> dict[str, Any]:
+        normalized = dict(item)
+        if normalized.get("image_vector") is not None:
+            normalized["image_vector"] = str(normalized["image_vector"])
+        normalized["search_source"] = "product_db"
+        return normalized

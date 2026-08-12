@@ -1,19 +1,25 @@
 from dataclasses import dataclass
-from typing import Any
 
-from project.backend.app.repositories.saved_posts import SavedPostsRepository
-from project.backend.app.repositories.product_db import ProductDBRepository
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from project.backend.app.repositories.event_logs import EventLogsRepository
+from project.backend.app.repositories.product_db import ProductDBRepository
+from project.backend.app.repositories.saved_posts import SavedPostsRepository
+from project.backend.app.repositories.users import UsersRepository
+
 
 @dataclass(slots=True)
 class Repositories:
+    users: UsersRepository
     saved_posts: SavedPostsRepository
     product_db: ProductDBRepository
     event_logs: EventLogsRepository
-    
-def get_repositories(conn: Any) -> Repositories:
+
+
+def get_repositories(session: AsyncSession) -> Repositories:
     return Repositories(
-        saved_posts=SavedPostsRepository(conn),
-        product_db=ProductDBRepository(conn),
-        event_logs=EventLogsRepository(conn),
+        users=UsersRepository(session),
+        saved_posts=SavedPostsRepository(session),
+        product_db=ProductDBRepository(session),
+        event_logs=EventLogsRepository(session),
     )

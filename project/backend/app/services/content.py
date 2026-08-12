@@ -88,16 +88,17 @@ async def stream_product_db_search_results(
         print(f"[DEBUG] product_db 검색 스킵: query='{query}' 텍스트 임베딩 실패")
         return
 
-    pool = getattr(app.state, "db_pool", None)
-    if pool is None or pool.closed:
-        print("[DEBUG] product_db 검색 스킵: DB 풀이 초기화되지 않았습니다.")
+    session_factory = getattr(app.state, "db_session_factory", None)
+    if session_factory is None:
+        print("[DEBUG] product_db 검색 스킵: DB session factory가 없습니다.")
         return
 
-    conn = None
     try:
-        conn = await pool.getconn()
-        repos = get_repositories(conn)
-        product_items = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+        async with session_factory() as session:
+            repos = get_repositories(session)
+            product_items = await repos.product_db.search_by_title_vector(
+                query_vector, limit=limit
+            )
         print(f"[DEBUG] product_db title_vector 검색 결과:{len(product_items)}개")
 
         if not manager:
@@ -113,9 +114,6 @@ async def stream_product_db_search_results(
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
     except Exception as exc:
         print(f"product_db 벡터 검색 에러: {exc}")
-    finally:
-        if conn is not None:
-            await pool.putconn(conn)
 
 
 async def search_product_db_by_title(
@@ -127,9 +125,9 @@ async def search_product_db_by_title(
     if not normalized_query:
         return []
 
-    pool = getattr(app.state, "db_pool", None)
-    if pool is None or pool.closed:
-        print("[DEBUG] product_db title search skipped: DB pool is not initialized.")
+    session_factory = getattr(app.state, "db_session_factory", None)
+    if session_factory is None:
+        print("[DEBUG] product_db title search skipped: DB session factory is missing.")
         return []
 
     translated_query = normalized_query
@@ -138,19 +136,21 @@ async def search_product_db_by_title(
     except Exception:
         translated_query = normalized_query
 
-    conn = None
     try:
         query_vector = await _extract_text_vector_sync(translated_query)
         if query_vector and isinstance(query_vector[0], list):
             query_vector = query_vector[0]
 
-        conn = await pool.getconn()
-        repos = get_repositories(conn)
-
-        text_matches = await repos.product_db.search_by_title_text(normalized_query, limit=limit)
-        vector_matches = []
-        if query_vector:
-            vector_matches = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+        async with session_factory() as session:
+            repos = get_repositories(session)
+            text_matches = await repos.product_db.search_by_title_text(
+                normalized_query, limit=limit
+            )
+            vector_matches = []
+            if query_vector:
+                vector_matches = await repos.product_db.search_by_title_vector(
+                    query_vector, limit=limit
+                )
 
         merged: list[dict] = []
         seen_ids: set[str] = set()
@@ -168,9 +168,6 @@ async def search_product_db_by_title(
     except Exception as exc:
         print(f"product_db title search error: {exc}")
         return []
-    finally:
-        if conn is not None:
-            await pool.putconn(conn)
 
 
 async def background_pse_search(
@@ -320,7 +317,6 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
 
         vector_source = image_url or normalized_image_url
         vector_list = await _extract_vector_sync(vector_source) if vector_source else None
-        vector_str = str(vector_list) if vector_list else None
         
         product_id = payload.product_id
         if product_id is None or not await repos.product_db.exists(product_id):
@@ -334,7 +330,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
                     "category": payload.category,
                     "is_soldout": payload.is_soldout,
                     "image_url": image_url,
-                    "image_vector": vector_str,
+                    "image_vector": vector_list,
                     "shop": payload.shop,
                 },
             )
@@ -343,10 +339,8 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
             product_id=product_id,
             user_id=user_id,
         )
-        await repos.saved_posts.conn.commit()
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
-        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc
 
 
@@ -371,10 +365,8 @@ async def get_random_item_for_user(user_id: int, repos: Repositories):
 async def delete_item_for_user(product_id: int, user_id: int, repos: Repositories):
     try:
         await repos.saved_posts.delete_by_id(product_id, user_id)
-        await repos.saved_posts.conn.commit()
         return {"success": True}
     except Exception as exc:
-        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 

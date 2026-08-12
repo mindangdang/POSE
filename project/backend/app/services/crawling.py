@@ -23,14 +23,16 @@ async def background_crawl_and_save(
 
         _mark_feed_add_items(extracted_items)
 
-        async with app.state.db_pool.connection() as conn:
-            repos = get_repositories(conn)
-            product_ids = await repos.product_db.insert_items_batch(post_url, extracted_items)
-            await repos.saved_posts.insert_items_batch(
-                user_id=user_id,
-                product_ids=product_ids,
-            )
-            await conn.commit()
+        async with app.state.db_session_factory() as session:
+            async with session.begin():
+                repos = get_repositories(session)
+                product_ids = await repos.product_db.insert_items_batch(
+                    post_url, extracted_items
+                )
+                await repos.saved_posts.insert_items_batch(
+                    user_id=user_id,
+                    product_ids=product_ids,
+                )
             print("[백그라운드] 작업 및 DB 저장 완료")
 
             all_items = await repos.saved_posts.list_feed_items(user_id)
@@ -51,10 +53,10 @@ async def background_crawl_and_save(
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
 
         try:
-            async with app.state.db_pool.connection() as conn:
-                repos = get_repositories(conn)
-                await repos.saved_posts.delete_by_id(placeholder_id, user_id)
-                await conn.commit()
+            async with app.state.db_session_factory() as session:
+                async with session.begin():
+                    repos = get_repositories(session)
+                    await repos.saved_posts.delete_by_id(placeholder_id, user_id)
                 print(f"[백그라운드] 에러로 인해 임시 아이템({placeholder_id}) 삭제 완료")
 
         except Exception as db_exc:
