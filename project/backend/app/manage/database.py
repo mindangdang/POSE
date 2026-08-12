@@ -7,7 +7,6 @@ from project.backend.app.manage.settings import get_settings
 from project.backend.app.db.session import (
     create_db_pool,
     get_db_connection as get_pooled_db_connection,
-    init_db,
 )
 from project.backend.app.repositories import Repositories, get_repositories
 
@@ -36,7 +35,12 @@ async def rebuild_db_pool(app: FastAPI) -> AsyncConnectionPool:
 async def lifespan(app: FastAPI):
     db_pool = await rebuild_db_pool(app)
     print("DB 커넥션 풀 생성 완료")
-    await init_db(db_pool)
+
+    async with db_pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1")
+            await cursor.fetchone()
+    print("DB 연결 확인 완료")
 
     yield
 
