@@ -26,17 +26,17 @@ async def background_crawl_and_save(
         async with app.state.db_session_factory() as session:
             async with session.begin():
                 repos = get_repositories(session)
-                product_ids = await repos.product_db.insert_items_batch(
+                products = await repos.product_db.insert_items_batch(
                     post_url, extracted_items
                 )
                 await repos.saved_posts.insert_items_batch(
                     user_id=user_id,
-                    product_ids=product_ids,
+                    product_ids=[product.id for product in products],
                 )
             print("[백그라운드] 작업 및 DB 저장 완료")
 
             all_items = await repos.saved_posts.list_feed_items(user_id)
-            new_items = [item for item in all_items if item.get("source_url") == post_url]
+            new_items = [item for item in all_items if item.source_url == post_url]
             if not new_items:
                 print("[백그라운드] DB에서 새 아이템을 찾을 수 없습니다.")
 
@@ -44,7 +44,7 @@ async def background_crawl_and_save(
             payload = {
                 "type": "CRAWL_SUCCESS",
                 "placeholder_id": placeholder_id,
-                "items": new_items,
+                "items": [item.model_dump(mode="json") for item in new_items],
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
             print("[백그라운드] 웹소켓 메시지 전송 완료")

@@ -1,7 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
-
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from project.backend.app.db.models.product import Product
 from project.backend.app.db.models.saved_post import SavedPost
 from project.backend.app.db.models.shop import Shop
+from project.backend.app.schemas.products import SavedProductDTO
 
 
 @dataclass(slots=True)
@@ -88,16 +86,16 @@ class SavedPostsRepository:
             .join(Shop, Shop.id == Product.shop_id)
         )
 
-    async def list_feed_items(self, user_id: int) -> list[dict[str, Any]]:
+    async def list_feed_items(self, user_id: int) -> list[SavedProductDTO]:
         statement = (
             self._joined_statement()
             .where(SavedPost.user_id == user_id)
             .order_by(SavedPost.created_at.desc())
         )
         rows = (await self.session.execute(statement)).mappings().all()
-        return jsonable_encoder([self._normalize_item(row) for row in rows])
+        return [SavedProductDTO.from_row(row) for row in rows]
 
-    async def get_random_feed_item(self, user_id: int) -> dict[str, Any] | None:
+    async def get_random_feed_item(self, user_id: int) -> SavedProductDTO | None:
         statement = (
             self._joined_statement()
             .where(SavedPost.user_id == user_id)
@@ -105,11 +103,4 @@ class SavedPostsRepository:
             .limit(1)
         )
         row = (await self.session.execute(statement)).mappings().one_or_none()
-        return jsonable_encoder(self._normalize_item(row)) if row else None
-
-    @staticmethod
-    def _normalize_item(item: Any) -> dict[str, Any]:
-        normalized = dict(item)
-        if normalized.get("image_vector") is not None:
-            normalized["image_vector"] = str(normalized["image_vector"])
-        return normalized
+        return SavedProductDTO.from_row(row) if row else None

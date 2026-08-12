@@ -38,11 +38,11 @@ async def log_user_event(
     current_user: dict = Depends(get_current_user),
     repos: Repositories = Depends(get_repos),
 ):
-    event_id = await repos.event_logs.create(
+    event_log = await repos.event_logs.create(
         user_id=int(current_user["sub"]),
         event=payload,
     )
-    return {"status": "success", "event_id": event_id}
+    return {"status": "success", "event_id": event_log.id}
 
 @router.post("/crawl_product")
 async def extract_and_save_url(

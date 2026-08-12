@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from project.backend.app.db.models.product import Product
 from project.backend.app.db.models.shop import Shop
+from project.backend.app.schemas.products import ProductSearchDTO
 from project.backend.basic_functions.utils import _extract_vector_sync
 
 
@@ -72,7 +73,7 @@ class ProductDBRepository:
             raise RuntimeError("The required UNKNOWN shop seed is missing")
         return int(shop_id)
 
-    async def insert_item(self, source_url: str, item: dict[str, Any]) -> int:
+    async def insert_item(self, source_url: str, item: dict[str, Any]) -> Product:
         image_url = item.get("image_url") or item.get("local_path") or ""
         vector_value = item.get("image_vector")
         if vector_value is None and image_url:
@@ -112,15 +113,15 @@ class ProductDBRepository:
                     "gender": excluded.gender,
                 },
             )
-            .returning(Product.id)
+            .returning(Product)
         )
-        return int((await self.session.scalars(statement)).one())
+        return (await self.session.scalars(statement)).one()
 
     async def insert_items_batch(
         self,
         source_url: str,
         extracted_items: list[dict[str, Any]],
-    ) -> list[int]:
+    ) -> list[Product]:
         return [
             await self.insert_item(item.get("source_url") or source_url, item)
             for item in extracted_items
@@ -130,7 +131,7 @@ class ProductDBRepository:
         self,
         query_vector: list[float],
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ProductSearchDTO]:
         if not query_vector:
             return []
         distance = Product.title_vector.cosine_distance(query_vector)
@@ -142,13 +143,13 @@ class ProductDBRepository:
             .limit(limit)
         )
         rows = (await self.session.execute(statement)).mappings().all()
-        return [self._normalize_search_item(row) for row in rows]
+        return [ProductSearchDTO.from_row(row) for row in rows]
 
     async def search_by_title_text(
         self,
         query: str,
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ProductSearchDTO]:
         normalized_query = (query or "").strip()
         if not normalized_query:
             return []
@@ -168,7 +169,7 @@ class ProductDBRepository:
             .limit(limit)
         )
         rows = (await self.session.execute(statement)).mappings().all()
-        return [self._normalize_search_item(row) for row in rows]
+        return [ProductSearchDTO.from_row(row) for row in rows]
 
     @staticmethod
     def _canonical_shop_name(value: Any) -> str:
@@ -213,11 +214,3 @@ class ProductDBRepository:
     def _get_is_soldout(item: dict[str, Any]) -> bool | None:
         value = item.get("is_soldout")
         return value if isinstance(value, bool) else None
-
-    @staticmethod
-    def _normalize_search_item(item: Any) -> dict[str, Any]:
-        normalized = dict(item)
-        if normalized.get("image_vector") is not None:
-            normalized["image_vector"] = str(normalized["image_vector"])
-        normalized["search_source"] = "product_db"
-        return normalized

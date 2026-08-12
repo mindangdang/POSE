@@ -11,7 +11,7 @@ from project.backend.app.schemas.requests import EventLogCreate
 class EventLogsRepository:
     session: AsyncSession
 
-    async def create(self, *, user_id: int, event: EventLogCreate) -> int:
+    async def create(self, *, user_id: int, event: EventLogCreate) -> EventLog:
         event_log = EventLog(
             user_id=user_id,
             action=event.action,
@@ -22,4 +22,4 @@ class EventLogsRepository:
         )
         self.session.add(event_log)
         await self.session.flush()
-        return event_log.id
+        return event_log

@@ -106,7 +106,7 @@ async def stream_product_db_search_results(
         for item in product_items:
             payload = {
                 "type": "SEARCH_SUCCESS",
-                "results": [item],
+                "results": [item.model_dump(mode="json")],
                 "is_append": True,
                 "page": current_page,
             }
@@ -144,14 +144,13 @@ async def search_product_db_by_title(
                 query_vector, limit=limit
             )
 
-        merged: list[dict] = []
-        seen_ids: set[str] = set()
+        merged = []
+        seen_ids: set[int] = set()
 
         for item in text_matches + vector_matches:
-            product_id = str(item.get("product_id") or "")
-            if not product_id or product_id in seen_ids:
+            if item.product_id in seen_ids:
                 continue
-            seen_ids.add(product_id)
+            seen_ids.add(item.product_id)
             merged.append(item)
             if len(merged) >= limit:
                 break
@@ -312,7 +311,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
         
         product_id = payload.product_id
         if product_id is None or not await repos.product_db.exists(product_id):
-            product_id = await repos.product_db.insert_item(
+            product = await repos.product_db.insert_item(
                 payload.source_url or image_url or payload.title or "manual",
                 {
                     "title": payload.title,
@@ -326,6 +325,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
                     "shop": payload.shop,
                 },
             )
+            product_id = product.id
 
         await repos.saved_posts.create(
             product_id=product_id,
