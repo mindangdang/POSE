@@ -25,6 +25,7 @@ class ManualItemCreate(BaseModel):
     brand: Optional[str] = None
     is_soldout: bool | None = None
     shop: Optional[str] = None
+    
 class EventLogCreate(BaseModel):
     action: Literal[
         "SEARCH",

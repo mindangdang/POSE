@@ -1,9 +1,50 @@
 import json
 from fastapi import FastAPI
 from project.backend.basic_functions.crawlers.product_crawler import product_crawler
-from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, fetch_image_task, normalize_url
-from project.backend.app.manage.settings import IMAGE_DIR
+from project.backend.basic_functions.crawlers.utils import _mark_feed_add_items, normalize_url
 from project.backend.app.repositories import get_repositories
+from project.backend.app.schemas.requests import UrlAnalyzeRequest
+from fastapi import BackgroundTasks, FastAPI
+import time
+
+async def start_url_extraction(
+    payload: UrlAnalyzeRequest,
+    app: FastAPI,
+    background_tasks: BackgroundTasks,
+    user_id: int,
+):
+    post_url = payload.url
+    placeholder_id = -time.time_ns()
+
+    background_tasks.add_task(
+        background_crawl_and_save,
+        app,
+        placeholder_id,
+        user_id,
+        post_url,
+    )
+
+    return {
+        "success": True,
+        "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
+        "product_id": placeholder_id,
+        "data": [
+            {   
+                "product_id": placeholder_id,
+                "title": "PROCESSING",
+                "price": None,
+                "currency": "KRW",
+                "brand": None,
+                "category": "PROCESSING",
+                "is_soldout": None,
+                "image_url": "",
+                "image_vector": None,
+                "title_vector": None,
+                "shop": None,
+                "source_url": post_url,
+            }
+        ],
+    }
 
 async def background_crawl_and_save(
     app: FastAPI,
@@ -69,8 +110,6 @@ async def background_crawl_and_save(
                 "message": "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
-
-###################################################################################################
 
 async def _extract_product_items(post_url: str) -> list[dict]:
     data = await product_crawler(post_url)

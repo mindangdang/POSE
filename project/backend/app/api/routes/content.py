@@ -25,10 +25,9 @@ from project.backend.app.services.content import (
     resolve_image_path,
     save_manual_item as save_manual_item_for_user,
     search_with_lens,
-    start_url_extraction,
 )
 from project.backend.app.services.websocket import get_websocket_manager
-
+from project.backend.app.services.crawling import start_url_extraction
 router = APIRouter()
 
 

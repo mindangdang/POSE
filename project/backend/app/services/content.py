@@ -1,9 +1,7 @@
 import asyncio
 import base64
 import json
-import os
 import re
-import time
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -21,52 +19,8 @@ from project.backend.basic_functions.ai_service.image_generate_search import gen
 from project.backend.basic_functions.ai_service.utils import upload_generated_image
 from project.backend.basic_functions.crawlers.utils import fetch_image_task, normalize_url
 from project.backend.basic_functions.searching.utils import fetch_from_single_site
+from project.backend.basic_functions.crawlers.utils import text_translate
 
-FAIL_IMAGE_DIR = Path("project/backend/fail_images")
-FAIL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-async def start_url_extraction(
-    payload: UrlAnalyzeRequest,
-    app: FastAPI,
-    background_tasks: BackgroundTasks,
-    user_id: int,
-):
-    post_url = payload.url
-
-
-    # Processing rows do not belong in the normalized saved_posts join table.
-    # A negative transient ID is only used to reconcile the websocket response.
-    placeholder_id = -time.time_ns()
-
-    background_tasks.add_task(
-        background_crawl_and_save,
-        app,
-        placeholder_id,
-        user_id,
-        post_url,
-    )
-
-    return {
-        "success": True,
-        "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
-        "product_id": placeholder_id,
-        "data": [
-            {   
-                "product_id": placeholder_id,
-                "title": "PROCESSING",
-                "price": None,
-                "currency": "KRW",
-                "brand": None,
-                "category": "PROCESSING",
-                "is_soldout": None,
-                "image_url": "",
-                "image_vector": None,
-                "shop": None,
-                "source_url": post_url,
-            }
-        ],
-    }
 
 
 async def stream_product_db_search_results(
@@ -78,7 +32,7 @@ async def stream_product_db_search_results(
 ): # TODO: 사이트 선택시 그 사이트의 상품만 가져오게 
     """검색어 텍스트 임베딩으로 product_db title_vector 유사 상품을 스트리밍합니다."""
     manager = get_websocket_manager(app)
-    translated_query = GoogleTranslator(source='auto', target='en').translate(query)
+    translated_query = text_translate(query, 'en')
     query_vector = await _extract_text_vector_sync(translated_query)
     if query_vector and isinstance(query_vector[0], list):
         query_vector = query_vector[0]
@@ -113,7 +67,6 @@ async def stream_product_db_search_results(
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
     except Exception as exc:
         print(f"product_db 벡터 검색 에러: {exc}")
-
 
 async def search_product_db_by_title(
     repos: Repositories,
@@ -159,7 +112,6 @@ async def search_product_db_by_title(
     except Exception as exc:
         print(f"product_db title search error: {exc}")
         return []
-
 
 async def background_pse_search(
     app: FastAPI,
@@ -218,7 +170,6 @@ async def background_pse_search(
         if manager:
             await manager.broadcast_to_user(user_id, json.dumps({"type": "SEARCH_FINISHED"}))
 
-
 def enqueue_pse_search(
     payload: SearchRequest,
     app: FastAPI,
@@ -234,7 +185,6 @@ def enqueue_pse_search(
         payload.domain_map,
     )
     return {"success": True, "message": "웹 검색 및 AI 분석이 백그라운드에서 시작되었습니다."}
-
 
 async def search_with_lens(file: UploadFile | None, query: str | None):
     serp_api_key = get_settings().serp_api_key
@@ -271,7 +221,6 @@ async def search_with_lens(file: UploadFile | None, query: str | None):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"구글 렌즈 검색 중 오류: {exc}") from exc
 
-
 async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) -> str | None:
     if file:
         file_content = await file.read()
@@ -296,7 +245,6 @@ async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) ->
     generated_image_bytes = await generate_image_from_query(query)
     return await upload_generated_image(generated_image_bytes)
 
-
 async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repositories):
     try:
         normalized_image_url = normalize_url(payload.image_url)
@@ -308,6 +256,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
 
         vector_source = image_url or normalized_image_url
         vector_list = await _extract_vector_sync(vector_source) if vector_source else None
+        text_vector_list = await _extract_text_vector_sync(text_translate(payload.title)) if payload.title else None
         
         product_id = payload.product_id
         if product_id is None or not await repos.product_db.exists(product_id):
@@ -322,6 +271,7 @@ async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repos
                     "is_soldout": payload.is_soldout,
                     "image_url": image_url,
                     "image_vector": vector_list,
+                    "title_vector": text_vector_list,
                     "shop": payload.shop,
                 },
             )
@@ -375,9 +325,5 @@ def resolve_image_path(filename: str) -> Path:
     normal_path = Path(IMAGE_DIR) / relative_path
     if normal_path.exists() and normal_path.is_file():
         return normal_path
-
-    fail_path = FAIL_IMAGE_DIR / relative_path
-    if fail_path.exists() and fail_path.is_file():
-        return fail_path
 
     raise HTTPException(status_code=404, detail="Image not found")

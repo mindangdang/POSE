@@ -9,11 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from project.backend.app.db.models.product import Product
 from project.backend.app.db.models.shop import Shop
-from project.backend.app.schemas.products import ProductSearchDTO
-from project.backend.basic_functions.utils import _extract_vector_sync
-
-from project.backend.basic_functions.utils import _extract_vector_batch, _extract_text_vector_batch
-from project.backend.basic_functions.crawlers.utils import text_translate, get_clean_category
+from project.backend.app.schemas.products import ProductListDTO, ProductSearchDTO
+from project.backend.basic_functions.utils import _extract_vector_sync, _extract_text_vector_sync
+from project.backend.basic_functions.crawlers.utils import text_translate
 
 @dataclass(slots=True)
 class ProductDBRepository:
@@ -21,7 +19,6 @@ class ProductDBRepository:
 
     _SHOP_ALIASES = {
         "fruitsfamily": "FRUITS FAMILY",
-        "fruits family": "FRUITS FAMILY",
         "fetching": "FETCHING",
         "empty": "EMPTY",
         "worksout": "WORKSOUT",
@@ -80,10 +77,14 @@ class ProductDBRepository:
         vector_value = item.get("image_vector")
         if vector_value is None and image_url:
             vector_value = await _extract_vector_sync(image_url)
+        title = item.get("title") or "Unknown"
+        translated_title = text_translate(title, target_lang="en")
+        title_vector = await _extract_text_vector_sync(translated_title)
 
         values = {
             "source_url": source_url,
-            "title": item.get("title") or "Unknown",
+            "title": title,
+            "title_vector": title_vector,
             "price": self._get_price(item.get("price")),
             "currency": self._get_currency(item.get("currency")),
             "brand": item.get("brand") or "UNKNOWN",
@@ -128,6 +129,35 @@ class ProductDBRepository:
             await self.insert_item(item.get("source_url") or source_url, item)
             for item in extracted_items
         ]
+
+    @staticmethod
+    def _list_columns():
+        return (
+            Product.id.label("product_id"),
+            Product.source_url,
+            Product.title,
+            Product.title_vector,
+            Product.price,
+            Product.currency,
+            Product.brand,
+            Product.category,
+            Product.is_soldout,
+            Product.image_url,
+            Product.image_vector,
+            Product.shop_id,
+            Product.gender,
+            Product.created_at,
+            Shop.name.label("shop"),
+        )
+
+    async def get_product_list(self) -> list[ProductListDTO]:
+        statement = (
+            select(*self._list_columns())
+            .join(Shop, Shop.id == Product.shop_id)
+            .order_by(Product.created_at.desc())
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [ProductListDTO.from_row(row) for row in rows]
 
     async def search_by_title_vector(
         self,
