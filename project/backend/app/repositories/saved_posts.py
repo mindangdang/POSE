@@ -1,341 +1,106 @@
 from dataclasses import dataclass
-from typing import Any
-from fastapi.encoders import jsonable_encoder
-from psycopg.rows import dict_row
-from project.backend.basic_functions.utils import _extract_vector_sync
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from project.backend.app.db.models.product import Product
+from project.backend.app.db.models.saved_post import SavedPost
+from project.backend.app.db.models.shop import Shop
+from project.backend.app.schemas.products import SavedProductDTO
 
 
 @dataclass(slots=True)
 class SavedPostsRepository:
-    conn: Any
+    session: AsyncSession
 
-    _INSERT_COLUMNS = (
-        "user_id, source_url, category, title, price, brand, is_available, image_url, image_vector, shop, likes, dislikes"
-    )
-    _INSERT_PLACEHOLDERS = ", ".join(["%s"] * 12)
-    _BASE_INSERT_QUERY = f"INSERT INTO saved_posts ({_INSERT_COLUMNS}) VALUES ({_INSERT_PLACEHOLDERS})"
+    @staticmethod
+    def _joined_columns():
+        return (
+            Product.id.label("product_id"),
+            Product.source_url,
+            Product.title,
+            Product.price,
+            Product.currency,
+            Product.brand,
+            Product.category,
+            Product.is_soldout,
+            Product.image_url,
+            Product.image_vector,
+            Shop.name.label("shop"),
+            Product.gender,
+            SavedPost.created_at,
+        )
 
-    async def delete_by_id(self, item_id: int, user_id: str) -> None:
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                "DELETE FROM saved_posts WHERE item_id = %s AND user_id = %s",
-                (item_id, user_id),
+    async def create(self, *, user_id: int, product_id: int) -> None:
+        statement = (
+            insert(SavedPost)
+            .values(user_id=user_id, product_id=product_id)
+            .on_conflict_do_nothing(
+                index_elements=[SavedPost.product_id, SavedPost.user_id]
             )
-
-    async def count_by_user_id(self, user_id: str) -> int:
-        async with self.conn.cursor(row_factory=dict_row) as cursor:
-            await cursor.execute(
-                "SELECT COUNT(*) AS count FROM saved_posts WHERE user_id = %s",
-                (user_id,),
-            )
-            row = await cursor.fetchone()
-            return int(row["count"]) if row else 0
-
-    async def create_processing_item(self, user_id: str, post_url: str) -> int:
-        '''크롤링 요청시 임시 아이템을 생성하여 DB에 저장하고 item_id를 생성하여 반환하는 메서드입니다.'''
-
-        return await self._insert_item(
-            item_id=None,
-            user_id=user_id,
-            source_url=post_url,
-            category="PROCESSING",
-            title="PROCESSING",
-            price="분석 중...",
-            brand=None,
-            is_available=None,
-            image_url="AI가 열심히 정보를 추출하고 있어요",
-            image_vector=None,
-            shop=None,
-            likes=None,
-            dislikes=None,
-            return_id=True,
         )
-
-    async def create_manual_item(
-        self,
-        item_id: int | None,
-        user_id: str,
-        source_url: str,
-        category: str,
-        title: str | None = None,
-        image_url: str = "",
-        image_vector: str | None = None,
-        price: str | None = None,
-        brand: str | None = None,
-        is_available: str | None = None,
-        shop: str | None = None,
-        likes: str | None = None,
-        dislikes: str | None = None,
-    ) -> int:
-        '''검색결과 아이템을 피드에 저장하기 위한 메서드입니다.'''
-        return await self._insert_item(
-            item_id=item_id,
-            user_id=user_id,
-            source_url=source_url,
-            category=category,
-            title=title,
-            price=price,
-            brand=brand,
-            is_available=is_available,
-            image_url=image_url,
-            image_vector=image_vector,
-            shop=shop,
-            likes=likes,
-            dislikes=dislikes,
-            return_id=False,
-        )
-
-    async def _insert_item(
-        self,
-        item_id: int | None,
-        user_id: str,
-        source_url: str,
-        category: str,
-        title: str | None,
-        price: str | None,
-        brand: str | None,
-        is_available: str | None,
-        image_url: str,
-        image_vector: str | None,
-        shop: str | None,
-        likes: str | None,
-        dislikes: str | None,
-        return_id: bool = False,
-    ) -> int | None:
-        '''DB에 아이템을 삽입하고 item_id를 반환하는 공통 메서드입니다.'''
-        # item_id가 주어지면 명시적으로 item_id 컬럼을 포함하여 삽입,
-        # 주어지지 않으면 기본 컬럼 목록으로 삽입하여 시퀀스(DEFAULT)가 동작하도록 함.
-        base_columns = self._INSERT_COLUMNS
-        base_placeholders = self._INSERT_PLACEHOLDERS
-
-        params = (
-            user_id,
-            source_url,
-            category,
-            title,
-            price,
-            brand,
-            is_available,
-            image_url,
-            image_vector,
-            shop,
-            likes,
-            dislikes,
-        )
-
-        if item_id is not None:
-            columns = "item_id, " + base_columns
-            placeholders = ", ".join(["%s"] * (len(params) + 1))
-            query = f"INSERT INTO saved_posts ({columns}) VALUES ({placeholders})"
-            exec_params = (item_id,) + params
-        else:
-            columns = base_columns
-            placeholders = base_placeholders
-            query = f"INSERT INTO saved_posts ({columns}) VALUES ({placeholders})"
-            exec_params = params
-
-        if return_id:
-            query = f"{query} RETURNING item_id"
-
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(query, exec_params)
-            new_item_id = None
-            if return_id:
-                row = await cursor.fetchone()
-                new_item_id = int(row[0]) if row else None
-            await self.conn.commit()
-            return new_item_id
+        await self.session.execute(statement)
 
     async def insert_items_batch(
         self,
-        user_id: str,
-        source_url: str,
-        extracted_items: list[dict],
+        *,
+        user_id: int,
+        product_ids: list[int],
     ) -> None:
-        """크롤링으로 추출된 여러 아이템을 한 번에 DB에 삽입합니다."""
-        if not extracted_items:
+        if not product_ids:
             return
-
-        try:
-            async with self.conn.cursor() as cursor:
-                insert_query_with_id = """
-                    INSERT INTO saved_posts 
-                    (item_id, user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop, likes, dislikes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source_url, title) DO NOTHING;
-                """
-                insert_query_without_id = """
-                    INSERT INTO saved_posts 
-                    (user_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop, likes, dislikes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source_url, title) DO NOTHING;
-                """
-                batch_with_id = []
-                batch_without_id = []
-
-                for item in extracted_items:
-                    raw_item_id = item.get("item_id")
-                    item_id = None
-                    if raw_item_id is not None:
-                        try:
-                            item_id = int(raw_item_id)
-                        except (TypeError, ValueError):
-                            item_id = None
-
-                    title = item.get("title", "Unknown")
-                    price = item.get("price")
-                    brand = item.get("brand") or "UNKNOWN"
-                    category = item.get("category") or "PRODUCT"
-                    is_available = str(item.get("is_available", "Unknown"))
-                    shop = item.get("shop") or "UNKNOWN"
-                    image_url = item.get("image_url") or item.get("local_path") or ""
-                    vector_list = await _extract_vector_sync(image_url)
-                    vector_str = str(vector_list) if vector_list else None
-                    likes = item.get("likes")
-                    dislikes = item.get("dislikes")
-
-                    if item_id is not None:
-                        batch_with_id.append((
-                            item_id,
-                            str(user_id),
-                            source_url,
-                            title,
-                            price,
-                            brand,
-                            category,
-                            is_available,
-                            image_url,
-                            vector_str,
-                            shop,
-                            likes,
-                            dislikes
-                        ))
-                    else:
-                        batch_without_id.append((
-                            str(user_id),
-                            source_url,
-                            title,
-                            price,
-                            brand,
-                            category,
-                            is_available,
-                            image_url,
-                            vector_str,
-                            shop,
-                            likes,
-                            dislikes
-                        ))
-
-                if batch_with_id:
-                    await cursor.executemany(insert_query_with_id, batch_with_id)
-                if batch_without_id:
-                    await cursor.executemany(insert_query_without_id, batch_without_id)
-
-            print(f"DB 저장 완료: {len(extracted_items)}개 아이템")
-        except Exception as e:
-            print(f"DB 저장 중 에러 발생: {e}")
-            raise e
-
-    @staticmethod
-    def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
-        if item.get("image_vector") is not None:
-            item["image_vector"] = str(item["image_vector"])
-        item["likes"] = SavedPostsRepository._coerce_vote_value(item.get("likes"))
-        item["dislikes"] = SavedPostsRepository._coerce_vote_value(item.get("dislikes"))
-        return item
-
-    @staticmethod
-    def _coerce_vote_value(value: Any) -> int:
-        if value in (None, ""):
-            return 0
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return 0
-
-    async def list_feed_items(self, user_id: str):
-        async with self.conn.cursor(row_factory=dict_row) as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    item_id,
-                    source_url,
-                    title,
-                    price,
-                    brand,
-                    category,
-                    is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                    likes,
-                    dislikes,
-                    created_at
-                FROM saved_posts
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-                """,
-                (user_id,),
+        statement = (
+            insert(SavedPost)
+            .values(
+                [
+                    {"user_id": user_id, "product_id": product_id}
+                    for product_id in product_ids
+                ]
             )
-            items = await cursor.fetchall()
-            return jsonable_encoder([self._normalize_item(item) for item in items])
-
-    async def get_random_feed_item(self, user_id: str):
-        async with self.conn.cursor(row_factory=dict_row) as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    item_id,
-                    source_url,
-                    title,
-                    price,
-                    brand,
-                    category,
-                    is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                    likes,
-                    dislikes,
-                    created_at
-                FROM saved_posts
-                WHERE user_id = %s
-                ORDER BY RANDOM()
-                LIMIT 1
-                """,
-                (user_id,),
+            .on_conflict_do_nothing(
+                index_elements=[SavedPost.product_id, SavedPost.user_id]
             )
-            item = await cursor.fetchone()
-            return jsonable_encoder(self._normalize_item(item)) if item else None
+        )
+        await self.session.execute(statement)
 
-    async def increment_vote_count(self, item_id: int, user_id: str, direction: str):
-        if direction not in {"like", "dislike"}:
-            raise ValueError("direction must be either 'like' or 'dislike'")
-
-        vote_column = "likes" if direction == "like" else "dislikes"
-
-        async with self.conn.cursor(row_factory=dict_row) as cursor:
-            await cursor.execute(
-                f"""
-                UPDATE saved_posts
-                SET {vote_column} = (COALESCE(NULLIF({vote_column}, '')::int, 0) + 1)::text
-                WHERE item_id = %s AND user_id = %s
-                RETURNING
-                    item_id,
-                    source_url,
-                    title,
-                    price,
-                    brand,
-                    category,
-                    is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                    likes,
-                    dislikes,
-                    created_at
-                """,
-                (item_id, user_id),
+    async def delete_by_id(self, product_id: int, user_id: int) -> None:
+        await self.session.execute(
+            delete(SavedPost).where(
+                SavedPost.product_id == product_id,
+                SavedPost.user_id == user_id,
             )
-            item = await cursor.fetchone()
-            return jsonable_encoder(self._normalize_item(item)) if item else None
+        )
+
+    async def count_by_user_id(self, user_id: int) -> int:
+        count = await self.session.scalar(
+            select(func.count()).select_from(SavedPost).where(
+                SavedPost.user_id == user_id
+            )
+        )
+        return int(count or 0)
+
+    def _joined_statement(self):
+        return (
+            select(*self._joined_columns())
+            .join(Product, Product.id == SavedPost.product_id)
+            .join(Shop, Shop.id == Product.shop_id)
+        )
+
+    async def list_feed_items(self, user_id: int) -> list[SavedProductDTO]:
+        statement = (
+            self._joined_statement()
+            .where(SavedPost.user_id == user_id)
+            .order_by(SavedPost.created_at.desc())
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [SavedProductDTO.from_row(row) for row in rows]
+
+    async def get_random_feed_item(self, user_id: int) -> SavedProductDTO | None:
+        statement = (
+            self._joined_statement()
+            .where(SavedPost.user_id == user_id)
+            .order_by(func.random())
+            .limit(1)
+        )
+        row = (await self.session.execute(statement)).mappings().one_or_none()
+        return SavedProductDTO.from_row(row) if row else None

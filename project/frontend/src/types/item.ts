@@ -1,15 +1,14 @@
 export interface SavedItem {
-  item_id: number;  
+  product_id: number;
   title: string;
   price: number | null;
+  currency: string;
   brand: string | null;
   category: string;
-  is_available: boolean | null;
+  is_soldout: boolean | null;
   image_url: string;
   image_vector: string | null;
   shop: string;
   source_url: string;
   created_at: string;
-  likes: number | null;
-  dislikes: number | null;
 }

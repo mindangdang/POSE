@@ -10,8 +10,8 @@ export async function saveItemToFeed(
 ): Promise<void> {
   try {
     const payload = {
-      ...(typeof item.item_id === 'number' && Number.isFinite(item.item_id)
-        ? { item_id: item.item_id }
+      ...(typeof item.product_id === 'number' && Number.isFinite(item.product_id)
+        ? { product_id: item.product_id }
         : {}),
       title: item.title,
       source_url: item.source_url,
@@ -19,11 +19,10 @@ export async function saveItemToFeed(
       image_url: item.image_url,
       image_vector: item.image_vector,
       price: item.price,
+      currency: item.currency,
       brand: item.brand,
-      is_available: item.is_available,
+      is_soldout: item.is_soldout,
       shop: item.shop,
-      likes: item.likes,
-      dislikes: item.dislikes,
     };
 
     await apiJson('/api/items/manual', {

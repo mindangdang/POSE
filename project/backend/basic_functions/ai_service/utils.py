@@ -3,8 +3,6 @@ import uuid
 import asyncio
 from supabase import create_client, Client
 import httpx
-import psycopg 
-from psycopg.rows import dict_row 
 from google import genai
 from google.genai import types
 from pathlib import Path
@@ -12,8 +10,6 @@ from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.manage.resilience import with_llm_resilience
 
 settings = get_settings()
-NEON_DB_URL = settings.neon_db_url
-
 url: str = settings.supabase_url
 key: str = settings.supabase_key
 
@@ -50,23 +46,6 @@ async def upload_generated_image(image_bytes: bytes) -> str:
     print(f"업로드 완료! 퍼블릭 URL: {public_url}")
     return public_url
 
-async def fetch_user_data_from_neon(user_id: str):
-    try:
-        async with await psycopg.AsyncConnection.connect(NEON_DB_URL) as conn:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                query = """
-                    SELECT category, title, image_url,image_vector
-                    FROM saved_posts
-                    WHERE user_id = %s
-                    ORDER BY created_at DESC
-                    LIMIT 10;
-                """
-                await cur.execute(query, (user_id,))
-                return await cur.fetchall()
-    except Exception as e:
-        print(f"DB 조회 실패: {e}")
-        return []
-
 async def get_image_bytes(url_or_filename: str) -> bytes | None:
     if not url_or_filename:
         return None
@@ -95,4 +74,3 @@ async def get_image_bytes(url_or_filename: str) -> bytes | None:
         return None
 
     return await asyncio.to_thread(read_local)
-

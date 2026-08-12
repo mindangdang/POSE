@@ -112,7 +112,7 @@ export function FeedTabContent({
           try {
             const data = JSON.parse(event.data);
             const removePlaceholder = (prevItems: SavedItem[]) => 
-              prevItems.filter(item => Number(item.item_id) !== Number(data.placeholder_id));
+              prevItems.filter(item => Number(item.product_id) !== Number(data.placeholder_id));
 
             if (data.type === 'CRAWL_SUCCESS') {
               onItemsChange((prev) => [...(data.items || []), ...removePlaceholder(prev)]);
@@ -170,7 +170,7 @@ export function FeedTabContent({
     },
     onMutate: async ({ id }) => {
       const previousItems = items;
-      onItemsChange((currentItems) => currentItems.filter((item) => item.item_id !== id));
+      onItemsChange((currentItems) => currentItems.filter((item) => item.product_id !== id));
       return { previousItems };
     },
     onError: (error, _variables, context) => {
@@ -188,7 +188,7 @@ export function FeedTabContent({
     void trackEvent({
       action: 'SAVE_WISHLIST',
       entityType: 'SEARCH_RESULT',
-      entityId: item.item_id,
+      entityId: item.product_id,
       metadata: { title: item.title, source_url: item.source_url, shop: item.shop },
     });
 
@@ -313,16 +313,16 @@ export function FeedTabContent({
             {/* Item Cards */}
             {itemsToDisplay.map((item) => (
               <FeedItemCard
-                key={item.item_id}
+                key={item.product_id}
                 item={item}
                 onDelete={handleDelete}
                 onSelect={() => {
-                  void trackEvent({ action: 'CLICK_ITEM', entityType: 'WISHLIST_ITEM', entityId: item.item_id, metadata: { title: item.title } });
+                  void trackEvent({ action: 'CLICK_ITEM', entityType: 'WISHLIST_ITEM', entityId: item.product_id, metadata: { title: item.title } });
                   onSelectItem(item);
                 }}
                 onSearchSecondhand={onSearchSecondhand}
-                onLike={(likedItem) => void trackEvent({ action: 'LIKE', entityType: 'WISHLIST_ITEM', entityId: likedItem.item_id, metadata: { title: likedItem.title } })}
-                onDislike={(dislikedItem) => void trackEvent({ action: 'DISLIKE', entityType: 'WISHLIST_ITEM', entityId: dislikedItem.item_id, metadata: { title: dislikedItem.title } })}
+                onLike={(likedItem) => void trackEvent({ action: 'LIKE', entityType: 'WISHLIST_ITEM', entityId: likedItem.product_id, metadata: { title: likedItem.title } })}
+                onDislike={(dislikedItem) => void trackEvent({ action: 'DISLIKE', entityType: 'WISHLIST_ITEM', entityId: dislikedItem.product_id, metadata: { title: dislikedItem.title } })}
               />
             ))}
           </motion.div>

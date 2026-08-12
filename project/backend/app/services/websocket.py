@@ -5,12 +5,14 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, list[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def connect(self, websocket: WebSocket, user_id: int | str):
         await websocket.accept()
-        self.active_connections.setdefault(user_id, []).append(websocket)
+        key = str(user_id)
+        self.active_connections.setdefault(key, []).append(websocket)
 
-    def disconnect(self, websocket: WebSocket, user_id: str):
-        connections = self.active_connections.get(user_id)
+    def disconnect(self, websocket: WebSocket, user_id: int | str):
+        key = str(user_id)
+        connections = self.active_connections.get(key)
         if not connections:
             return
 
@@ -18,10 +20,10 @@ class ConnectionManager:
             connections.remove(websocket)
 
         if not connections:
-            del self.active_connections[user_id]
+            del self.active_connections[key]
 
-    async def broadcast_to_user(self, user_id: str, message: str):
-        connections = self.active_connections.get(user_id, [])
+    async def broadcast_to_user(self, user_id: int | str, message: str):
+        connections = self.active_connections.get(str(user_id), [])
         dead_sockets = []
 
         for websocket in connections:

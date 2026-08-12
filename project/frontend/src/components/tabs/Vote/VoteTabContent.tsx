@@ -70,7 +70,7 @@ export function VoteTabContent({ items, userPosts, onCreatePost, composerSignal 
 
   const votePosts = useMemo<CommunityPost[]>(
     () => items.map((item) => ({
-      id: `wish-${item.item_id}`,
+      id: `wish-${item.product_id}`,
       type: 'vote',
       title: item.title || '위시템 투표',
       body: '이 위시템이 나에게 어울릴지, 객관적으로 어떤지 투표해주세요.',
@@ -78,8 +78,8 @@ export function VoteTabContent({ items, userPosts, onCreatePost, composerSignal 
       imageUrl: item.image_url,
       item,
       comments: [],
-      likes: item.likes ?? 0,
-      dislikes: item.dislikes ?? 0,
+      likes: 0,
+      dislikes: 0,
     })),
     [items],
   );
@@ -92,15 +92,15 @@ export function VoteTabContent({ items, userPosts, onCreatePost, composerSignal 
     void trackEvent({
       action: direction === 'like' ? 'VOTE_PRETTY' : 'VOTE_UGLY',
       entityType: 'VOTING_ITEM',
-      entityId: post.item?.item_id ?? post.id,
+      entityId: post.item?.product_id ?? post.id,
       metadata: { title: post.title },
     });
   };
 
   const handleWishlist = (post: CommunityPost) => {
     if (!post.item) return;
-    setWishlistIds((prev) => (prev.includes(post.item!.item_id) ? prev : [post.item!.item_id, ...prev]));
-    void trackEvent({ action: 'SAVE_WISHLIST', entityType: 'VOTING_ITEM', entityId: post.item.item_id, metadata: { title: post.title } });
+    setWishlistIds((prev) => (prev.includes(post.item!.product_id) ? prev : [post.item!.product_id, ...prev]));
+    void trackEvent({ action: 'SAVE_WISHLIST', entityType: 'VOTING_ITEM', entityId: post.item.product_id, metadata: { title: post.title } });
   };
 
   const handleComment = (postId: string) => {
@@ -140,7 +140,7 @@ export function VoteTabContent({ items, userPosts, onCreatePost, composerSignal 
 
       <div className="space-y-8">
         {posts.map((post) => {
-          const isWishlisted = post.item ? wishlistIds.includes(post.item.item_id) : false;
+          const isWishlisted = post.item ? wishlistIds.includes(post.item.product_id) : false;
           const mergedComments = [...post.comments, ...(comments[post.id] || [])];
           const vote = votedPosts[post.id];
           return (

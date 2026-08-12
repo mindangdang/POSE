@@ -1,198 +1,218 @@
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+import re
 from typing import Any
+
+from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from project.backend.app.db.models.product import Product
+from project.backend.app.db.models.shop import Shop
+from project.backend.app.schemas.products import ProductSearchDTO
+from project.backend.basic_functions.utils import _extract_vector_sync
+
 from project.backend.basic_functions.utils import _extract_vector_batch, _extract_text_vector_batch
 from project.backend.basic_functions.crawlers.utils import text_translate, get_clean_category
 
 @dataclass(slots=True)
 class ProductDBRepository:
-    conn: Any
+    session: AsyncSession
+
+    _SHOP_ALIASES = {
+        "fruitsfamily": "FRUITS FAMILY",
+        "fruits family": "FRUITS FAMILY",
+        "fetching": "FETCHING",
+        "empty": "EMPTY",
+        "worksout": "WORKSOUT",
+        "8division": "8DIVISION",
+        "iamshop": "IAMSHOP",
+        "thebounce": "THE BOUNCE",
+        "the bounce": "THE BOUNCE",
+        "thexshop": "THE X SHOP",
+        "the x shop": "THE X SHOP",
+        "collectiv": "COLLECTIV",
+        "kream": "KREAM",
+        "musinsa": "MUSINSA",
+        "eql": "EQL",
+        "29cm": "29CM",
+        "bunjang": "Bunjang",
+        "daangn": "Danggeun Market",
+        "danggeun market": "Danggeun Market",
+        "joongna": "Joonggonara",
+        "joonggonara": "Joonggonara",
+        "zara": "ZARA",
+    }
+
+    @staticmethod
+    def _columns():
+        return (
+            Product.id.label("product_id"),
+            Product.source_url,
+            Product.title,
+            Product.price,
+            Product.currency,
+            Product.brand,
+            Product.category,
+            Product.is_soldout,
+            Product.image_url,
+            Product.image_vector,
+            Shop.name.label("shop"),
+            Product.gender,
+        )
+
+    async def exists(self, product_id: int) -> bool:
+        return await self.session.get(Product, product_id) is not None
+
+    async def _shop_id(self, shop_value: Any) -> int:
+        shop_name = self._canonical_shop_name(shop_value)
+        shop_id = await self.session.scalar(select(Shop.id).where(Shop.name == shop_name))
+        if shop_id is None:
+            shop_id = await self.session.scalar(
+                select(Shop.id).where(Shop.name == "UNKNOWN")
+            )
+        if shop_id is None:
+            raise RuntimeError("The required UNKNOWN shop seed is missing")
+        return int(shop_id)
+
+    async def insert_item(self, source_url: str, item: dict[str, Any]) -> Product:
+        image_url = item.get("image_url") or item.get("local_path") or ""
+        vector_value = item.get("image_vector")
+        if vector_value is None and image_url:
+            vector_value = await _extract_vector_sync(image_url)
+
+        values = {
+            "source_url": source_url,
+            "title": item.get("title") or "Unknown",
+            "price": self._get_price(item.get("price")),
+            "currency": self._get_currency(item.get("currency")),
+            "brand": item.get("brand") or "UNKNOWN",
+            "category": item.get("category") or "PRODUCT",
+            "is_soldout": self._get_is_soldout(item),
+            "image_url": image_url,
+            "image_vector": vector_value,
+            "shop_id": await self._shop_id(item.get("shop")),
+            "gender": item.get("gender") or "UNKNOWN",
+        }
+        excluded = insert(Product).excluded
+        statement = (
+            insert(Product)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=[Product.source_url],
+                set_={
+                    "title": excluded.title,
+                    "price": excluded.price,
+                    "currency": excluded.currency,
+                    "brand": excluded.brand,
+                    "category": excluded.category,
+                    "is_soldout": excluded.is_soldout,
+                    "image_url": excluded.image_url,
+                    "image_vector": func.coalesce(
+                        excluded.image_vector, Product.image_vector
+                    ),
+                    "shop_id": excluded.shop_id,
+                    "gender": excluded.gender,
+                },
+            )
+            .returning(Product)
+        )
+        return (await self.session.scalars(statement)).one()
 
     async def insert_items_batch(
         self,
         source_url: str,
-        extracted_items: list[dict],
-    ) -> None:
-        """크롤링으로 추출된 여러 아이템을 한 번에 DB에 삽입합니다."""
-        if not extracted_items:
-            return
-        try:
-            async with self.conn.cursor() as cursor:
-                insert_query_with_id = """
-                    INSERT INTO product_db 
-                    (item_id, source_url, title, price, brand, category, is_available, image_url, image_vector, shop, gender)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source_url, title) DO NOTHING;
-                """
-                insert_query_without_id = """
-                    INSERT INTO product_db 
-                    (source_url, title, price, brand, category, is_available, image_url, image_vector, shop, gender)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source_url, title) DO NOTHING;
-                """
-                batch_with_id = []
-                batch_without_id = []
-
-                for item in extracted_items:
-                    raw_item_id = item.get("item_id")
-                    item_id = None
-                    if raw_item_id is not None:
-                        try:
-                            item_id = int(raw_item_id)
-                        except (TypeError, ValueError):
-                            item_id = None
-
-                    title = item.get("title", "Unknown")
-                    title_vec = await _extract_text_vector_batch([text_translate(title, 'en')])
-                    price = item.get("price")
-                    brand = item.get("brand") or "UNKNOWN"
-                    category = get_clean_category(title_vec[0]) if title_vec else "PRODUCT"
-                    is_available = str(item.get("is_available", "Unknown"))
-                    shop = item.get("shop") or "UNKNOWN"
-                    image_url = item.get("image_url") or item.get("local_path") or ""
-                    vector_list = await _extract_vector_batch(image_url)
-                    vector_str = str(vector_list) if vector_list else None
-                    gender = item.get("gender") or "UNKNOWN"
-
-                    if item_id is not None:
-                        batch_with_id.append((
-                            item_id,
-                            source_url,
-                            title,
-                            price,
-                            brand,
-                            category,
-                            is_available,
-                            image_url,
-                            vector_str,
-                            shop,
-                            gender
-                        ))
-                    else:
-                        batch_without_id.append((
-                            source_url,
-                            title,
-                            price,
-                            brand,
-                            category,
-                            is_available,
-                            image_url,
-                            vector_str,
-                            shop,
-                            gender
-                        ))
-
-                await cursor.executemany(insert_query_with_id, batch_with_id)
-                if batch_without_id:
-                    await cursor.executemany(insert_query_without_id, batch_without_id)
-            print(f"DB 저장 완료: {len(extracted_items)}개 아이템")
-
-        except Exception as e:
-            print(f"DB 저장 중 에러 발생: {e}")
-            raise e
-
+        extracted_items: list[dict[str, Any]],
+    ) -> list[Product]:
+        return [
+            await self.insert_item(item.get("source_url") or source_url, item)
+            for item in extracted_items
+        ]
 
     async def search_by_title_vector(
         self,
         query_vector: list[float],
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        """title_vector cosine similarity 기준으로 product_db 상품을 조회합니다."""
+    ) -> list[ProductSearchDTO]:
         if not query_vector:
             return []
-
-        vector_str = str(query_vector)
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    item_id,
-                    source_url,
-                    title,
-                    price,
-                    brand,
-                    category,
-                    is_soldout AS is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                    gender,
-                    1 - (title_vector <=> %s::vector) AS similarity
-                FROM product_db
-                WHERE title_vector IS NOT NULL
-                ORDER BY title_vector <=> %s::vector
-                LIMIT %s;
-                """,
-                (vector_str, vector_str, limit),
-            )
-            rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-
-        results = []
-        for row in rows:
-            item = self._normalize_item(dict(zip(columns, row)))
-            item["item_id"] = str(item.get("item_id"))
-            item["likes"] = None
-            item["dislikes"] = None
-            item["search_source"] = "product_db"
-            results.append(item)
-        return results
+        distance = Product.title_vector.cosine_distance(query_vector)
+        statement = (
+            select(*self._columns(), (1 - distance).label("similarity"))
+            .join(Shop, Shop.id == Product.shop_id)
+            .where(Product.title_vector.is_not(None))
+            .order_by(distance)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [ProductSearchDTO.from_row(row) for row in rows]
 
     async def search_by_title_text(
         self,
         query: str,
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        """title 텍스트가 일치하거나 유사한 product_db 상품을 조회합니다."""
+    ) -> list[ProductSearchDTO]:
         normalized_query = (query or "").strip()
         if not normalized_query:
             return []
-
-        like_query = f"%{normalized_query}%"
-        async with self.conn.cursor() as cursor:
-            await cursor.execute(
-                """
-                SELECT
-                    item_id,
-                    source_url,
-                    title,
-                    price,
-                    brand,
-                    category,
-                    is_soldout AS is_available,
-                    image_url,
-                    image_vector,
-                    shop,
-                    gender,
-                    CASE
-                        WHEN lower(title) = lower(%s) THEN 0
-                        WHEN lower(title) LIKE lower(%s) || '%%' THEN 1
-                        WHEN lower(title) LIKE '%%' || lower(%s) || '%%' THEN 2
-                        ELSE 3
-                    END AS text_rank
-                FROM product_db
-                WHERE lower(title) LIKE lower(%s)
-                ORDER BY text_rank, created_at DESC
-                LIMIT %s;
-                """,
-                (normalized_query, normalized_query, normalized_query, like_query, limit),
-            )
-            rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-
-        results = []
-        for row in rows:
-            item = self._normalize_item(dict(zip(columns, row)))
-            item["item_id"] = str(item.get("item_id"))
-            item["likes"] = None
-            item["dislikes"] = None
-            item["search_source"] = "product_db"
-            results.append(item)
-        return results
+        lowered_title = func.lower(Product.title)
+        lowered_query = normalized_query.lower()
+        text_rank = case(
+            (lowered_title == lowered_query, 0),
+            (lowered_title.like(f"{lowered_query}%"), 1),
+            (lowered_title.like(f"%{lowered_query}%"), 2),
+            else_=3,
+        ).label("text_rank")
+        statement = (
+            select(*self._columns(), text_rank)
+            .join(Shop, Shop.id == Product.shop_id)
+            .where(lowered_title.like(f"%{lowered_query}%"))
+            .order_by(text_rank, Product.created_at.desc())
+            .limit(limit)
+        )
+        rows = (await self.session.execute(statement)).mappings().all()
+        return [ProductSearchDTO.from_row(row) for row in rows]
 
     @staticmethod
-    def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
-        if item.get("image_vector") is not None:
-            item["image_vector"] = str(item["image_vector"])
-        return item
+    def _canonical_shop_name(value: Any) -> str:
+        if not isinstance(value, str):
+            return "UNKNOWN"
+        return ProductDBRepository._SHOP_ALIASES.get(value.strip().lower(), "UNKNOWN")
 
- 
+    @staticmethod
+    def _get_currency(value: Any) -> str:
+        if not isinstance(value, str):
+            return "KRW"
+        normalized = value.strip().upper()
+        aliases = {
+            "₩": "KRW", "KRW": "KRW", "$": "USD", "USD": "USD",
+            "¥": "JPY", "JPY": "JPY", "€": "EUR", "EUR": "EUR",
+        }
+        return aliases.get(
+            normalized,
+            normalized if re.fullmatch(r"[A-Z]{3}", normalized) else "KRW",
+        )
+
+    @staticmethod
+    def _get_price(value: Any) -> Decimal | None:
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float, Decimal)):
+            try:
+                return Decimal(str(value))
+            except InvalidOperation:
+                return None
+        if not isinstance(value, str):
+            return None
+        match = re.search(r"-?\d+(?:\.\d+)?", value.strip().replace(",", ""))
+        if not match:
+            return None
+        try:
+            return Decimal(match.group())
+        except InvalidOperation:
+            return None
+
+    @staticmethod
+    def _get_is_soldout(item: dict[str, Any]) -> bool | None:
+        value = item.get("is_soldout")
+        return value if isinstance(value, bool) else None

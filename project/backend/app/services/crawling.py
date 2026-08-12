@@ -7,11 +7,11 @@ from project.backend.app.repositories import get_repositories
 
 async def background_crawl_and_save(
     app: FastAPI,
-    item_id: int,
-    user_id: str,
+    placeholder_id: int,
+    user_id: int,
     post_url: str,
 ):
-    print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {item_id})")
+    print(f"[백그라운드] 작업 시작: {post_url} (임시 ID: {placeholder_id})")
     manager = getattr(app.state, "websocket_manager", None)
 
     try:
@@ -23,24 +23,28 @@ async def background_crawl_and_save(
 
         _mark_feed_add_items(extracted_items)
 
-        async with app.state.db_pool.connection() as conn:
-            repos = get_repositories(conn)
-            await repos.saved_posts.delete_by_id(item_id, user_id)
-            await repos.saved_posts.insert_items_batch(user_id, post_url, extracted_items)
-            await repos.product_db.insert_items_batch(post_url, extracted_items)
-            await conn.commit()
+        async with app.state.db_session_factory() as session:
+            async with session.begin():
+                repos = get_repositories(session)
+                products = await repos.product_db.insert_items_batch(
+                    post_url, extracted_items
+                )
+                await repos.saved_posts.insert_items_batch(
+                    user_id=user_id,
+                    product_ids=[product.id for product in products],
+                )
             print("[백그라운드] 작업 및 DB 저장 완료")
 
             all_items = await repos.saved_posts.list_feed_items(user_id)
-            new_items = [item for item in all_items if item.get("source_url") == post_url]
+            new_items = [item for item in all_items if item.source_url == post_url]
             if not new_items:
                 print("[백그라운드] DB에서 새 아이템을 찾을 수 없습니다.")
 
         if manager:
             payload = {
                 "type": "CRAWL_SUCCESS",
-                "placeholder_id": item_id,
-                "items": new_items,
+                "placeholder_id": placeholder_id,
+                "items": [item.model_dump(mode="json") for item in new_items],
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
             print("[백그라운드] 웹소켓 메시지 전송 완료")
@@ -49,19 +53,19 @@ async def background_crawl_and_save(
         print(f"[백그라운드] 전체 프로세스 에러: {exc}")
 
         try:
-            async with app.state.db_pool.connection() as conn:
-                repos = get_repositories(conn)
-                await repos.saved_posts.delete_by_id(item_id,user_id)
-                await conn.commit()
-                print(f"[백그라운드] 에러로 인해 임시 아이템({item_id}) 삭제 완료")
+            async with app.state.db_session_factory() as session:
+                async with session.begin():
+                    repos = get_repositories(session)
+                    await repos.saved_posts.delete_by_id(placeholder_id, user_id)
+                print(f"[백그라운드] 에러로 인해 임시 아이템({placeholder_id}) 삭제 완료")
 
         except Exception as db_exc:
-            print(f"[백그라운드] 임시 아이템({item_id}) 삭제 실패: {db_exc}")
+            print(f"[백그라운드] 임시 아이템({placeholder_id}) 삭제 실패: {db_exc}")
 
         if manager:
             payload = {
                 "type": "CRAWL_ERROR",
-                "placeholder_id": item_id,
+                "placeholder_id": placeholder_id,
                 "message": "데이터를 가져오는 데 실패했습니다. 잠시 후 다시 시도해주세요.",
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload))
@@ -79,7 +83,7 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     #local_image_url = await fetch_image_task(normalized_url, IMAGE_DIR)
     brand = data.get("brand", "Unknown")
     title = data.get("title", "Unknown")
-    is_available = data.get("is_available", "Unknown")
+    is_soldout = data.get("is_soldout")
     shop = data.get("source", "Unknown")
     category = data.get("category") or "PRODUCT"
     gender = data.get("gender") or "UNKNOWN"
@@ -87,10 +91,11 @@ async def _extract_product_items(post_url: str) -> list[dict]:
     return [
         {
             "title": title,
-            "price": f"{data.get('price', '')} {data.get('currency', '')}".strip() or None,
+            "price": data.get("price"),
+            "currency": data.get("currency") or "KRW",
             "brand": brand,
             "category": category,
-            "is_available": is_available,
+            "is_soldout": is_soldout if isinstance(is_soldout, bool) else None,
             "image_url": raw_image_url or None,
             "shop": shop,
             "source_url": post_url,

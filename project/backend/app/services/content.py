@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import time
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -29,22 +30,19 @@ async def start_url_extraction(
     payload: UrlAnalyzeRequest,
     app: FastAPI,
     background_tasks: BackgroundTasks,
-    repos: Repositories,
-    user_id: str,
+    user_id: int,
 ):
     post_url = payload.url
 
 
-    try:
-        new_item_id = await repos.saved_posts.create_processing_item(user_id, post_url)
-    except Exception as exc:
-        await repos.saved_posts.conn.rollback()
-        raise HTTPException(status_code=500, detail=f"임시 데이터 저장 실패: {exc}") from exc
+    # Processing rows do not belong in the normalized saved_posts join table.
+    # A negative transient ID is only used to reconcile the websocket response.
+    placeholder_id = -time.time_ns()
 
     background_tasks.add_task(
         background_crawl_and_save,
         app,
-        new_item_id,
+        placeholder_id,
         user_id,
         post_url,
     )
@@ -52,20 +50,19 @@ async def start_url_extraction(
     return {
         "success": True,
         "message": "데이터 추출 및 AI 분석이 시작되었습니다.",
-        "item_id": new_item_id,
+        "product_id": placeholder_id,
         "data": [
             {   
-                "item_id": new_item_id,
+                "product_id": placeholder_id,
                 "title": "PROCESSING",
                 "price": None,
+                "currency": "KRW",
                 "brand": None,
                 "category": "PROCESSING",
-                "is_available": None,
+                "is_soldout": None,
                 "image_url": "",
                 "image_vector": None,
                 "shop": None,
-                "likes": None,
-                "dislikes": None,
                 "source_url": post_url,
             }
         ],
@@ -74,7 +71,7 @@ async def start_url_extraction(
 
 async def stream_product_db_search_results(
     app: FastAPI,
-    user_id: str,
+    user_id: int,
     query: str,
     current_page: int,
     limit: int = 20,
@@ -90,16 +87,17 @@ async def stream_product_db_search_results(
         print(f"[DEBUG] product_db 검색 스킵: query='{query}' 텍스트 임베딩 실패")
         return
 
-    pool = getattr(app.state, "db_pool", None)
-    if pool is None or pool.closed:
-        print("[DEBUG] product_db 검색 스킵: DB 풀이 초기화되지 않았습니다.")
+    session_factory = getattr(app.state, "db_session_factory", None)
+    if session_factory is None:
+        print("[DEBUG] product_db 검색 스킵: DB session factory가 없습니다.")
         return
 
-    conn = None
     try:
-        conn = await pool.getconn()
-        repos = get_repositories(conn)
-        product_items = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+        async with session_factory() as session:
+            repos = get_repositories(session)
+            product_items = await repos.product_db.search_by_title_vector(
+                query_vector, limit=limit
+            )
         print(f"[DEBUG] product_db title_vector 검색 결과:{len(product_items)}개")
 
         if not manager:
@@ -108,30 +106,22 @@ async def stream_product_db_search_results(
         for item in product_items:
             payload = {
                 "type": "SEARCH_SUCCESS",
-                "results": [item],
+                "results": [item.model_dump(mode="json")],
                 "is_append": True,
                 "page": current_page,
             }
             await manager.broadcast_to_user(user_id, json.dumps(payload, default=str))
     except Exception as exc:
         print(f"product_db 벡터 검색 에러: {exc}")
-    finally:
-        if conn is not None:
-            await pool.putconn(conn)
 
 
 async def search_product_db_by_title(
-    app: FastAPI,
+    repos: Repositories,
     query: str,
     limit: int = 12,
 ):
     normalized_query = (query or "").strip()
     if not normalized_query:
-        return []
-
-    pool = getattr(app.state, "db_pool", None)
-    if pool is None or pool.closed:
-        print("[DEBUG] product_db title search skipped: DB pool is not initialized.")
         return []
 
     translated_query = normalized_query
@@ -140,28 +130,27 @@ async def search_product_db_by_title(
     except Exception:
         translated_query = normalized_query
 
-    conn = None
     try:
         query_vector = await _extract_text_vector_sync(translated_query)
         if query_vector and isinstance(query_vector[0], list):
             query_vector = query_vector[0]
 
-        conn = await pool.getconn()
-        repos = get_repositories(conn)
-
-        text_matches = await repos.product_db.search_by_title_text(normalized_query, limit=limit)
+        text_matches = await repos.product_db.search_by_title_text(
+            normalized_query, limit=limit
+        )
         vector_matches = []
         if query_vector:
-            vector_matches = await repos.product_db.search_by_title_vector(query_vector, limit=limit)
+            vector_matches = await repos.product_db.search_by_title_vector(
+                query_vector, limit=limit
+            )
 
-        merged: list[dict] = []
-        seen_ids: set[str] = set()
+        merged = []
+        seen_ids: set[int] = set()
 
         for item in text_matches + vector_matches:
-            item_id = str(item.get("item_id") or "")
-            if not item_id or item_id in seen_ids:
+            if item.product_id in seen_ids:
                 continue
-            seen_ids.add(item_id)
+            seen_ids.add(item.product_id)
             merged.append(item)
             if len(merged) >= limit:
                 break
@@ -170,14 +159,11 @@ async def search_product_db_by_title(
     except Exception as exc:
         print(f"product_db title search error: {exc}")
         return []
-    finally:
-        if conn is not None:
-            await pool.putconn(conn)
 
 
 async def background_pse_search(
     app: FastAPI,
-    user_id: str,
+    user_id: int,
     query: str,
     page: Optional[int],
     custom_domain_map: Optional[dict] = None,
@@ -311,7 +297,7 @@ async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) ->
     return await upload_generated_image(generated_image_bytes)
 
 
-async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repositories):
+async def save_manual_item(payload: ManualItemCreate, user_id: int, repos: Repositories):
     try:
         normalized_image_url = normalize_url(payload.image_url)
         if normalized_image_url.startswith(("http://", "https://")):
@@ -322,30 +308,35 @@ async def save_manual_item(payload: ManualItemCreate, user_id: str, repos: Repos
 
         vector_source = image_url or normalized_image_url
         vector_list = await _extract_vector_sync(vector_source) if vector_source else None
-        vector_str = str(vector_list) if vector_list else None
         
-        await repos.saved_posts.create_manual_item(
-            item_id=getattr(payload, "item_id", None),
-            user_id=str(user_id),
-            source_url=payload.source_url,
-            category=payload.category,
-            title=payload.title,
-            image_url=image_url,
-            image_vector=vector_str,
-            price=payload.price,
-            brand=payload.brand,
-            is_available=payload.is_available,
-            shop=payload.shop,
-            likes=payload.likes,
-            dislikes=payload.dislikes,
+        product_id = payload.product_id
+        if product_id is None or not await repos.product_db.exists(product_id):
+            product = await repos.product_db.insert_item(
+                payload.source_url or image_url or payload.title or "manual",
+                {
+                    "title": payload.title,
+                    "price": payload.price,
+                    "currency": payload.currency,
+                    "brand": payload.brand,
+                    "category": payload.category,
+                    "is_soldout": payload.is_soldout,
+                    "image_url": image_url,
+                    "image_vector": vector_list,
+                    "shop": payload.shop,
+                },
+            )
+            product_id = product.id
+
+        await repos.saved_posts.create(
+            product_id=product_id,
+            user_id=user_id,
         )
         return {"success": True, "message": "웹 검색 결과가 내 피드로 이동되었습니다."}
     except Exception as exc:
-        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=f"수동 저장 실패: {exc}") from exc
 
 
-async def list_items_for_user(user_id: str, repos: Repositories):
+async def list_items_for_user(user_id: int, repos: Repositories):
     try:
         items = await repos.saved_posts.list_feed_items(user_id)
         print(f"프론트로 보내는 아이템 수: {len(items)}")
@@ -355,7 +346,7 @@ async def list_items_for_user(user_id: str, repos: Repositories):
         return []
 
 
-async def get_random_item_for_user(user_id: str, repos: Repositories):
+async def get_random_item_for_user(user_id: int, repos: Repositories):
     try:
         return await repos.saved_posts.get_random_feed_item(user_id)
     except Exception as exc:
@@ -363,29 +354,11 @@ async def get_random_item_for_user(user_id: str, repos: Repositories):
         return None
 
 
-async def vote_for_item(item_id: int, user_id: str, direction: str, repos: Repositories):
+async def delete_item_for_user(product_id: int, user_id: int, repos: Repositories):
     try:
-        voted_item = await repos.saved_posts.increment_vote_count(item_id, user_id, direction)
-        if voted_item is None:
-            raise HTTPException(status_code=404, detail="투표할 아이템을 찾을 수 없습니다.")
-
-        await repos.saved_posts.conn.commit()
-        return voted_item
-    except HTTPException:
-        await repos.saved_posts.conn.rollback()
-        raise
-    except Exception as exc:
-        await repos.saved_posts.conn.rollback()
-        raise HTTPException(status_code=500, detail=f"투표 처리 실패: {exc}") from exc
-
-
-async def delete_item_for_user(item_id: int, user_id: str, repos: Repositories):
-    try:
-        await repos.saved_posts.delete_by_id(item_id, user_id)
-        await repos.saved_posts.conn.commit()
+        await repos.saved_posts.delete_by_id(product_id, user_id)
         return {"success": True}
     except Exception as exc:
-        await repos.saved_posts.conn.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 

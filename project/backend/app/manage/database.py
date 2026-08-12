@@ -1,14 +1,15 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-from fastapi import Depends, FastAPI, Request
-from psycopg_pool import AsyncConnectionPool
 
-from project.backend.app.manage.settings import get_settings
+from fastapi import Depends, FastAPI, Request
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from project.backend.app.db.session import (
-    create_db_pool,
-    get_db_connection as get_pooled_db_connection,
-    init_db,
+    create_db_engine,
+    create_session_factory,
 )
+from project.backend.app.manage.settings import get_settings
 from project.backend.app.repositories import Repositories, get_repositories
 
 
@@ -18,39 +19,41 @@ def get_neon_db_url() -> str:
         raise RuntimeError("NEON_DB_URL environment variable is not set.")
     return db_url
 
-async def rebuild_db_pool(app: FastAPI) -> AsyncConnectionPool:
-    old_pool = getattr(app.state, "db_pool", None)
-    new_pool = create_db_pool(conninfo=get_neon_db_url(), min_size=5, max_size=20)
-    app.state.db_pool = new_pool
-
-    if old_pool is not None and not old_pool.closed:
-        try:
-            await old_pool.close()
-        except Exception as exc:
-            print(f"기존 DB 풀 종료 중 경고: {exc}")
-
-    print("DB 커넥션 풀 재생성 완료")
-    return new_pool
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db_pool = await rebuild_db_pool(app)
-    print("DB 커넥션 풀 생성 완료")
-    await init_db(db_pool)
+    engine = create_db_engine(get_neon_db_url())
+    session_factory = create_session_factory(engine)
+    app.state.db_engine = engine
+    app.state.db_session_factory = session_factory
+
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
+    print("SQLAlchemy DB engine and pool initialized")
 
     yield
 
-    if getattr(app.state, "db_pool", None) is not None:
-        await app.state.db_pool.close()
-        print("DB 커넥션 풀 안전하게 종료됨")
-
-async def get_db_connection(request: Request) -> AsyncGenerator[object, None]:
-    async for conn in get_pooled_db_connection(
-        getattr(request.app.state, "db_pool", None),
-        recreate_pool=lambda: rebuild_db_pool(request.app),
-    ):
-        yield conn
+    await engine.dispose()
+    print("SQLAlchemy DB engine disposed")
 
 
-async def get_repos(conn=Depends(get_db_connection)) -> Repositories:
-    return get_repositories(conn)
+def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
+    session_factory = getattr(request.app.state, "db_session_factory", None)
+    if session_factory is None:
+        raise RuntimeError("Database session factory is not initialized")
+    return session_factory
+
+
+async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    session_factory = get_session_factory(request)
+    async with session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def get_repos(session: AsyncSession = Depends(get_db_session)) -> Repositories:
+    return get_repositories(session)

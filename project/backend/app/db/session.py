@@ -1,109 +1,34 @@
-from collections.abc import AsyncGenerator
-from typing import Any, Awaitable, Callable
-from fastapi import HTTPException
-from psycopg import InterfaceError, OperationalError
-from psycopg_pool import AsyncConnectionPool
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-async def init_db(db_pool: AsyncConnectionPool) -> None:
-    try:
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS event_logs (
-                            id SERIAL PRIMARY KEY,
-                            user_id VARCHAR(50) NOT NULL,
-                            action VARCHAR(50) NOT NULL,
-                            entity_type VARCHAR(50) NOT NULL,
-                            entity_id TEXT,
-                            metadata JSONB DEFAULT '{}'::jsonb,
-                            occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                            );
-                    """
-                )
-                await cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_event_logs_user_action ON event_logs (user_id, action);"
-                )
-                await cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_event_logs_entity ON event_logs (entity_type, entity_id);"
-                )
 
-                await cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS saved_posts (
-                            item_id SERIAL PRIMARY KEY,
-                            user_id VARCHAR(50) NOT NULL,
-                            source_url TEXT,
-                            title TEXT,
-                            price TEXT,
-                            brand TEXT,
-                            category VARCHAR(20),
-                            is_available TEXT,
-                            image_url TEXT,
-                            image_vector VECTOR(768), 
-                            shop TEXT,
-                            likes TEXT,
-                            dislikes TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            UNIQUE(source_url, title)
-                            );
-                    """
-                )
+def sqlalchemy_database_url(database_url: str) -> URL:
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql"}:
+        url = url.set(drivername="postgresql+psycopg")
+    return url
 
-                await conn.commit()
-        print("DB 테이블 초기화 완료")
-    except Exception as exc:
-        print(f"DB 초기화 중 경고: {exc}")
 
-def create_db_pool(conninfo: str, min_size: int = 5, max_size: int = 20) -> AsyncConnectionPool:
-    return AsyncConnectionPool(conninfo=conninfo, min_size=min_size, max_size=max_size)
+def create_db_engine(database_url: str) -> AsyncEngine:
+    return create_async_engine(
+        sqlalchemy_database_url(database_url),
+        pool_size=5,
+        max_overflow=5,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+    )
 
-async def _ping_connection(conn: Any) -> None:
-    async with conn.cursor() as cursor:
-        await cursor.execute("SELECT 1")
-        await cursor.fetchone()
 
-async def get_db_connection(
-    pool: AsyncConnectionPool | None,
-    recreate_pool: Callable[[], Awaitable[AsyncConnectionPool]] | None = None,
-) -> AsyncGenerator[Any, None]:
-    current_pool = pool
-
-    for attempt in range(2):
-        if current_pool is None or current_pool.closed:
-            if recreate_pool is None:
-                raise HTTPException(status_code=500, detail="Database pool is not initialized")
-            current_pool = await recreate_pool()
-
-        conn = None
-        pool_used = current_pool
-        try:
-            conn = await pool_used.getconn()
-            await _ping_connection(conn)
-            try:
-                yield conn
-            except Exception:
-                if not getattr(conn, "closed", False):
-                    await conn.rollback()
-                raise
-            return
-        except (OperationalError, InterfaceError) as exc:
-            if conn is not None:
-                try:
-                    await conn.close()
-                except Exception:
-                    pass
-
-            if recreate_pool is None or attempt == 1:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Database connection is unavailable: {exc}",
-                ) from exc
-
-            current_pool = await recreate_pool()
-        finally:
-            if conn is not None and not getattr(conn, "closed", False):
-                await pool_used.putconn(conn)
-
-    raise HTTPException(status_code=500, detail="Database connection is unavailable")
+def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )

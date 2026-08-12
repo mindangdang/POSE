@@ -35,7 +35,7 @@ export function FeedItemCard({
       ([key, value]) =>
         value != null &&
         value !== '' &&
-        !['item_id', 'title', 'category', 'source_url', '_source'].includes(key)
+        !['product_id', 'title', 'category', 'source_url', '_source'].includes(key)
     );
 
     const itemTitle = getItemTitle(item);
@@ -98,7 +98,7 @@ export function FeedItemCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(item.item_id);
+            onDelete(item.product_id);
           }}
           className="absolute top-2 sm:top-3 right-2 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:scale-105 z-10"
           aria-label="Delete item"

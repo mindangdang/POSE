@@ -19,7 +19,7 @@ def _clone_product_info():
         "brand": None,
         "image_url": None,
         "category": None,
-        "is_available": False,
+        "is_soldout": None,
         "shop": None,
     }
 
@@ -196,7 +196,7 @@ def parse_html_basic(soup):
 
     buy_button = soup.select_one("div.Product-buy")
     if buy_button and "구매하기" in buy_button.get_text():
-        product_info["is_available"] = True
+        product_info["is_soldout"] = False
 
     return product_info if product_info["title"] else None
 
@@ -233,7 +233,10 @@ def parse_html_with_json_ld(soup):
                 offers = offers[0] if offers else {}
             if offers:
                 product_info["price"] = _normalize_price(offers.get("price"))
-                product_info["is_available"] = _normalize_availability(offers.get("availability")) or _normalize_availability(offers.get("status"))
+                product_info["is_soldout"] = not (
+                    _normalize_availability(offers.get("availability"))
+                    or _normalize_availability(offers.get("status"))
+                )
 
             product_info["category"] = data.get("category")
             break
@@ -276,8 +279,10 @@ def parse_html_with_opengraph(soup):
         or og_data.get("price:amount")
         or og_data.get("og:price:amount")
     )
-    product_info["is_available"] = _normalize_availability(
-        og_data.get("availability") or og_data.get("product:availability") or og_data.get("status")
+    product_info["is_soldout"] = not _normalize_availability(
+        og_data.get("availability")
+        or og_data.get("product:availability")
+        or og_data.get("status")
     )
     product_info["shop"] = og_data.get("site_name")
 
@@ -311,7 +316,7 @@ def parse_musinsa_html(soup):
             "price": _normalize_price(json_data.get("goodsPrice", {}).get("salePrice") or json_data.get("goodsPrice", {}).get("normalPrice")),
             "image_url": json_data.get("thumbnailImageUrl"),
             "shop": "Musinsa",
-            'is_available': not json_data.get("isOutOfStock"),
+            'is_soldout': bool(json_data.get("isOutOfStock")),
             'gender': json_data.get("displayGenderText") or "UNKNOWN"
         }
     except Exception as e:
