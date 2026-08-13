@@ -4,6 +4,7 @@ import os
 import nodriver as uc
 from bs4 import BeautifulSoup
 import traceback
+from decimal import Decimal, InvalidOperation
 from curl_cffi import requests as curl_requests
 import asyncpg
 from pgvector.asyncpg import register_vector
@@ -32,6 +33,43 @@ def load_progress() -> set:
 def save_progress(completed_urls: set):
     with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
         json.dump(list(completed_urls), f)
+
+def parse_price(value):
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            return Decimal(str(value))
+        except InvalidOperation:
+            return None
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().replace(',', '')
+    if not normalized:
+        return None
+    digits = ''.join(ch for ch in normalized if ch.isdigit() or ch in {'.', '-'})
+    if not digits or digits in {'.', '-'}:
+        return None
+    try:
+        return Decimal(digits)
+    except InvalidOperation:
+        return None
+
+
+def parse_is_soldout(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'true', 't', '1', 'yes', 'y'}:
+            return True
+        if normalized in {'false', 'f', '0', 'no', 'n'}:
+            return False
+    return None
 
 # --- Worker 1: Producer (크롤러) ---
 async def crawler_worker(url, raw_data_queue):
@@ -180,14 +218,17 @@ async def processor_worker(raw_data_queue, db_insert_queue):
             
             records = []
             for i, item in enumerate(items):
-                source_url = item.get('goodsLinkUrl', None)
-                title = titles[i]
-                price = str(item.get('price')) or str(item.get('normalPrice'))
-                brand = item.get('brand')
-                is_soldout = str(item.get('isSoldOut'))
-                image_url = image_urls[i] or []
-                shop = 'musinsa'
-                gender = item.get('displayGenderText')
+                source_url = item.get('goodsLinkUrl')
+                if not source_url:
+                    continue
+                title = titles[i] or 'Unknown'
+                price = parse_price(item.get('price') or item.get('normalPrice'))
+                currency = 'KRW'
+                brand = item.get('brand') or 'UNKNOWN'
+                is_soldout = parse_is_soldout(item.get('isSoldOut'))
+                image_url = image_urls[i] or ''
+                shop = 'MUSINSA'
+                gender = item.get('displayGenderText') or 'UNKNOWN'
                 
                 # 원본 결과가 이중 리스트일 수 있으므로 안전하게 벗김
                 raw_title_vec = title_vectors[i]
@@ -195,12 +236,12 @@ async def processor_worker(raw_data_queue, db_insert_queue):
                     title_vector = raw_title_vec[0]
                 else:
                     title_vector = raw_title_vec
-                category = get_clean_category(title_vector)
+                category = get_clean_category(title_vector) or 'PRODUCT'
                 image_vector = image_vectors[i]
 
                 records.append((
-                    source_url, title, price, brand, category, is_soldout, 
-                    image_url, image_vector, shop, gender, title_vector
+                    source_url, title, title_vector, price, currency, brand, category,
+                    is_soldout, image_url, image_vector, shop, gender
                 ))
             
             await db_insert_queue.put(records)
@@ -210,10 +251,28 @@ async def processor_worker(raw_data_queue, db_insert_queue):
 # --- Worker 3: Consumer (DB 적재) ---
 async def db_worker(db_insert_queue, pool):
     insert_query = """
-        INSERT INTO product_db 
-        (source_url, title, price, brand, category, is_soldout, image_url, image_vector, shop, gender, title_vector)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (title) DO NOTHING;
+        INSERT INTO product_db
+        (
+            source_url, title, title_vector, price, currency, brand, category,
+            is_soldout, image_url, image_vector, shop_id, gender
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            (SELECT id FROM shops WHERE name = $11),
+            $12
+        )
+        ON CONFLICT (source_url) DO UPDATE SET
+            title = EXCLUDED.title,
+            title_vector = COALESCE(EXCLUDED.title_vector, product_db.title_vector),
+            price = EXCLUDED.price,
+            currency = EXCLUDED.currency,
+            brand = EXCLUDED.brand,
+            category = EXCLUDED.category,
+            is_soldout = EXCLUDED.is_soldout,
+            image_url = EXCLUDED.image_url,
+            image_vector = COALESCE(EXCLUDED.image_vector, product_db.image_vector),
+            shop_id = EXCLUDED.shop_id,
+            gender = EXCLUDED.gender;
     """
     
     while True:
