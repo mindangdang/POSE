@@ -80,7 +80,7 @@ async def crawler_worker(url, raw_data_queue):
     config = uc.Config(
         headless=True,
         no_sandbox=True,
-        browser_executable_path="/usr/bin/google-chrome",
+        browser_executable_path="/usr/bin/chromium",
         browser_args=[
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -236,7 +236,7 @@ async def processor_worker(raw_data_queue, db_insert_queue):
                     title_vector = raw_title_vec[0]
                 else:
                     title_vector = raw_title_vec
-                category = get_clean_category(title_vector) or 'PRODUCT'
+                category = await get_clean_category(title_vector) or 'PRODUCT'
                 image_vector = image_vectors[i]
 
                 records.append((
@@ -350,5 +350,5 @@ if __name__ == '__main__':
     asyncio.run(main())
 '''
 python -m crawl4shopping.musinsa
-chromium --headless --disable-gpu --dump-dom https://www.google.com
+chromium --headless --disable-gpu --no-sandbox --disable-setuid-sandbox --dump-dom https://www.google.com
 '''

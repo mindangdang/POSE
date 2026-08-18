@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from pydantic import List, Optional
+from typing import List,Optional
 
 
 class EmbedRequest(BaseModel):
