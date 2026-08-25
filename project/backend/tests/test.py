@@ -52,8 +52,8 @@ async def calculate_relative_probabilities(
     probabilities = softmax(logits)
 
     return {
-        text: float(prob) 
-        for text, prob in zip(candidate_texts, probabilities)
+        text: (float(sim), float(prob)) 
+        for text, sim, prob in zip(candidate_texts, raw_similarities, probabilities)
     }
 
 
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     results = asyncio.run(calculate_relative_probabilities(image_url, candidate_texts))
     
     print("\n=== 상대적 분류 확률 결과 ===")
-    for text, prob in results.items():
-        print(f"- {text:<45} : {prob * 100:.2f}%")
+    for text, (sim, prob) in results.items():
+        print(f"- {text:<45} : Similarity: {sim:.4f}, Probability: {prob * 100:.2f}%")
 
 #python -m project.backend.tests.test

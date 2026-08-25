@@ -52,8 +52,8 @@ async def search_images_by_text(
 
     # 5. 결과 매핑
     return {
-        url: float(prob) 
-        for url, prob in zip(candidate_image_urls, probabilities)
+        url: (float(sim), float(prob)) 
+        for url, sim, prob in zip(candidate_image_urls, raw_similarities, probabilities)
     }
 
 if __name__ == "__main__":
@@ -68,5 +68,7 @@ if __name__ == "__main__":
     probabilities = asyncio.run(search_images_by_text(query, urls))
     
     # 결과 출력
-    for url, prob in probabilities.items():
-        print(f"Image URL: {url}, Probability: {prob:.4f}")
+    for url, (sim, prob) in probabilities.items():
+        print(f"Image URL: {url}, Similarity: {sim:.4f}, Probability: {prob:.4f}")
+
+# python -m project.backend.tests.test_image
