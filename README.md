@@ -1,6 +1,6 @@
-# POSE — 취향을 이해하는 패션 메타검색 엔진
+# POSE — 취향과 의미를 이해하는 패션 메타검색 엔진
 
-> **"휴양지 느낌의 시원한 룩"처럼 모호한 문장도, 사용자의 저장·클릭 맥락과 패션 멀티모달 임베딩을 결합해 탐색 가능한 상품으로 연결합니다.**
+> **"스트릿한 가죽자켓"처럼 모호한 문장도, 유저의 저장·클릭 맥락과 패션 멀티모달 임베딩을 결합해 탐색 가능한 상품으로 연결합니다.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -8,12 +8,6 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-FashionSigLIP-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Alembic](https://img.shields.io/badge/Alembic-migrations-6BA539)](https://alembic.sqlalchemy.org/)
-
-POSE는 여러 쇼핑몰의 상품을 한 곳에서 탐색하는 패션 메타검색 서비스입니다. 사용자는 자연어로 분위기와 상황을 설명하고, 상품 URL 또는 이미지로 자신의 취향을 쌓습니다. 서비스는 수집한 상품 메타데이터와 **FashionCLIP 계열 비전·언어 임베딩**을 바탕으로 검색·저장·피드 경험을 제공합니다.
-
-> 현재 추론 서버의 구현 모델은 `Marqo/marqo-fashionSigLIP`입니다. FAISS/HNSW 기반 대규모 ANN 인덱스는 향후 확장 지점이며, 현재 저장·검색 계층은 PostgreSQL과 `pgvector` 모델 컬럼을 사용합니다.
-
-![POSE 서비스 화면](project/frontend/public/image.png)
 
 ## 문제와 해결 방식
 
