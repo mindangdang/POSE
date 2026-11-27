@@ -2,6 +2,12 @@
   "dataset": "pose_v2_fixture.jsonl",
   "label_source": "synthetic_fixture (not human-validated)",
   "case_count": 30,
+  "model_execution": {
+    "observed_embedding_models": [],
+    "hashing_fallback_cases": 30,
+    "cross_encoder": "not_run_or_unavailable",
+    "cross_encoder_scored_cases": 0
+  },
   "baselines": {
     "B0_external": {
       "recall@5": 1.0,
@@ -53,55 +59,64 @@
       "mrr": 0.9444444444444444,
       "personalized_pairwise_accuracy": 0.0
     },
-    "B5_reranker_fallback": {
+    "B6_static_user_vector": {
       "recall@5": 1.0,
       "precision@5": 0.32000000000000006,
-      "ndcg@5": 0.9354474741765864,
+      "ndcg@5": 0.9309425661785555,
       "recall@10": 1.0,
       "precision@10": 0.16000000000000003,
-      "ndcg@10": 0.9354474741765864,
+      "ndcg@10": 0.9309425661785555,
       "mrr": 0.9444444444444444,
-      "personalized_pairwise_accuracy": 0.0
-    },
-    "B6_static_user_vector": {
-      "recall@5": 0.8333333333333334,
-      "precision@5": 0.26,
-      "ndcg@5": 0.720044576795757,
-      "recall@10": 1.0,
-      "precision@10": 0.16000000000000003,
-      "ndcg@10": 0.7722248225325747,
-      "mrr": 0.7814814814814816,
       "personalized_pairwise_accuracy": 0.0
     },
     "B7_query_conditioned": {
       "recall@5": 1.0,
       "precision@5": 0.32000000000000006,
-      "ndcg@5": 0.9413330928053675,
+      "ndcg@5": 0.9432395119268407,
       "recall@10": 1.0,
       "precision@10": 0.16000000000000003,
-      "ndcg@10": 0.9413330928053675,
+      "ndcg@10": 0.9432395119268407,
       "mrr": 0.9444444444444444,
       "personalized_pairwise_accuracy": 0.6666666666666666
+    }
+  },
+  "evaluation_modes": {
+    "ground_truth_criteria": {
+      "input": "Synthetic labeled criteria passed directly as request overrides; intent extraction quality is not measured.",
+      "metrics": {
+        "recall@5": 0.6296296296296297,
+        "precision@5": 0.18666666666666668,
+        "ndcg@5": 0.6914547278093269,
+        "recall@10": 0.6296296296296297,
+        "precision@10": 0.09333333333333334,
+        "ndcg@10": 0.6914547278093269,
+        "mrr": 0.7037037037037037
+      },
+      "hard_constraint_violation_rate": 0.0,
+      "unknown_constraint_rate": 0.0
     },
-    "B8_pose_full": {
-      "recall@5": 0.9444444444444444,
-      "precision@5": 0.3,
-      "ndcg@5": 0.9908132680792175,
-      "recall@10": 0.9444444444444444,
-      "precision@10": 0.15,
-      "ndcg@10": 0.9908132680792175,
-      "mrr": 1.0,
-      "personalized_pairwise_accuracy": 1.0
+    "end_to_end_intent": {
+      "input": "Original query only; the deterministic intent parser extracts criteria without labeled overrides.",
+      "metrics": {
+        "recall@5": 0.7407407407407407,
+        "precision@5": 0.22666666666666668,
+        "ndcg@5": 0.8025658389204381,
+        "recall@10": 0.7407407407407407,
+        "precision@10": 0.11333333333333334,
+        "ndcg@10": 0.8025658389204381,
+        "mrr": 0.8148148148148148
+      },
+      "hard_constraint_violation_rate": 0.0,
+      "unknown_constraint_rate": 0.0
     }
   },
   "full_pipeline_operational": {
-    "mean_latency_ms": 10.010657000627058,
-    "p50_latency_ms": 5.31339600274805,
-    "p95_latency_ms": 6.521625007735565,
-    "mean_tool_calls": 3.4,
-    "hard_constraint_violation_rate": 0.0,
-    "unknown_constraint_rate": 0.0,
-    "evidence_coverage": 0.8333333333333334,
+    "measurement_mode": "end_to_end_intent",
+    "mean_latency_ms": 8.50823339424096,
+    "p50_latency_ms": 8.318416992551647,
+    "p95_latency_ms": 10.504458012292162,
+    "mean_external_query_calls": 3.7333333333333334,
+    "evidence_coverage": 0.9714285714285714,
     "duplicate_rate": 0.0
   }
 }

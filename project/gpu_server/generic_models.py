@@ -9,8 +9,23 @@ from project.backend.app.manage.settings import get_settings
 
 _settings = get_settings()
 EMBEDDING_MODEL_ID = _settings.embedding_model
+EMBEDDING_MODEL_VERSION = _settings.embedding_model_version
+EMBEDDING_POOLING_METHOD = "cls"
 RERANKER_MODEL_ID = _settings.reranker_model
 MAX_EMBEDDING_LENGTH = min(max(int(os.getenv("POSE_EMBEDDING_MAX_LENGTH", "2048")), 64), 8192)
+
+
+def pool_cls_tokens(hidden_states: Any, *, normalize: bool = True, torch_module: Any = None) -> Any:
+    """Apply BGE-M3 CLS pooling and optional L2 normalization."""
+    if torch_module is None:
+        import torch as torch_module
+
+    vectors = hidden_states[:, 0, :]
+    return (
+        torch_module.nn.functional.normalize(vectors, p=2, dim=1)
+        if normalize
+        else vectors
+    )
 
 
 class GenericModelRegistry:
@@ -70,11 +85,11 @@ class GenericModelRegistry:
             encoded = {key: value.to(device) for key, value in encoded.items()}
             with torch.inference_mode():
                 output = model(**encoded)
-                hidden = output.last_hidden_state
-                mask = encoded["attention_mask"].unsqueeze(-1).to(hidden.dtype)
-                vectors = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-                if normalize:
-                    vectors = torch.nn.functional.normalize(vectors, p=2, dim=1)
+                vectors = pool_cls_tokens(
+                    output.last_hidden_state,
+                    normalize=normalize,
+                    torch_module=torch,
+                )
             results.extend(vectors.float().cpu().tolist())
         return results, device
 
@@ -107,6 +122,8 @@ class GenericModelRegistry:
     def status(self) -> dict[str, Any]:
         return {
             "embedding_model": EMBEDDING_MODEL_ID,
+            "embedding_model_version": EMBEDDING_MODEL_VERSION,
+            "embedding_pooling_method": EMBEDDING_POOLING_METHOD,
             "reranker_model": RERANKER_MODEL_ID,
             "embedding_loaded": self._embedding is not None,
             "reranker_loaded": self._reranker is not None,

@@ -33,11 +33,11 @@ migrate:
   .venv/bin/python -m alembic -c project/backend/alembic.ini upgrade head
 
 lint:
-  .venv/bin/python -m ruff check --select E4,E7,E9,F project/backend/search_engine project/backend/tests/test_pose_v2.py project/backend/app/api/router.py project/backend/app/db/models/search.py project/backend/app/manage/settings.py project/gpu_server/generic_models.py project/gpu_server/generic_routes.py
+  .venv/bin/python -m ruff check --select E4,E7,E9,F project/backend/search_engine project/backend/tests project/backend/app/search project/backend/app/runtime project/backend/app/api/router.py project/backend/app/db/models/search.py project/backend/app/manage/settings.py project/backend/migrations/versions/0003_embedding_space_metadata.py project/backend/migrations/versions/0004_session_preferences.py project/gpu_server/generic_models.py project/gpu_server/generic_routes.py
   cd {{frontend_dir}} && npm run lint
 
 typecheck:
-  .venv/bin/python -m mypy --ignore-missing-imports --follow-imports=silent project/backend/search_engine
+  .venv/bin/python -m mypy --ignore-missing-imports --follow-imports=silent --explicit-package-bases project/backend/search_engine project/backend/app/search project/backend/app/runtime
   cd {{frontend_dir}} && npx tsc --noEmit
 
 test:

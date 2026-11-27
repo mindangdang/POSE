@@ -26,6 +26,15 @@ class CriterionSource(str, Enum):
     SESSION_CONTEXT = "session_context"
 
 
+class CriterionValueType(str, Enum):
+    AUTO = "auto"
+    NUMERIC = "numeric"
+    DATE = "date"
+    BOOLEAN = "boolean"
+    ENUM = "enum"
+    SEMANTIC = "semantic"
+
+
 class Criterion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -33,10 +42,35 @@ class Criterion(BaseModel):
     attribute: str = Field(min_length=1, max_length=120)
     operator: CriterionOperator
     value: str | float | bool | list[str]
+    value_type: CriterionValueType = CriterionValueType.AUTO
     weight: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)
     is_hard_constraint: bool = False
     source: CriterionSource
+
+
+class ConditionExpression(BaseModel):
+    """Boolean composition for typed criteria using three-valued evaluation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operator: Literal["and", "or", "not"] | None = None
+    criterion: Criterion | None = None
+    operands: list["ConditionExpression"] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_expression(self) -> "ConditionExpression":
+        if self.criterion is not None:
+            if self.operator is not None or self.operands:
+                raise ValueError("A leaf condition cannot have an operator or operands")
+            return self
+        if self.operator is None:
+            raise ValueError("A condition requires either a criterion or an operator")
+        if self.operator == "not" and len(self.operands) != 1:
+            raise ValueError("NOT requires exactly one operand")
+        if self.operator in {"and", "or"} and len(self.operands) < 2:
+            raise ValueError("AND and OR require at least two operands")
+        return self
 
 
 class SearchIntent(BaseModel):
@@ -48,6 +82,7 @@ class SearchIntent(BaseModel):
     rewritten_query: str
     criteria: list[Criterion] = Field(default_factory=list)
     exclusions: list[Criterion] = Field(default_factory=list)
+    condition: ConditionExpression | None = None
     sub_queries: list[str] = Field(default_factory=list, max_length=3)
     unresolved_information: list[str] = Field(default_factory=list)
     clarification_required: bool = False
@@ -57,7 +92,7 @@ class SearchContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     locale: str = "ko-KR"
-    session_id: str | None = None
+    session_id: str | None = Field(default=None, min_length=1, max_length=36)
     location: str | None = None
     task_context: str | None = None
     criteria_overrides: list[Criterion] | None = None
@@ -75,6 +110,54 @@ class PreferenceSource(str, Enum):
     INFERRED = "inferred"
 
 
+class EmbeddingSpace(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str = Field(min_length=1)
+    model_version: str = Field(min_length=1)
+    dimension: int = Field(gt=0)
+    pooling_method: str = Field(min_length=1)
+
+
+class EmbeddingBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    space: EmbeddingSpace
+    embeddings: list[list[float]]
+
+    @field_validator("embeddings")
+    @classmethod
+    def validate_vectors(cls, vectors: list[list[float]], info):
+        import math
+
+        space = info.data.get("space")
+        if space is None:
+            return vectors
+        for vector in vectors:
+            if len(vector) != space.dimension or any(not math.isfinite(value) for value in vector):
+                raise ValueError("Embedding dimensions or values do not match their declared space")
+        return vectors
+
+
+class EmbeddingVector(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    space: EmbeddingSpace
+    values: list[float]
+
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, values: list[float], info):
+        import math
+
+        space = info.data.get("space")
+        if space is not None and (
+            len(values) != space.dimension or any(not math.isfinite(value) for value in values)
+        ):
+            raise ValueError("Embedding dimensions or values do not match their declared space")
+        return values
+
+
 class Preference(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -87,10 +170,11 @@ class Preference(BaseModel):
     confidence: float = Field(default=1.0, ge=0, le=1)
     scope: PreferenceScope = PreferenceScope.GLOBAL
     domain: str | None = None
-    session_id: str | None = None
+    session_id: str | None = Field(default=None, min_length=1, max_length=36)
     source: PreferenceSource = PreferenceSource.EXPLICIT
     evidence_event_ids: list[str] = Field(default_factory=list)
     embedding: list[float] | None = None
+    embedding_space: EmbeddingSpace | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -111,6 +195,9 @@ class SearchCandidate(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     embedding_model: str | None = None
     embedding_version: str | None = None
+    embedding_dimension: int | None = None
+    embedding_pooling_method: str | None = None
+    embedding_content_hash: str | None = None
     embedding: list[float] | None = None
     retrieval_ranks: dict[str, int] = Field(default_factory=dict)
 
@@ -132,11 +219,18 @@ class CriterionEvaluation(BaseModel):
     evidence_type: Literal["metadata", "content", "snippet", "none"] = "none"
 
 
+class ConditionEvaluation(BaseModel):
+    status: Literal["satisfied", "violated", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    evaluations: list[CriterionEvaluation] = Field(default_factory=list)
+
+
 class RankingFeatures(BaseModel):
     query_relevance: float = Field(ge=0, le=1)
     preference_compatibility: float = Field(ge=0, le=1)
     constraint_satisfaction: float = Field(ge=0, le=1)
     evidence_quality: float = Field(ge=0, le=1)
+    content_availability: float = Field(ge=0, le=1)
     uncertainty: float = Field(ge=0, le=1)
 
 
@@ -152,11 +246,18 @@ class SearchResult(BaseModel):
     features: RankingFeatures
 
 
+class SearchTraceSpan(BaseModel):
+    node: str
+    status: str
+    latency_ms: float = Field(ge=0)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class SearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(min_length=1, max_length=2000)
-    session_id: str | None = None
+    session_id: str | None = Field(default=None, min_length=1, max_length=36)
     personalization_enabled: bool = True
     limit: int = Field(default=10, ge=1, le=10)
     context: SearchContext = Field(default_factory=SearchContext)
@@ -164,6 +265,8 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     search_id: str
+    session_id: str | None = None
+    execution_id: str | None = None
     status: Literal["queued", "running", "completed", "partial", "cancelled", "failed", "clarification_required"]
     intent: SearchIntent | None = None
     preferences_used: list[str] = Field(default_factory=list)
@@ -172,6 +275,8 @@ class SearchResponse(BaseModel):
     excluded_result_count: int = 0
     tool_calls: int = 0
     errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    trace: list[SearchTraceSpan] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
 
