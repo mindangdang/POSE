@@ -34,7 +34,7 @@ async def test_postgres_feedback_idempotency_and_session_preference_persistence(
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         async_url,
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
+        connect_args={"options": f"-c search_path={schema},public"},
     )
     tables = [
         User.__table__,
