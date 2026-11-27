@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 from project.gpu_server.generic_models import (
     EMBEDDING_MODEL_ID,
+    EMBEDDING_MODEL_VERSION,
+    EMBEDDING_POOLING_METHOD,
     RERANKER_MODEL_ID,
     generic_models,
 )
@@ -45,7 +47,9 @@ async def embed(request: EmbedRequest) -> dict[str, Any]:
         return {
             "embeddings": vectors,
             "model_id": EMBEDDING_MODEL_ID,
+            "model_version": EMBEDDING_MODEL_VERSION,
             "embedding_dimension": dimension,
+            "pooling_method": EMBEDDING_POOLING_METHOD,
             "normalized": request.normalize,
         }
     except Exception as exc:
@@ -58,7 +62,9 @@ async def embed_batch(request: BatchEmbedRequest) -> dict[str, Any]:
         return {
             "embeddings": [],
             "model_id": EMBEDDING_MODEL_ID,
+            "model_version": EMBEDDING_MODEL_VERSION,
             "embedding_dimension": 1024,
+            "pooling_method": EMBEDDING_POOLING_METHOD,
             "normalized": request.normalize,
         }
     results: list[list[float]] = []
@@ -71,7 +77,9 @@ async def embed_batch(request: BatchEmbedRequest) -> dict[str, Any]:
         return {
             "embeddings": results,
             "model_id": EMBEDDING_MODEL_ID,
+            "model_version": EMBEDDING_MODEL_VERSION,
             "embedding_dimension": len(results[0]) if results else 1024,
+            "pooling_method": EMBEDDING_POOLING_METHOD,
             "normalized": request.normalize,
         }
     except Exception as exc:

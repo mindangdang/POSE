@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any, cast
 
 from sqlalchemy import Table, delete, select
@@ -10,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from project.backend.app.db.models.search import Document as DocumentRow
 from project.backend.app.db.models.search import DocumentEmbedding
 from project.backend.search_engine.schemas import SearchCandidate
+from project.backend.search_engine.retrieval.cache import document_content_hash
 
 
 class PostgresCachedDocumentRepository:
@@ -23,8 +22,12 @@ class PostgresCachedDocumentRepository:
         query_embedding: list[float],
         embedding_model: str,
         limit: int,
+        *,
+        model_version: str = "bge-m3-cls-v1",
+        dimension: int = 1024,
+        pooling_method: str = "cls",
     ) -> list[SearchCandidate]:
-        if len(query_embedding) != 1024 or limit <= 0:
+        if dimension != 1024 or len(query_embedding) != dimension or limit <= 0:
             return []
         async with self.session_factory() as db:
             rows = (
@@ -36,8 +39,11 @@ class PostgresCachedDocumentRepository:
                     )
                     .where(
                         DocumentEmbedding.embedding_model == embedding_model,
-                        DocumentEmbedding.embedding_version == "v1",
+                        DocumentEmbedding.embedding_version == model_version,
+                        DocumentEmbedding.embedding_dimension == dimension,
+                        DocumentEmbedding.pooling_method == pooling_method,
                         DocumentEmbedding.normalized.is_(True),
+                        DocumentEmbedding.content_hash == DocumentRow.content_hash,
                     )
                     .order_by(DocumentEmbedding.embedding.cosine_distance(query_embedding))
                     .limit(limit)
@@ -60,6 +66,9 @@ class PostgresCachedDocumentRepository:
                     metadata=document.metadata_json or {},
                     embedding_model=embedding.embedding_model,
                     embedding_version=embedding.embedding_version,
+                    embedding_dimension=getattr(embedding, "embedding_dimension", len(embedding.embedding)),
+                    embedding_pooling_method=getattr(embedding, "pooling_method", "unknown"),
+                    embedding_content_hash=getattr(embedding, "content_hash", None),
                     embedding=list(embedding.embedding),
                     retrieval_ranks={"cached": rank},
                 )
@@ -74,14 +83,11 @@ class PostgresCachedDocumentRepository:
                     document.embedding is None
                     or len(document.embedding) != 1024
                     or not document.embedding_model
+                    or document.embedding_dimension != 1024
+                    or document.embedding_pooling_method != "cls"
                 ):
                     continue
-                serialized_content = json.dumps(
-                    [document.title, document.snippet, document.content],
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-                content_hash = hashlib.sha256(serialized_content.encode("utf-8")).hexdigest()
+                content_hash = document_content_hash(document)
                 document_values = {
                     "document_id": document.document_id,
                     "canonical_url": document.canonical_url,
@@ -120,6 +126,8 @@ class PostgresCachedDocumentRepository:
                     "document_id": document.document_id,
                     "embedding_model": document.embedding_model,
                     "embedding_version": document.embedding_version or "v1",
+                    "embedding_dimension": document.embedding_dimension,
+                    "pooling_method": document.embedding_pooling_method,
                     "content_hash": content_hash,
                     "embedding": document.embedding,
                     "normalized": True,

@@ -63,6 +63,8 @@ class DocumentEmbedding(Base):
     )
     embedding_model: Mapped[str] = mapped_column(String(255), nullable=False)
     embedding_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_dimension: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1024")
+    pooling_method: Mapped[str] = mapped_column(String(32), nullable=False, server_default="unknown")
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=False)
     normalized: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
@@ -86,11 +88,13 @@ class UserPreference(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")
     scope: Mapped[str] = mapped_column(String(16), nullable=False, server_default="global")
     domain: Mapped[str | None] = mapped_column(String(255))
+    session_id: Mapped[str | None] = mapped_column(String(36))
     source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="explicit")
     evidence_event_ids: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    embedding_space: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.current_timestamp()

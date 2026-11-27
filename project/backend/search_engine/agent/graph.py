@@ -5,21 +5,29 @@ from typing import Any, cast
 from project.backend.search_engine.agent.state import SearchState
 
 
-def build_search_graph(pipeline: Any) -> Any:
+def build_search_graph(pipeline: Any, checkpoint_callback=None) -> Any:
+    async def checkpoint(state: SearchState, update: dict) -> dict:
+        merged = {**state, **update}
+        if checkpoint_callback is not None:
+            result = checkpoint_callback(merged)
+            if hasattr(result, "__await__"):
+                await result
+        return update
+
     async def prepare(state: SearchState) -> dict:
-        return await pipeline.prepare(state)
+        return await checkpoint(state, await pipeline.prepare(state))
 
     async def retrieve(state: SearchState) -> dict:
-        return await pipeline.retrieve(state)
+        return await checkpoint(state, await pipeline.retrieve(state))
 
     async def rank(state: SearchState) -> dict:
-        return await pipeline.rank(state)
+        return await checkpoint(state, await pipeline.rank(state))
 
     async def evaluate_coverage(state: SearchState) -> dict:
-        return await pipeline.evaluate_coverage(state)
+        return await checkpoint(state, await pipeline.evaluate_coverage(state))
 
     async def finalize(state: SearchState) -> dict:
-        return await pipeline.finalize(state)
+        return await checkpoint(state, await pipeline.finalize(state))
 
     try:
         from langgraph.graph import END, START, StateGraph

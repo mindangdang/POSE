@@ -1,303 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiFetch, apiJson } from '../../../lib/api';
-import { getAccessToken } from '../../../lib/token';
-
-type Criterion = {
-  id: string;
-  attribute: string;
-  operator: string;
-  value: string | number | boolean | string[];
-  weight: number;
-  confidence: number;
-  is_hard_constraint: boolean;
-  source: 'explicit' | 'inferred' | 'user_memory' | 'session_context';
-};
-
-type Preference = {
-  id: string;
-  attribute: string;
-  value: string;
-  polarity: 'positive' | 'negative';
-  weight: number;
-  confidence: number;
-  scope: 'session' | 'domain' | 'global';
-  domain?: string | null;
-  source: 'explicit' | 'inferred';
-};
-
-type Result = {
-  document: {
-    document_id: string;
-    canonical_url: string;
-    title: string;
-    snippet: string;
-    content: string;
-    source: string;
-    metadata: Record<string, unknown>;
-  };
-  rank: number;
-  score: number;
-  verified: boolean;
-  reason: string;
-  satisfied_criteria: string[];
-  uncertain_criteria: string[];
-  evaluations: Array<{
-    criterion_id: string;
-    status: 'satisfied' | 'violated' | 'unknown';
-    evidence_excerpt?: string | null;
-  }>;
-};
-
-type SearchState = {
-  search_id: string;
-  status: string;
-  intent?: {
-    objective: string;
-    rewritten_query: string;
-    criteria: Criterion[];
-    exclusions: Criterion[];
-    unresolved_information: string[];
-    clarification_required: boolean;
-  };
-  preferences_used?: string[];
-  verified_results?: Result[];
-  unverified_results?: Result[];
-  excluded_result_count?: number;
-  errors?: string[];
-  events?: Array<{ type: string; search_id: string; sequence: number }>;
-};
-
-const FEEDBACK_REASONS = [
-  '검색 목적과 맞지 않음',
-  '특정 조건 불충족',
-  '이미 알고 있는 정보',
-  '신뢰하기 어려운 정보',
-  '개인 취향과 맞지 않음',
-  '기타',
-];
+import { FEEDBACK_REASONS } from './types';
+import type { Criterion } from './types';
+import { useGenericSearch } from './useGenericSearch';
 
 export function GenericSearchPage({ onUseLegacy }: { onUseLegacy: () => void }) {
-  const [query, setQuery] = useState('');
-  const [personalization, setPersonalization] = useState(true);
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const [searchId, setSearchId] = useState<string | null>(null);
-  const [searchState, setSearchState] = useState<SearchState | null>(null);
-  const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [exclusions, setExclusions] = useState<Criterion[]>([]);
-  const [criteriaEdited, setCriteriaEdited] = useState(false);
-  const [location, setLocation] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [feedbackReason, setFeedbackReason] = useState(FEEDBACK_REASONS[0]);
-  const [feedbackScope, setFeedbackScope] = useState<'session' | 'related_searches'>('session');
-  const [feedbackNotice, setFeedbackNotice] = useState('');
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [preferences, setPreferences] = useState<Preference[]>([]);
-  const [newAttribute, setNewAttribute] = useState('');
-  const [newValue, setNewValue] = useState('');
-  const [events, setEvents] = useState<string[]>([]);
-  const timer = useRef<number | undefined>(undefined);
-  const loadedIntentFor = useRef<string | null>(null);
-  const results = useMemo(
-    () => [...(searchState?.verified_results ?? []), ...(searchState?.unverified_results ?? [])],
-    [searchState],
-  );
-
-  const loadPreferences = useCallback(async () => {
-    try {
-      const items = await apiJson<Preference[]>('/api/v2/preferences');
-      setPreferences(items);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '선호를 불러오지 못했습니다.');
-    }
-  }, []);
-
-  const pollSearch = useCallback(async (id: string) => {
-    try {
-      const state = await apiJson<SearchState>('/api/v2/search/' + id);
-      setSearchState(state);
-      if (state.intent && loadedIntentFor.current !== id) {
-        setCriteria(state.intent.criteria);
-        setExclusions(state.intent.exclusions);
-        loadedIntentFor.current = id;
-      }
-      if (['completed', 'partial', 'failed', 'cancelled', 'clarification_required'].includes(state.status)) {
-        setBusy(false);
-        if (timer.current) window.clearInterval(timer.current);
-      }
-    } catch (cause) {
-      setBusy(false);
-      setError(cause instanceof Error ? cause.message : '검색 상태를 불러오지 못했습니다.');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!searchId) return;
-    void pollSearch(searchId);
-    timer.current = window.setInterval(() => void pollSearch(searchId), 1200);
-    const token = getAccessToken();
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = token
-      ? new WebSocket(protocol + '//' + window.location.host + '/api/v2/ws/' + searchId + '?token=' + encodeURIComponent(token))
-      : null;
-    if (socket) {
-      socket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as { type?: string; search_id?: string };
-          if (data.search_id === searchId && data.type) {
-            setEvents((current) => [...current.slice(-5), data.type!]);
-            void pollSearch(searchId);
-          }
-        } catch {
-          // GET polling remains the recovery path if a socket frame is malformed.
-        }
-      };
-    }
-    return () => {
-      if (timer.current) window.clearInterval(timer.current);
-      socket?.close();
-    };
-  }, [searchId, pollSearch]);
-
-  useEffect(() => {
-    if (showPreferences) void loadPreferences();
-  }, [showPreferences, loadPreferences]);
-
-  const submitSearch = useCallback(async (event?: React.FormEvent) => {
-    event?.preventDefault();
-    if (!query.trim()) return;
-    setError('');
-    setFeedbackNotice('');
-    setBusy(true);
-    setSearchState(null);
-    setSearchId(null);
-    loadedIntentFor.current = null;
-    setEvents([]);
-    try {
-      const context: Record<string, unknown> = { session_id: sessionId };
-      if (location.trim()) context.location = location.trim();
-      if (criteriaEdited) {
-        context.criteria_overrides = criteria;
-        context.exclusion_overrides = exclusions;
-      }
-      const created = await apiJson<{ search_id: string; status: string }>('/api/v2/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: query.trim(),
-          personalization_enabled: personalization,
-          limit: 10,
-          context,
-        }),
-      });
-      setSearchId(created.search_id);
-      setCriteriaEdited(false);
-    } catch (cause) {
-      setBusy(false);
-      setError(cause instanceof Error ? cause.message : '검색을 시작하지 못했습니다.');
-    }
-  }, [query, sessionId, location, criteriaEdited, criteria, exclusions, personalization]);
-
-  const cancelSearch = async () => {
-    if (!searchId) return;
-    try {
-      await apiJson('/api/v2/search/' + searchId + '/cancel', { method: 'POST' });
-      setBusy(false);
-      if (timer.current) window.clearInterval(timer.current);
-      await pollSearch(searchId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '검색을 취소하지 못했습니다.');
-    }
-  };
-
-  const sendFeedback = async (result: Result, type: string) => {
-    if (!searchId) return;
-    setFeedbackNotice('');
-    try {
-      await apiJson('/api/v2/feedback', {
-        method: 'POST',
-        body: JSON.stringify({
-          idempotency_key: crypto.randomUUID(),
-          search_id: searchId,
-          document_id: result.document.document_id,
-          original_rank: result.rank,
-          feedback_type: type,
-          feedback_reason: type === 'RESULT_DISLIKE' || type === 'RESULT_DISMISS' ? feedbackReason : null,
-          feedback_scope: feedbackScope,
-        }),
-      });
-      setFeedbackNotice('피드백을 저장했습니다.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '피드백을 저장하지 못했습니다.');
-    }
-  };
-
-  const clarify = async () => {
-    if (!searchId || !location.trim()) return;
-    setBusy(true);
-    try {
-      const created = await apiJson<{ search_id: string }>('/api/v2/search/' + searchId + '/clarify', {
-        method: 'POST',
-        body: JSON.stringify({ answers: { location: location.trim() } }),
-      });
-      setSearchId(created.search_id);
-      setSearchState(null);
-    } catch (cause) {
-      setBusy(false);
-      setError(cause instanceof Error ? cause.message : '추가 정보를 반영하지 못했습니다.');
-    }
-  };
-
-  const updateCriterion = (id: string, patch: Partial<Criterion>, isExclusion: boolean) => {
-    setCriteriaEdited(true);
-    const setter = isExclusion ? setExclusions : setCriteria;
-    setter((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
-  };
-
-  const addPreference = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!newAttribute.trim() || !newValue.trim()) return;
-    try {
-      await apiJson('/api/v2/preferences', {
-        method: 'POST',
-        body: JSON.stringify({
-          attribute: newAttribute.trim(),
-          value: newValue.trim(),
-          polarity: 'positive',
-          weight: 0.7,
-          confidence: 1,
-          scope: 'global',
-          source: 'explicit',
-        }),
-      });
-      setNewAttribute('');
-      setNewValue('');
-      await loadPreferences();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '선호를 저장하지 못했습니다.');
-    }
-  };
-
-  const updatePreference = async (preference: Preference, patch: Partial<Preference>) => {
-    try {
-      await apiJson('/api/v2/preferences/' + preference.id, {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      });
-      await loadPreferences();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '선호를 수정하지 못했습니다.');
-    }
-  };
-
-  const deletePreference = async (preference: Preference) => {
-    try {
-      const response = await apiFetch('/api/v2/preferences/' + preference.id, { method: 'DELETE' });
-      if (!response.ok) throw new Error('선호를 삭제하지 못했습니다.');
-      await loadPreferences();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '선호를 삭제하지 못했습니다.');
-    }
-  };
+  const {
+    query, setQuery, personalization, setPersonalization, searchId, searchState,
+    criteria, exclusions, criteriaEdited, location, setLocation, busy, error,
+    feedbackReason, setFeedbackReason, feedbackScope, setFeedbackScope,
+    feedbackNotice, showPreferences, setShowPreferences, preferences,
+    newAttribute, setNewAttribute, newValue, setNewValue, events, results,
+    loadPreferences, submitSearch, cancelSearch, sendFeedback, clarify,
+    updateCriterion, removeCriterion, addPreference, updatePreference, deletePreference,
+  } = useGenericSearch();
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 py-10 text-black">
@@ -409,8 +123,8 @@ export function GenericSearchPage({ onUseLegacy }: { onUseLegacy: () => void }) 
             </div>
           )}
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <CriterionEditor title="명시적 조건 및 추론 조건" items={criteria} onChange={(id, patch) => updateCriterion(id, patch, false)} onRemove={(id) => { setCriteriaEdited(true); setCriteria((items) => items.filter((item) => item.id !== id)); }} />
-            <CriterionEditor title="제외 조건" items={exclusions} onChange={(id, patch) => updateCriterion(id, patch, true)} onRemove={(id) => { setCriteriaEdited(true); setExclusions((items) => items.filter((item) => item.id !== id)); }} />
+            <CriterionEditor title="명시적 조건 및 추론 조건" items={criteria} onChange={(id, patch) => updateCriterion(id, patch, false)} onRemove={(id) => removeCriterion(id, false)} />
+            <CriterionEditor title="제외 조건" items={exclusions} onChange={(id, patch) => updateCriterion(id, patch, true)} onRemove={(id) => removeCriterion(id, true)} />
           </div>
           {(criteriaEdited || exclusions.length > 0) && (
             <button onClick={() => void submitSearch()} disabled={busy} className="mt-4 rounded-full border border-black/20 px-4 py-2 text-sm font-semibold hover:bg-white disabled:opacity-40">
@@ -421,6 +135,7 @@ export function GenericSearchPage({ onUseLegacy }: { onUseLegacy: () => void }) 
       )}
 
       {searchState?.errors?.map((item, index) => <p key={index} className="text-sm text-amber-700">{item}</p>)}
+      {searchState?.warnings?.map((item, index) => <p key={`warning-${index}`} className="text-sm text-amber-700">{item}</p>)}
       {searchState && searchState.excluded_result_count ? <p className="text-sm text-black/55">필수 조건 위반으로 제외한 결과 {searchState.excluded_result_count}개</p> : null}
 
       <div className="space-y-4">

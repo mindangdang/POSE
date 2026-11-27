@@ -25,7 +25,7 @@ import {
 } from './searchConfig';
 import { saveItemToFeed } from '../../../hooks/itemService';
 import { trackEvent } from '../../../lib/analytics';
-import { GenericSearchPage } from './GenericSearchPage';
+import { GenericSearchPage } from '../../../features/generic-search/GenericSearchPage';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;

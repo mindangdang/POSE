@@ -1,0 +1,71 @@
+name: POSE v2 checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: pose_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pose_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      POSE_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pose_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: project/backend/requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: project/frontend/package-lock.json
+      - name: Install backend dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r project/backend/requirements-dev.txt
+      - name: Install frontend dependencies
+        working-directory: project/frontend
+        run: npm ci --ignore-scripts
+      - name: Install Playwright Chromium
+        working-directory: project/frontend
+        run: npx playwright install --with-deps chromium
+      - name: Apply migrations to disposable PostgreSQL
+        env:
+          ALEMBIC_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pose_test
+        run: .venv/bin/python -m alembic -c project/backend/alembic.ini upgrade head
+      - name: Lint and typecheck
+        run: |
+          .venv/bin/python -m ruff check --select E4,E7,E9,F project/backend/search_engine project/backend/tests project/backend/app/search project/backend/app/runtime project/backend/app/api/router.py project/backend/app/db/models/search.py project/backend/app/manage/settings.py project/backend/migrations/versions/0003_embedding_space_metadata.py project/backend/migrations/versions/0004_session_preferences.py project/gpu_server/generic_models.py project/gpu_server/generic_routes.py
+          .venv/bin/python -m mypy --ignore-missing-imports --follow-imports=silent --explicit-package-bases project/backend/search_engine project/backend/app/search project/backend/app/runtime
+          cd project/frontend && npm run lint
+      - name: Run unit and frontend tests
+        run: |
+          .venv/bin/python -m pytest project/backend/tests -q -m "not integration"
+          cd project/frontend && npm test
+      - name: Run disposable PostgreSQL integration tests
+        run: .venv/bin/python -m pytest project/backend/tests -q -m integration
+      - name: Run frontend browser tests
+        working-directory: project/frontend
+        run: npm run test:e2e
+      - name: Run deterministic fixture evaluation
+        run: |
+          .venv/bin/python -m project.backend.search_engine.evaluation.generate_dataset
+          .venv/bin/python -m project.backend.search_engine.evaluation.benchmark
