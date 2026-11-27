@@ -26,7 +26,6 @@ from project.backend.app.services.content import (
     search_with_lens,
 )
 from project.backend.app.services.websocket import get_websocket_manager
-from project.backend.app.services.crawling import start_url_extraction
 router = APIRouter()
 
 
@@ -49,6 +48,8 @@ async def extract_and_save_url(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
+    from project.backend.app.services.crawling import start_url_extraction
+
     return await start_url_extraction(
         payload=payload,
         app=request.app,

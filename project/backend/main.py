@@ -28,5 +28,5 @@ if __name__ == "__main__":
     import uvicorn
 
     settings = get_settings()
-    port = settings.backend_port or settings.port or 8000
+    port = settings.backend_port or 8000
     uvicorn.run("project.backend.main:app", host="0.0.0.0", port=port, reload=True)

@@ -13,3 +13,7 @@ yarn-debug.log*
 yarn-error.log*
 google-chrome-stable_current_amd64.deb
 *.deb
+
+# Browser test artifacts
+project/frontend/test-results/
+project/frontend/playwright-report/

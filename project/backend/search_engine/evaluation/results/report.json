@@ -1,0 +1,107 @@
+{
+  "dataset": "pose_v2_fixture.jsonl",
+  "label_source": "synthetic_fixture (not human-validated)",
+  "case_count": 30,
+  "baselines": {
+    "B0_external": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.933541055055113,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.933541055055113,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B1_bm25": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.9354474741765864,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.9354474741765864,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B2_dense": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.9309425661785555,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.9309425661785555,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B3_hybrid": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.9354474741765864,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.9354474741765864,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B4_rewrite_hybrid": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.933541055055113,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.933541055055113,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B5_reranker_fallback": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.9354474741765864,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.9354474741765864,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B6_static_user_vector": {
+      "recall@5": 0.8333333333333334,
+      "precision@5": 0.26,
+      "ndcg@5": 0.720044576795757,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.7722248225325747,
+      "mrr": 0.7814814814814816,
+      "personalized_pairwise_accuracy": 0.0
+    },
+    "B7_query_conditioned": {
+      "recall@5": 1.0,
+      "precision@5": 0.32000000000000006,
+      "ndcg@5": 0.9413330928053675,
+      "recall@10": 1.0,
+      "precision@10": 0.16000000000000003,
+      "ndcg@10": 0.9413330928053675,
+      "mrr": 0.9444444444444444,
+      "personalized_pairwise_accuracy": 0.6666666666666666
+    },
+    "B8_pose_full": {
+      "recall@5": 0.9444444444444444,
+      "precision@5": 0.3,
+      "ndcg@5": 0.9908132680792175,
+      "recall@10": 0.9444444444444444,
+      "precision@10": 0.15,
+      "ndcg@10": 0.9908132680792175,
+      "mrr": 1.0,
+      "personalized_pairwise_accuracy": 1.0
+    }
+  },
+  "full_pipeline_operational": {
+    "mean_latency_ms": 10.010657000627058,
+    "p50_latency_ms": 5.31339600274805,
+    "p95_latency_ms": 6.521625007735565,
+    "mean_tool_calls": 3.4,
+    "hard_constraint_violation_rate": 0.0,
+    "unknown_constraint_rate": 0.0,
+    "evidence_coverage": 0.8333333333333334,
+    "duplicate_rate": 0.0
+  }
+}

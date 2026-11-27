@@ -1,0 +1,43 @@
+# AutoRAG Legacy (0.3.x) offline retrieval experiment. Optional dependency only.
+vectordb:
+  - name: pose_fixture_bge_m3
+    db_type: chroma
+    client_type: persistent
+    embedding_batch: 8
+    embedding_model:
+      - type: huggingface
+        model_name: BAAI/bge-m3
+    collection_name: pose_fixture
+    path: ./evaluation/autorag_artifacts/chroma
+
+node_lines:
+  - node_line_name: retrieve_node_line
+    nodes:
+      - node_type: lexical_retrieval
+        strategy:
+          metrics: [retrieval_recall, retrieval_precision, retrieval_ndcg, retrieval_mrr]
+        top_k: [5, 10]
+        modules:
+          - module_type: bm25
+      - node_type: semantic_retrieval
+        strategy:
+          metrics: [retrieval_recall, retrieval_precision, retrieval_ndcg, retrieval_mrr]
+        top_k: [5, 10]
+        modules:
+          - module_type: vectordb
+            vectordb: pose_fixture_bge_m3
+      - node_type: hybrid_retrieval
+        strategy:
+          metrics: [retrieval_recall, retrieval_precision, retrieval_ndcg, retrieval_mrr]
+        top_k: [5, 10]
+        modules:
+          - module_type: hybrid_rrf
+            weight_range: (4, 80)
+      - node_type: passage_reranker
+        strategy:
+          metrics: [reranker_recall, reranker_precision]
+        top_k: [5, 10]
+        modules:
+          - module_type: sentence_transformer_reranker
+            model_name: BAAI/bge-reranker-v2-m3
+            batch: 8

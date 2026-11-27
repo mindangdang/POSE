@@ -7,19 +7,12 @@ from typing import Sequence
 import httpx
 from project.backend.basic_functions.utils import _extract_text_vector_sync
 import numpy as np
-from deep_translator import GoogleTranslator
-from project.backend.app.manage.settings import get_settings
 
 FAKE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Referer": "https://www.instagram.com/",
     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
 }
-
-settings = get_settings()
-api_key = settings.google_api_key
-if not api_key:
-    raise ValueError(".env 파일에 GOOGLE_API_KEY가 설정되지 않았습니다.")
 
 def _mark_feed_add_items(items: list[dict]) -> None:
     for item in items:
@@ -91,6 +84,8 @@ _CATEGORY_VECTORS = {cat: None for cat in CATEGORY_LIST}
 
 def text_translate(text: str, target_lang: str = 'en') -> str:
     try:
+        from deep_translator import GoogleTranslator
+
         translated_text = GoogleTranslator(source='auto', target=target_lang).translate(text)
         return translated_text
     except Exception as e:

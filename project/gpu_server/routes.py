@@ -4,13 +4,19 @@ import io
 import asyncio
 import httpx
 from fastapi import APIRouter
-from project.gpu_server.embedding_reranking import FashionSiglipReRankingPipeline
-from project.gpu_server.schemas import *
+from project.gpu_server.schemas import (
+    EmbedBatchRequest,
+    EmbedRequest,
+    EncodeTextBatchRequest,
+    EncodeTextRequest,
+)
 from project.backend.app.manage.settings import IMAGE_DIR
     
 router = APIRouter()
 
 def get_pipeline():
+    from project.gpu_server.embedding_reranking import FashionSiglipReRankingPipeline
+
     return FashionSiglipReRankingPipeline()
 
 @router.post("/embedding")

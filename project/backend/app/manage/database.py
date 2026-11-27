@@ -22,7 +22,15 @@ def get_neon_db_url() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    engine = create_db_engine(get_neon_db_url())
+    database_url = get_settings().neon_db_url
+    if not database_url:
+        app.state.db_engine = None
+        app.state.db_session_factory = None
+        print("NEON_DB_URL is not configured; database-backed legacy APIs are unavailable.")
+        yield
+        return
+
+    engine = create_db_engine(database_url)
     session_factory = create_session_factory(engine)
     app.state.db_engine = engine
     app.state.db_session_factory = session_factory

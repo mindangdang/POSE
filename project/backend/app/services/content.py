@@ -5,18 +5,14 @@ import re
 import traceback
 from pathlib import Path
 from typing import Optional
-from deep_translator import GoogleTranslator
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from project.backend.basic_functions.utils import _extract_text_vector_sync, _extract_vector_sync
 from project.backend.app.manage.settings import IMAGE_DIR, get_settings
 from project.backend.app.repositories import Repositories, get_repositories
-from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest, UrlAnalyzeRequest
-from project.backend.app.services.crawling import background_crawl_and_save
+from project.backend.app.schemas.requests import ManualItemCreate, SearchRequest
 from project.backend.app.services.searching import process_site
 from project.backend.app.services.websocket import get_websocket_manager
-from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
-from project.backend.basic_functions.ai_service.utils import upload_generated_image
 from project.backend.basic_functions.crawlers.utils import fetch_image_task, normalize_url
 from project.backend.basic_functions.searching.utils import fetch_from_single_site
 from project.backend.basic_functions.crawlers.utils import text_translate
@@ -79,6 +75,8 @@ async def search_product_db_by_title(
 
     translated_query = normalized_query
     try:
+        from deep_translator import GoogleTranslator
+
         translated_query = GoogleTranslator(source='auto', target='en').translate(normalized_query) or normalized_query
     except Exception:
         translated_query = normalized_query
@@ -223,6 +221,8 @@ async def search_with_lens(file: UploadFile | None, query: str | None):
 
 async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) -> str | None:
     if file:
+        from project.backend.basic_functions.ai_service.utils import upload_generated_image
+
         file_content = await file.read()
         print(f"SerpApi(Google Lens)로 파일 디깅 시작: {file.filename}")
         return await upload_generated_image(file_content)
@@ -236,12 +236,17 @@ async def _resolve_lens_image_url(file: UploadFile | None, query: str | None) ->
         return search_image_url
 
     if query.startswith("data:image"):
+        from project.backend.basic_functions.ai_service.utils import upload_generated_image
+
         print("SerpApi(Google Lens)로 클립보드 복사 이미지 디깅 시작")
         base64_str = re.sub(r"^data:image/.+;base64,", "", query)
         image_data = base64.b64decode(base64_str)
         return await upload_generated_image(image_data)
 
     print(f"SerpApi(Google Lens)로 검색어 기반 이미지 생성 및 디깅 시작: {query}")
+    from project.backend.basic_functions.ai_service.image_generate_search import generate_image_from_query
+    from project.backend.basic_functions.ai_service.utils import upload_generated_image
+
     generated_image_bytes = await generate_image_from_query(query)
     return await upload_generated_image(generated_image_bytes)
 

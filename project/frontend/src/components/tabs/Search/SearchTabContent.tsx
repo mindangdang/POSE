@@ -25,6 +25,7 @@ import {
 } from './searchConfig';
 import { saveItemToFeed } from '../../../hooks/itemService';
 import { trackEvent } from '../../../lib/analytics';
+import { GenericSearchPage } from './GenericSearchPage';
 
 type SearchTabContentProps = {
   onItemsChange: React.Dispatch<React.SetStateAction<SavedItem[]>>;
@@ -51,6 +52,7 @@ export function SearchTabContent({
   const [selectedShopNames, setSelectedShopNames] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
   const [randomSuggestions] = useState(getRandomSuggestions);
+  const [showLegacySearch, setShowLegacySearch] = useState(false);
   
   const { quotaCountdown, startCountdown } = useQuotaCountdown();
   const handleImagePasted = useCallback((base64: string) => {
@@ -160,7 +162,7 @@ export function SearchTabContent({
     setIsAddShopModalOpen(false);
   };
 
-  return (
+  return showLegacySearch ? (
     <>
       <motion.div
         key="search"
@@ -279,5 +281,7 @@ export function SearchTabContent({
         onAddShop={handleAddShop}
       />
     </>
+  ) : (
+    <GenericSearchPage onUseLegacy={() => setShowLegacySearch(true)} />
   );
 }
